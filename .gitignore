@@ -1,0 +1,15 @@
+@"
+.vs/
+**/.vs/
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+bin/
+**/bin/
+obj/
+**/obj/
+*.user
+*.suo
+.env
+"@ | Set-Content .gitignore
