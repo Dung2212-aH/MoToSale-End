@@ -8,7 +8,6 @@ import ProductCommitmentSidebar from '../components/product/ProductCommitmentSid
 import ProductImageGallery from '../components/product/ProductImageGallery.jsx';
 import ProductInfoBox from '../components/product/ProductInfoBox.jsx';
 import ProductTabs from '../components/product/ProductTabs.jsx';
-import ProductVoucherBox from '../components/product/ProductVoucherBox.jsx';
 import RelatedProductSection from '../components/product/RelatedProductSection.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { useCart } from '../contexts/CartContext.jsx';
@@ -311,20 +310,22 @@ function ProductDetailPage() {
     }
   }
 
-  function requireLogin() {
+  function requireLogin(redirect = '/cart') {
     if (!isAuthenticated) {
-      notify('Vui lòng đăng nhập để thêm vào giỏ hàng', 'error');
-      navigate('/login?redirect=/cart');
+      notify('Vui lòng đăng nhập để tiếp tục', 'error');
+      navigate(`/login?redirect=${encodeURIComponent(redirect)}`);
       return false;
     }
 
     return true;
   }
 
-  async function addProductToCart(payload) {
+  async function addProductToCart(payload, { showSuccess = true } = {}) {
     try {
       await addItem(payload);
-      notify('Đã thêm vào giỏ hàng', 'success');
+      if (showSuccess) {
+        notify('Đã thêm vào giỏ hàng', 'success');
+      }
       return true;
     } catch (err) {
       notify(err.message || 'Không thể thêm vào giỏ hàng', 'error');
@@ -332,39 +333,50 @@ function ProductDetailPage() {
     }
   }
 
-  async function addToCart(redirectToCart = true) {
-    if (!product) {
-      return;
-    }
+  function buildCartPayload() {
+    return {
+      productId: product.id,
+      variantId: Number.isFinite(Number(selectedVariant?.id)) ? Number(selectedVariant.id) : null,
+      quantity,
+    };
+  }
 
-    if (!requireLogin()) {
-      return;
+  function canSubmitSelectedProduct() {
+    if (!product) {
+      return false;
     }
 
     if (options.hasVariantData && !selectedVariant?.id) {
       notify('Vui lòng chọn phiên bản/màu sắc', 'error');
-      return;
+      return false;
     }
 
     const stockValue = selectedVariant?.stockQuantity ?? product?.stockQuantity;
     const hasKnownStock = stockValue !== undefined && stockValue !== null;
     if (hasKnownStock && Number(stockValue) <= 0) {
       notify('Sản phẩm đã hết hàng', 'error');
+      return false;
+    }
+
+    return true;
+  }
+
+  async function addToCart() {
+    if (!requireLogin('/cart') || !canSubmitSelectedProduct()) {
       return;
     }
 
-    const added = await addProductToCart({
-      productId: product.id,
-      variantId: Number.isFinite(Number(selectedVariant?.id)) ? Number(selectedVariant.id) : null,
-      quantity,
-    });
+    await addProductToCart(buildCartPayload());
+  }
 
-    if (!added) {
+  async function buyNow() {
+    if (!requireLogin('/checkout') || !canSubmitSelectedProduct()) {
       return;
     }
 
-    if (redirectToCart) {
-      navigate('/cart');
+    const added = await addProductToCart(buildCartPayload(), { showSuccess: false });
+    if (added) {
+      navigate('/checkout');
     }
   }
 
@@ -427,8 +439,8 @@ function ProductDetailPage() {
                     product={product}
                     quantity={quantity}
                     onQuantityChange={setQuantity}
-                    onAddToCart={() => addToCart(false)}
-                    onBuyNow={() => addToCart(true)}
+                    onAddToCart={addToCart}
+                    onBuyNow={buyNow}
                     selectedVersion={selectedVersion}
                     onSelectVersion={handleSelectVersion}
                     selectedColor={selectedColor}
@@ -450,8 +462,6 @@ function ProductDetailPage() {
                   <ProductCommitmentSidebar />
                 </div>
               </div>
-
-              {/* Removed ProductVoucherBox as requested */}
 
               <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <div className="space-y-6">

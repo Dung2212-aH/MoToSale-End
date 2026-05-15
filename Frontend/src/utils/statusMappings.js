@@ -29,7 +29,6 @@ export const PAYMENT_STATUS_MAP = {
 };
 
 export const PAYMENT_METHOD_MAP = {
-  COD: 'Thanh toán khi nhận hàng',
   BankTransfer: 'Chuyển khoản ngân hàng',
   Card: 'Thẻ tín dụng/ghi nợ',
   Momo: 'Ví MoMo',
@@ -39,12 +38,41 @@ export const PAYMENT_METHOD_MAP = {
 export const ORDER_TYPE_MAP = {
   FullPayment: 'Thanh toán toàn bộ',
   Deposit: 'Đặt cọc',
-  Installment: 'Trả góp',
 };
 
 export const RECEIVING_METHOD_MAP = {
   Delivery: 'Giao hàng tận nơi',
   Pickup: 'Nhận tại showroom',
+};
+
+const ORDER_STATUS_COLOR_MAP = {
+  Pending: 'bg-amber-100 text-amber-700',
+  AwaitingPayment: 'bg-amber-100 text-amber-700',
+  Confirmed: 'bg-blue-100 text-blue-700',
+  Processing: 'bg-blue-100 text-blue-700',
+  Completed: 'bg-green-100 text-green-700',
+  Delivered: 'bg-green-100 text-green-700',
+  Cancelled: 'bg-red-100 text-red-700',
+  Failed: 'bg-red-100 text-red-700',
+};
+
+const SHIPPING_STATUS_COLOR_MAP = {
+  NotShipped: 'bg-zinc-100 text-zinc-600',
+  AwaitingPickup: 'bg-zinc-100 text-zinc-600',
+  Preparing: 'bg-amber-100 text-amber-700',
+  InTransit: 'bg-blue-100 text-blue-700',
+  Delivered: 'bg-green-100 text-green-700',
+  Returned: 'bg-red-100 text-red-700',
+  Failed: 'bg-red-100 text-red-700',
+};
+
+const PAYMENT_STATUS_COLOR_MAP = {
+  Unpaid: 'bg-red-100 text-red-700',
+  Pending: 'bg-red-100 text-red-700',
+  Paid: 'bg-green-100 text-green-700',
+  PartiallyPaid: 'bg-orange-100 text-orange-700',
+  Refunded: 'bg-purple-100 text-purple-700',
+  PartiallyRefunded: 'bg-purple-100 text-purple-700',
 };
 
 export function getOrderStatusLabel(status) {
@@ -72,56 +100,13 @@ export function getReceivingMethodLabel(method) {
 }
 
 export function getOrderStatusColor(status) {
-  switch (status) {
-    case 'Pending':
-    case 'AwaitingPayment':
-      return 'bg-amber-100 text-amber-700';
-    case 'Confirmed':
-    case 'Processing':
-      return 'bg-blue-100 text-blue-700';
-    case 'Completed':
-    case 'Delivered':
-      return 'bg-green-100 text-green-700';
-    case 'Cancelled':
-    case 'Failed':
-      return 'bg-red-100 text-red-700';
-    default:
-      return 'bg-zinc-100 text-zinc-700';
-  }
+  return ORDER_STATUS_COLOR_MAP[status] || 'bg-zinc-100 text-zinc-700';
 }
 
 export function getShippingStatusColor(status) {
-  switch (status) {
-    case 'NotShipped':
-    case 'AwaitingPickup':
-      return 'bg-zinc-100 text-zinc-600';
-    case 'Preparing':
-      return 'bg-amber-100 text-amber-700';
-    case 'InTransit':
-      return 'bg-blue-100 text-blue-700';
-    case 'Delivered':
-      return 'bg-green-100 text-green-700';
-    case 'Returned':
-    case 'Failed':
-      return 'bg-red-100 text-red-700';
-    default:
-      return 'bg-zinc-100 text-zinc-700';
-  }
+  return SHIPPING_STATUS_COLOR_MAP[status] || 'bg-zinc-100 text-zinc-700';
 }
 
 export function getPaymentStatusColor(status) {
-  switch (status) {
-    case 'Unpaid':
-    case 'Pending':
-      return 'bg-red-100 text-red-700';
-    case 'Paid':
-      return 'bg-green-100 text-green-700';
-    case 'PartiallyPaid':
-      return 'bg-orange-100 text-orange-700';
-    case 'Refunded':
-    case 'PartiallyRefunded':
-      return 'bg-purple-100 text-purple-700';
-    default:
-      return 'bg-zinc-100 text-zinc-700';
-  }
+  return PAYMENT_STATUS_COLOR_MAP[status] || 'bg-zinc-100 text-zinc-700';
 }

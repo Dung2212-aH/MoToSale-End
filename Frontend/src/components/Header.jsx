@@ -1,79 +1,19 @@
 import { useEffect, useState } from 'react';
+import {
+  FiChevronDown,
+  FiClipboard,
+  FiHeart,
+  FiLogIn,
+  FiMapPin,
+  FiMenu,
+  FiShoppingBag,
+  FiUserPlus,
+} from 'react-icons/fi';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { brandAssets, navItems, productBrandGroups, socialLinks } from '../assets/siteData.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { useCart } from '../contexts/CartContext.jsx';
 import { useFavorite } from '../contexts/FavoriteContext.jsx';
-
-function IconPin() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
-      <path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Zm0-9.5A2.5 2.5 0 1 0 12 7a2.5 2.5 0 0 0 0 5.5Z" fill="currentColor" />
-    </svg>
-  );
-}
-
-function IconLogin() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
-      <path
-        d="M13 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5M10 17l5-5-5-5M15 12H4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function IconUserPlus() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
-      <path
-        d="M15 19a4 4 0 0 0-8 0M11 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8 8v-6m-3 3h6"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function IconSearch() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-7 w-7">
-      <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path d="m20 20-3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function IconHeart() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-7 w-7">
-      <path
-        d="M12 20.2 4.8 13A4.6 4.6 0 1 1 11.3 6.6L12 7.3l.7-.7A4.6 4.6 0 1 1 19.2 13L12 20.2Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function IconBag() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-7 w-7">
-      <path d="M6 8h12l-1 12H7L6 8Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="M9 9V7a3 3 0 1 1 6 0v2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
 
 function getDisplayName(user) {
   return user?.name || user?.username || user?.email || 'Tài khoản';
@@ -129,7 +69,7 @@ function Header() {
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-wrap items-center gap-y-2 text-[12px] font-medium xl:text-[13px]">
                 <Link className="inline-flex items-center gap-1.5 border-white/60 pr-3 transition hover:text-[#ffe082] lg:border-r" to="/he-thong-cua-hang">
-                  <IconPin />
+                  <FiMapPin className="h-4 w-4" />
                   Hệ thống cửa hàng
                 </Link>
 
@@ -146,18 +86,18 @@ function Header() {
                       className="inline-flex items-center gap-1.5 bg-transparent px-0 transition hover:text-[#ffe082] lg:px-3"
                       onClick={handleLogout}
                     >
-                      <IconLogin />
+                      <FiLogIn className="h-4 w-4" />
                       Đăng xuất
                     </button>
                   </>
                 ) : (
                   <>
                     <Link className="inline-flex items-center gap-1.5 border-white/60 px-0 transition hover:text-[#ffe082] lg:border-r lg:px-3" to="/login">
-                      <IconLogin />
+                      <FiLogIn className="h-4 w-4" />
                       Đăng nhập
                     </Link>
                     <Link className="inline-flex items-center gap-1.5 px-0 transition hover:text-[#ffe082] lg:px-3" to="/register">
-                      <IconUserPlus />
+                      <FiUserPlus className="h-4 w-4" />
                       Đăng ký
                     </Link>
                   </>
@@ -213,7 +153,7 @@ function Header() {
                           onClick={() => setProductMenuOpen((value) => !value)}
                         >
                           <span>{item.label}</span>
-                          <small className={`translate-y-[1px] text-[11px] transition duration-300 ${productMenuOpen ? 'rotate-180' : ''}`}>▼</small>
+                          <FiChevronDown className={`h-3.5 w-3.5 translate-y-[1px] transition duration-300 ${productMenuOpen ? 'rotate-180' : ''}`} />
                         </button>
 
                         <div className={`absolute left-0 top-full z-30 pt-3 transition duration-300 ${productMenuOpen ? 'visible translate-y-0 opacity-100' : 'invisible translate-y-3 opacity-0'}`}>
@@ -246,7 +186,7 @@ function Header() {
                   return (
                     <NavLink key={item.label} to={item.to} onClick={(event) => handleNavClick(item, event)} className={({ isActive }) => navItemBaseClass(isActive)}>
                       <span>{item.label}</span>
-                      {item.hasCaret && <small className="translate-y-[1px] text-[11px] transition duration-300 group-hover:rotate-180">▼</small>}
+                      {item.hasCaret && <FiChevronDown className="h-3.5 w-3.5 translate-y-[1px] transition duration-300 group-hover:rotate-180" />}
                     </NavLink>
                   );
                 })}
@@ -255,18 +195,18 @@ function Header() {
 
             <div className="flex shrink-0 items-center gap-3">
               <Link className="group relative inline-grid h-11 w-11 place-items-center rounded-full text-[#111] transition duration-300 hover:bg-zinc-100 hover:text-[#d71920]" to="/favorites" aria-label="Yêu thích">
-                <IconHeart />
+                <FiHeart className="h-7 w-7" />
                 <span className="absolute right-0 top-1 grid h-[18px] w-[18px] place-items-center rounded-full bg-[#d71920] text-[11px] font-extrabold text-white">
                   {favoriteCount}
                 </span>
               </Link>
               {isAuthenticated && (
                 <Link className="group relative inline-grid h-11 w-11 place-items-center rounded-full text-[#111] transition duration-300 hover:bg-zinc-100 hover:text-[#d71920]" to="/orders" aria-label="Đơn hàng">
-                  <svg viewBox="0 0 24 24" aria-hidden="true" className="h-7 w-7"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><path d="M9 14l2 2 4-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  <FiClipboard className="h-7 w-7" />
                 </Link>
               )}
               <Link className="group relative inline-grid h-11 w-11 place-items-center rounded-full text-[#111] transition duration-300 hover:bg-zinc-100 hover:text-[#d71920]" to="/cart" aria-label="Giỏ hàng">
-                <IconBag />
+                <FiShoppingBag className="h-7 w-7" />
                 <span className="absolute right-0 top-1 grid h-[18px] w-[18px] place-items-center rounded-full bg-[#d71920] text-[11px] font-extrabold text-white">
                   {cartCount}
                 </span>
@@ -276,6 +216,7 @@ function Header() {
                 className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-200 px-4 text-sm font-bold transition hover:border-[#d71920] hover:text-[#d71920] xl:hidden"
                 onClick={() => setMenuOpen((value) => !value)}
               >
+                <FiMenu className="mr-2 h-4 w-4" />
                 Menu
               </button>
             </div>
@@ -291,7 +232,7 @@ function Header() {
                     className="flex min-h-11 items-center justify-between rounded-xl px-3 text-[15px] font-bold text-[#171717] transition hover:bg-zinc-100 hover:text-[#d71920]"
                   >
                     <span>{item.label}</span>
-                    {item.hasCaret && <small className="text-[11px]">▼</small>}
+                    {item.hasCaret && <FiChevronDown className="h-3.5 w-3.5" />}
                   </Link>
 
                   {item.label === 'Sản phẩm' && (

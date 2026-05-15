@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { FiHeart } from 'react-icons/fi';
 import QuantitySelector from '../QuantitySelector.jsx';
 import { formatCurrency, getProductDiscountPercent } from '../../utils/formatters.js';
 
@@ -54,20 +55,6 @@ function buildColorStyle(name) {
   return { backgroundImage: `linear-gradient(135deg, ${segments.join(', ')})` };
 }
 
-function IconHeart({ filled = false }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
-      <path
-        d="M12 20.2 4.8 13A4.6 4.6 0 1 1 11.3 6.6L12 7.3l.7-.7A4.6 4.6 0 1 1 19.2 13L12 20.2Z"
-        fill={filled ? 'currentColor' : 'none'}
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 function ProductInfoBox({
   product,
   quantity,
@@ -119,11 +106,11 @@ function ProductInfoBox({
                   ? 'border-[#d71920] bg-[#d71920] text-white shadow-[0_14px_28px_rgba(215,25,32,0.22)]'
                   : 'border-zinc-200 bg-white text-zinc-700 hover:border-[#d71920] hover:text-[#d71920]'
               }`}
-              aria-label={isFavorite ? 'Bo khoi yeu thich' : 'Them vao yeu thich'}
+              aria-label={isFavorite ? 'Bỏ khỏi yêu thích' : 'Thêm vào yêu thích'}
               aria-pressed={isFavorite}
               onClick={onToggleFavorite}
             >
-              <IconHeart filled={isFavorite} />
+              <FiHeart className={isFavorite ? 'h-5 w-5 fill-current' : 'h-5 w-5'} />
             </button>
           )}
         </div>

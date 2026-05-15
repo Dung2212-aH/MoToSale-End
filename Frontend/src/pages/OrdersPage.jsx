@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { orderApi } from '../services/api.js';
 import Breadcrumb from '../components/Breadcrumb.jsx';
+import LoadingState from '../components/LoadingState.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { formatCurrency } from '../utils/formatters.js';
 import {
   getOrderStatusLabel, getOrderStatusColor,
   getShippingStatusLabel, getShippingStatusColor,
   getPaymentStatusLabel, getPaymentStatusColor,
-  getOrderTypeLabel,
+  getOrderTypeLabel, getPaymentMethodLabel,
 } from '../utils/statusMappings.js';
 
 function StatusBadge({ label, colorClass }) {
@@ -19,20 +20,44 @@ function StatusBadge({ label, colorClass }) {
   );
 }
 
+function getOrderPaymentDisplay(order) {
+  if (order.paymentMethod) return getPaymentMethodLabel(order.paymentMethod);
+  if (order.orderType === 'Deposit') return getOrderTypeLabel(order.orderType);
+  return 'Chưa cập nhật';
+}
+
+function formatOrderTime(value, now) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Chưa cập nhật';
+
+  const absoluteTime = date.toLocaleDateString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const diffMs = now.getTime() - date.getTime();
+
+  if (diffMs < 0) return absoluteTime;
+  if (diffMs < 60 * 1000) return `${absoluteTime} · vừa xong`;
+  if (diffMs < 60 * 60 * 1000) return `${absoluteTime} · ${Math.floor(diffMs / (60 * 1000))} phút trước`;
+  if (diffMs < 24 * 60 * 60 * 1000) return `${absoluteTime} · ${Math.floor(diffMs / (60 * 60 * 1000))} giờ trước`;
+
+  return absoluteTime;
+}
+
 function OrdersPage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [now, setNow] = useState(() => new Date());
 
-  useEffect(() => {
-    if (!isAuthenticated) { navigate('/login?redirect=/orders', { replace: true }); return; }
-    fetchOrders();
-  }, [isAuthenticated, navigate]);
-
-  async function fetchOrders() {
-    setLoading(true); setError('');
+  const fetchOrders = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
+    setError('');
     try {
       const data = await orderApi.getMyOrders();
       const list = Array.isArray(data) ? data : data?.orders || data?.$values || [];
@@ -40,8 +65,25 @@ function OrdersPage() {
       setOrders(list);
     } catch (err) {
       setError(err?.message || 'Không thể tải danh sách đơn hàng');
-    } finally { setLoading(false); }
-  }
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login?redirect=/orders', { replace: true });
+      return undefined;
+    }
+
+    fetchOrders();
+    const refreshTimer = window.setInterval(() => {
+      setNow(new Date());
+      fetchOrders({ silent: true });
+    }, 15000);
+
+    return () => window.clearInterval(refreshTimer);
+  }, [fetchOrders, isAuthenticated, navigate]);
 
   if (!isAuthenticated) return null;
 
@@ -53,8 +95,8 @@ function OrdersPage() {
         <div className="mx-auto w-full max-w-[1200px]">
           {/* Loading */}
           {loading && (
-            <div className="mt-8 flex items-center justify-center py-20">
-              <svg className="h-8 w-8 animate-spin text-[#d71920]" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+            <div className="mt-8">
+              <LoadingState message="Đang tải danh sách đơn hàng..." />
             </div>
           )}
 
@@ -89,18 +131,18 @@ function OrdersPage() {
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-black text-zinc-900">#{order.orderCode || order.id}</span>
-                      <span className="ml-3 text-xs text-zinc-400">{new Date(order.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="ml-3 text-xs text-zinc-400">{formatOrderTime(order.createdAt, now)}</span>
                     </div>
                     <StatusBadge label={getOrderStatusLabel(order.orderStatus)} colorClass={getOrderStatusColor(order.orderStatus)} />
                   </div>
 
                   {/* Info grid */}
                   <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                    <InfoCell label="Loại đơn" value={getOrderTypeLabel(order.orderType)} />
-                    <InfoCell label="Thanh toán" value={
+                    <InfoCell label="Hình thức thanh toán" value={getOrderPaymentDisplay(order)} />
+                    <InfoCell label="Trạng thái" value={
                       <StatusBadge label={getPaymentStatusLabel(order.paymentStatus)} colorClass={getPaymentStatusColor(order.paymentStatus)} />
                     } />
-                    <InfoCell label="Vận chuyển" value={
+                    <InfoCell label="Trạng thái vận chuyển" value={
                       <StatusBadge label={getShippingStatusLabel(order.shippingStatus)} colorClass={getShippingStatusColor(order.shippingStatus)} />
                     } />
                     <InfoCell label="Tổng tiền" value={
@@ -130,7 +172,7 @@ function InfoCell({ label, value }) {
   return (
     <div>
       <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">{label}</div>
-      <div className="mt-0.5 text-sm font-bold text-zinc-800">{typeof value === 'string' ? value : value}</div>
+      <div className="mt-0.5 text-sm font-bold text-zinc-800">{value}</div>
     </div>
   );
 }

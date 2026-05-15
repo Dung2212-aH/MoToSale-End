@@ -1,3 +1,4 @@
+import { FiCheck } from 'react-icons/fi';
 import { Link, useSearchParams } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb.jsx';
 
@@ -11,15 +12,7 @@ function CheckoutSuccessPage() {
       <section className="bg-[linear-gradient(180deg,#f5f6f8_0%,#ffffff_26%)] px-4 py-16">
         <div className="mx-auto max-w-[560px] text-center">
           <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
-            <svg
-              className="h-10 w-10 text-green-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth="2.5"
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-            </svg>
+            <FiCheck className="h-10 w-10 text-green-600" />
           </div>
 
           <h1 className="mt-6 text-[32px] font-black text-zinc-950">

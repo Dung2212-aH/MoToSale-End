@@ -52,6 +52,10 @@ const legacyAuthStorage = {
     return getStorage('localStorage')?.getItem(key) ?? null;
   },
 
+  setItem(key, value) {
+    getStorage('localStorage')?.setItem(key, value);
+  },
+
   removeItem(key) {
     getStorage('localStorage')?.removeItem(key);
   },
@@ -92,6 +96,7 @@ const normalizeOrder = (raw = {}) => {
     paymentStatus: field(raw, 'paymentStatus', 'PaymentStatus', 'trangThaiThanhToan', 'TrangThaiThanhToan'),
     shippingStatus: field(raw, 'shippingStatus', 'ShippingStatus', 'trangThaiVanChuyen', 'TrangThaiVanChuyen'),
     receivingMethod: field(raw, 'receivingMethod', 'ReceivingMethod', 'phuongThucNhanHang', 'PhuongThucNhanHang'),
+    paymentMethod: field(raw, 'paymentMethod', 'PaymentMethod', 'phuongThucThanhToan', 'PhuongThucThanhToan', 'phuongThuc', 'PhuongThuc'),
     orderType: field(raw, 'orderType', 'OrderType', 'loaiDonHang', 'LoaiDonHang'),
     depositAmount: Number(field(raw, 'depositAmount', 'DepositAmount', 'tienDatCoc', 'TienDatCoc') || 0),
     remainingAmount: Number(field(raw, 'remainingAmount', 'RemainingAmount', 'soTienConLai', 'SoTienConLai') || 0),
@@ -219,7 +224,7 @@ const clearAuthStorage = (notify = true) => {
 };
 
 const getStoredUser = () => {
-  const rawUser = sessionAuthStorage.getItem(USER_KEY);
+  const rawUser = sessionAuthStorage.getItem(USER_KEY) || legacyAuthStorage.getItem(USER_KEY);
 
   if (!rawUser) {
     return null;
@@ -291,15 +296,18 @@ const normalizeLoginResponse = (data) => {
   };
 };
 
-const saveAuthUser = (user) => {
+const saveAuthUser = (user, rememberMe = false) => {
   if (!user?.token) {
     throw new Error('Không nhận được token đăng nhập từ máy chủ');
   }
 
-  sessionAuthStorage.setItem(TOKEN_KEY, user.token);
-  sessionAuthStorage.setItem(USER_KEY, JSON.stringify(user));
-  legacyAuthStorage.removeItem(TOKEN_KEY);
-  legacyAuthStorage.removeItem(USER_KEY);
+  const targetStorage = rememberMe ? legacyAuthStorage : sessionAuthStorage;
+  const staleStorage = rememberMe ? sessionAuthStorage : legacyAuthStorage;
+
+  targetStorage.setItem(TOKEN_KEY, user.token);
+  targetStorage.setItem(USER_KEY, JSON.stringify(user));
+  staleStorage.removeItem(TOKEN_KEY);
+  staleStorage.removeItem(USER_KEY);
 
   notifyAuthChanged(user);
 };
@@ -318,7 +326,8 @@ const mergeStoredUser = (data = {}) => {
     token,
   };
 
-  sessionAuthStorage.setItem(USER_KEY, JSON.stringify(nextUser));
+  const targetStorage = sessionAuthStorage.getItem(TOKEN_KEY) ? sessionAuthStorage : legacyAuthStorage;
+  targetStorage.setItem(USER_KEY, JSON.stringify(nextUser));
   notifyAuthChanged(nextUser);
   return nextUser;
 };
@@ -347,10 +356,10 @@ api.interceptors.response.use(
 );
 
 export const authApi = {
-  async login({ username, password }) {
+  async login({ username, password, rememberMe }) {
     const response = await api.post('/auth/login', { email: username, matKhau: password });
     const user = normalizeLoginResponse(responseData(response));
-    saveAuthUser(user);
+    saveAuthUser(user, rememberMe === true || rememberMe === 'true' || rememberMe === 'on');
     return user;
   },
 
@@ -411,7 +420,7 @@ function getToken() {
 
   const legacyToken = legacyAuthStorage.getItem(TOKEN_KEY);
   if (legacyToken) {
-    clearAuthStorage(false);
+    return legacyToken;
   }
 
   return null;
@@ -424,7 +433,7 @@ export const productApi = {
   },
 
   async search(params) {
-    return this.getAll(params);
+    return productApi.getAll(params);
   },
 
   async getById(id) {
@@ -438,11 +447,11 @@ export const productApi = {
   },
 
   getProducts(params) {
-    return this.getAll(params);
+    return productApi.getAll(params);
   },
 
   getProductById(id) {
-    return this.getById(id);
+    return productApi.getById(id);
   },
 
   async uploadImage(productId, data) {
@@ -498,7 +507,7 @@ export const cartApi = {
   },
 
   getCart() {
-    return this.getMine();
+    return cartApi.getMine();
   },
 
   async getCount() {
@@ -521,12 +530,12 @@ export const cartApi = {
     await api.put(`/cart/items/${id}`, {
       soLuong: data.quantity ?? data.soLuong,
     });
-    return this.getMine();
+    return cartApi.getMine();
   },
 
   async removeItem(id) {
     await api.delete(`/cart/items/${id}`);
-    return this.getMine();
+    return cartApi.getMine();
   },
 
   async clearCart() {
@@ -548,7 +557,7 @@ export const orderApi = {
   },
 
   getMyOrders() {
-    return this.getAll();
+    return orderApi.getAll();
   },
 
   async getById(id) {
@@ -563,7 +572,7 @@ export const orderApi = {
   },
 
   getOrderById(id) {
-    return this.getById(id);
+    return orderApi.getById(id);
   },
 
   async createOrder(data) {
@@ -632,7 +641,7 @@ export const voucherApi = {
   },
 
   listVouchers(params) {
-    return this.getAll(params);
+    return voucherApi.getAll(params);
   },
 
   async validateVoucher(data) {
@@ -707,11 +716,11 @@ export const userApi = {
   },
 
   getUsers(params) {
-    return this.getAll(params);
+    return userApi.getAll(params);
   },
 
   getUserById(id) {
-    return this.getById(id);
+    return userApi.getById(id);
   },
 };
 

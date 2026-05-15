@@ -1,4 +1,4 @@
-function AuthForm({ title, subtitle, fields, submitLabel, footer, loading, error, onSubmit }) {
+function AuthForm({ title, subtitle, fields, submitLabel, footer, loading, error, onSubmit, children }) {
   function handleSubmit(event) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -34,6 +34,8 @@ function AuthForm({ title, subtitle, fields, submitLabel, footer, loading, error
             </label>
           ))}
         </div>
+
+        {children && <div className="mt-4">{children}</div>}
 
         <button
           className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#d71920] px-5 text-sm font-extrabold uppercase tracking-[0.08em] text-white transition hover:bg-[#b61016] disabled:cursor-not-allowed disabled:opacity-60"

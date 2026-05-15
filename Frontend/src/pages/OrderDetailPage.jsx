@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { FiCheck } from 'react-icons/fi';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { orderApi, paymentApi } from '../services/api.js';
 import Breadcrumb from '../components/Breadcrumb.jsx';
+import LoadingState from '../components/LoadingState.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { formatCurrency } from '../utils/formatters.js';
 import {
@@ -17,6 +19,12 @@ function Badge({ label, colorClass }) {
 }
 
 const SHIPPING_STEPS = ['NotShipped', 'AwaitingPickup', 'Preparing', 'InTransit', 'Delivered'];
+
+function getOrderPaymentDisplay(order) {
+  if (order.paymentMethod) return getPaymentMethodLabel(order.paymentMethod);
+  if (order.orderType === 'Deposit') return getOrderTypeLabel(order.orderType);
+  return 'Chưa cập nhật';
+}
 
 function OrderDetailPage() {
   const { id } = useParams();
@@ -34,25 +42,35 @@ function OrderDetailPage() {
   const [reviewProduct, setReviewProduct] = useState(null);
 
   useEffect(() => {
-    if (!isAuth) { navigate('/login', { replace: true }); return; }
+    if (!isAuth) {
+      navigate('/login', { replace: true });
+      return;
+    }
+
     fetchOrder();
   }, [id, isAuth]);
 
   async function fetchOrder() {
-    setLoading(true); setError('');
+    setLoading(true);
+    setError('');
+
     try {
       const res = await orderApi.getOrderById(id);
       setOrder(res.order || res);
       setDetails(res.details?.$values || res.details || []);
       setVouchers(res.vouchers?.$values || res.vouchers || []);
-      // Fetch payments
+
       try {
         const payRes = await paymentApi.getPaymentsByOrder(id);
         setPayments(Array.isArray(payRes) ? payRes : payRes?.$values || []);
-      } catch { setPayments([]); }
+      } catch {
+        setPayments([]);
+      }
     } catch (err) {
       setError(err?.message || 'Không thể tải thông tin đơn hàng');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleCancel() {
@@ -63,14 +81,16 @@ function OrderDetailPage() {
       fetchOrder();
     } catch (err) {
       setError(err?.response?.data?.message || err?.message || 'Hủy đơn thất bại');
-    } finally { setCancelling(false); }
+    } finally {
+      setCancelling(false);
+    }
   }
 
   if (!isAuth) return null;
 
   if (loading) return (
-    <div className="flex items-center justify-center py-32">
-      <svg className="h-8 w-8 animate-spin text-[#d71920]" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+    <div className="mx-auto max-w-[800px] px-4 py-16">
+      <LoadingState message="Đang tải thông tin đơn hàng..." />
     </div>
   );
 
@@ -128,7 +148,7 @@ function OrderDetailPage() {
                   <div key={step} className="flex flex-1 flex-col items-center relative">
                     {i > 0 && <div className={`absolute top-3 right-1/2 w-full h-0.5 -translate-y-1/2 ${i <= currentShipIdx ? 'bg-green-400' : 'bg-zinc-200'}`} style={{ zIndex: 0 }} />}
                     <div className={`relative z-10 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${active ? 'bg-green-500 text-white ring-4 ring-green-100' : done ? 'bg-green-400 text-white' : 'bg-zinc-200 text-zinc-400'}`}>
-                      {done ? '✓' : i + 1}
+                      {done ? <FiCheck className="h-3.5 w-3.5" /> : i + 1}
                     </div>
                     <div className={`mt-2 text-center text-[10px] font-bold leading-tight ${active ? 'text-green-600' : done ? 'text-green-500' : 'text-zinc-400'}`}>
                       {getShippingStatusLabel(step)}
@@ -194,7 +214,7 @@ function OrderDetailPage() {
           <div className="rounded-[28px] border border-zinc-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-black text-zinc-950">Thông tin thanh toán</h2>
             <dl className="mt-4 space-y-3 text-sm">
-              <div className="flex justify-between"><span className="text-zinc-500">Loại đơn</span><span className="font-bold">{getOrderTypeLabel(order.orderType)}</span></div>
+              <div className="flex justify-between"><span className="text-zinc-500">Hình thức thanh toán</span><span className="font-bold">{getOrderPaymentDisplay(order)}</span></div>
               <div className="flex justify-between"><span className="text-zinc-500">Tạm tính</span><span className="font-bold">{formatCurrency(order.subtotal)}</span></div>
               {order.discountAmount > 0 && (
                 <div className="flex justify-between text-green-600"><span>Giảm voucher</span><span className="font-bold">-{formatCurrency(order.discountAmount)}</span></div>

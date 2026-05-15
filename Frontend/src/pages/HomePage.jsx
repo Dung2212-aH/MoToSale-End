@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { FiAlertCircle } from 'react-icons/fi';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { orderApi, productApi } from '../services/api.js';
 import { brandAssets, homeCategoryReferences, serviceHighlights } from '../assets/siteData.js';
@@ -77,14 +78,17 @@ function HomePage() {
 
       setProducts(productsResponse.items);
       setCategories(categoriesResponse.filter((category) => category.isActive));
-      
+
       if (Array.isArray(ordersResponse)) {
-        setPendingOrders(ordersResponse.filter(o =>
-          o.orderType === 'Deposit' &&
-          o.paymentStatus === 'PartiallyPaid' &&
-          o.remainingAmount > 0 &&
-          o.orderStatus !== 'Cancelled'
-        ));
+        setPendingOrders(
+          ordersResponse.filter(
+            (order) =>
+              order.orderType === 'Deposit' &&
+              order.paymentStatus === 'PartiallyPaid' &&
+              order.remainingAmount > 0 &&
+              order.orderStatus !== 'Cancelled',
+          ),
+        );
       }
     } catch (err) {
       setError(err);
@@ -193,14 +197,10 @@ function HomePage() {
         <div className="bg-[#fff6e6] px-4 py-3 border-b border-[#f0a327]/30">
           <div className="mx-auto flex max-w-[1200px] flex-col items-center justify-between gap-3 sm:flex-row">
             <div className="flex items-center gap-2 text-sm font-medium text-[#d71920]">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-              </svg>
+              <FiAlertCircle className="h-5 w-5 shrink-0" />
               <span>Bạn có {pendingOrders.length} đơn hàng đang đặt cọc chưa thanh toán phần còn lại.</span>
             </div>
-            <Link 
+            <Link
               to={`/orders/${pendingOrders[0].id}`}
               className="whitespace-nowrap rounded-full bg-[#d71920] px-4 py-1.5 text-xs font-bold uppercase text-white transition hover:bg-[#b61016]"
             >

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { FiHeart } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb.jsx';
 import ErrorState from '../components/ErrorState.jsx';
@@ -8,17 +9,6 @@ import { useCart } from '../contexts/CartContext.jsx';
 import { useFavorite } from '../contexts/FavoriteContext.jsx';
 import { useNotification } from '../contexts/NotificationContext.jsx';
 import { productApi } from '../services/api.js';
-
-function IconHeart() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-7 w-7">
-      <path
-        d="M12 20.2 4.8 13A4.6 4.6 0 1 1 11.3 6.6L12 7.3l.7-.7A4.6 4.6 0 1 1 19.2 13L12 20.2Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
 
 function FavoritesPage() {
   const navigate = useNavigate();
@@ -68,7 +58,7 @@ function FavoritesPage() {
           {!loading && count === 0 && (
             <div className="rounded-[28px] border border-dashed border-zinc-300 bg-white px-6 py-14 text-center shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
               <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-red-50 text-[#d71920]">
-                <IconHeart />
+                <FiHeart className="h-7 w-7 fill-current" />
               </div>
               <h2 className="mt-5 text-2xl font-black text-zinc-950">Chưa có sản phẩm yêu thích</h2>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-600">

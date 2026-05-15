@@ -1,6 +1,6 @@
 USE [ShowroomDB]
 GO
-/****** Object:  Table [dbo].[BIENSANPHAM]    Script Date: 5/7/2026 4:04:05 PM ******/
+/****** Object:  Table [dbo].[BIENSANPHAM]    Script Date: 5/14/2026 5:11:47 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -27,7 +27,7 @@ CREATE TABLE [dbo].[BIENSANPHAM](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [dbo].[ANHSANPHAM]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[ANHSANPHAM]    Script Date: 5/14/2026 5:11:47 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -47,7 +47,7 @@ CREATE TABLE [dbo].[ANHSANPHAM](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [dbo].[SANPHAM]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[SANPHAM]    Script Date: 5/14/2026 5:11:47 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -71,6 +71,7 @@ CREATE TABLE [dbo].[SANPHAM](
 	[TrangThaiSanPham] [varchar](20) NOT NULL,
 	[NgayTao] [datetime2](0) NOT NULL,
 	[NgayCapNhat] [datetime2](0) NOT NULL,
+	[LoaiSanPham] [varchar](20) NOT NULL,
  CONSTRAINT [PK_SANPHAM] PRIMARY KEY CLUSTERED 
 (
 	[MaSanPham] ASC
@@ -85,7 +86,7 @@ CREATE TABLE [dbo].[SANPHAM](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 GO
-/****** Object:  View [dbo].[v_SANPHAM_BIENTHE_ANH]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  View [dbo].[v_SANPHAM_BIENTHE_ANH]    Script Date: 5/14/2026 5:11:47 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -154,7 +155,7 @@ OUTER APPLY
 ) a;
 
 GO
-/****** Object:  Table [dbo].[PHUTUNG_TUONGTHICH]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[PHUTUNG_TUONGTHICH]    Script Date: 5/14/2026 5:11:47 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -177,7 +178,7 @@ CREATE TABLE [dbo].[PHUTUNG_TUONGTHICH](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [dbo].[HANGXE]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[HANGXE]    Script Date: 5/14/2026 5:11:47 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -204,7 +205,7 @@ CREATE TABLE [dbo].[HANGXE](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [dbo].[DONGXE]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[DONGXE]    Script Date: 5/14/2026 5:11:47 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -232,7 +233,7 @@ CREATE TABLE [dbo].[DONGXE](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  View [dbo].[v_PHUTUNG_TUONGTHICH]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  View [dbo].[v_PHUTUNG_TUONGTHICH]    Script Date: 5/14/2026 5:11:47 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -268,7 +269,7 @@ LEFT JOIN dbo.HANGXE hx ON hx.MaHangXe = ptt.MaHangXe
 LEFT JOIN dbo.DONGXE dx ON dx.MaDongXe = ptt.MaDongXe;
 
 GO
-/****** Object:  View [dbo].[v_SANPHAM_TONKHO_KIEMTRA]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  View [dbo].[v_SANPHAM_TONKHO_KIEMTRA]    Script Date: 5/14/2026 5:11:47 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -302,7 +303,7 @@ GROUP BY
     sp.SoLuongTon;
 
 GO
-/****** Object:  View [dbo].[v_ANHSANPHAM_THEO_BIENTHE]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  View [dbo].[v_ANHSANPHAM_THEO_BIENTHE]    Script Date: 5/14/2026 5:11:47 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -334,7 +335,7 @@ LEFT JOIN dbo.BIENSANPHAM bsp
     ON bsp.MaBienSanPham = a.MaBienSanPham;
 
 GO
-/****** Object:  Table [dbo].[TONKHO_GIUCHO]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[TONKHO_GIUCHO]    Script Date: 5/14/2026 5:11:47 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -357,7 +358,7 @@ CREATE TABLE [dbo].[TONKHO_GIUCHO](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  View [dbo].[v_TONKHO_KHADUNG]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  View [dbo].[v_TONKHO_KHADUNG]    Script Date: 5/14/2026 5:11:47 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -411,7 +412,165 @@ AS
     ) gc;
 
 GO
-/****** Object:  Table [dbo].[DONHANG]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[VOUCHER_NGUOIDUNG]    Script Date: 5/14/2026 5:11:47 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[VOUCHER_NGUOIDUNG](
+	[MaVoucherNguoiDung] [int] IDENTITY(1,1) NOT NULL,
+	[MaVoucher] [int] NOT NULL,
+	[MaNguoiDung] [int] NOT NULL,
+	[MaDonHang] [int] NULL,
+	[MaVoucherCodeSnapshot] [nvarchar](50) NOT NULL,
+	[LoaiGiamGiaSnapshot] [varchar](20) NULL,
+	[GiaTriGiamSnapshot] [decimal](18, 2) NULL,
+	[SoTienGiam] [decimal](18, 2) NOT NULL,
+	[TrangThai] [varchar](20) NOT NULL,
+	[NgaySuDung] [datetime2](0) NULL,
+	[NgayTao] [datetime2](0) NOT NULL,
+ CONSTRAINT [PK_VOUCHER_NGUOIDUNG] PRIMARY KEY CLUSTERED 
+(
+	[MaVoucherNguoiDung] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+/****** Object:  View [dbo].[v_VOUCHER_USER_USAGE]    Script Date: 5/14/2026 5:11:48 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+/* 8. View lich su user da dung voucher */
+CREATE   VIEW [dbo].[v_VOUCHER_USER_USAGE]
+AS
+SELECT
+    MaNguoiDung,
+    MaVoucher,
+    COUNT(*) AS SoLanDaDungHopLe
+FROM dbo.VOUCHER_NGUOIDUNG
+WHERE TrangThai = 'Used'
+GROUP BY MaNguoiDung, MaVoucher;
+
+GO
+/****** Object:  Table [dbo].[BAIVIET]    Script Date: 5/14/2026 5:11:48 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[BAIVIET](
+	[MaBaiViet] [int] IDENTITY(1,1) NOT NULL,
+	[TieuDe] [nvarchar](255) NOT NULL,
+	[Slug] [nvarchar](280) NOT NULL,
+	[TomTat] [nvarchar](500) NULL,
+	[NoiDung] [nvarchar](max) NOT NULL,
+	[AnhDaiDienUrl] [nvarchar](500) NULL,
+	[DanhMuc] [nvarchar](100) NULL,
+	[MaTacGia] [int] NULL,
+	[XuatBanLuc] [datetime2](0) NULL,
+	[TrangThai] [varchar](20) NOT NULL,
+	[NgayTao] [datetime2](0) NOT NULL,
+	[NgayCapNhat] [datetime2](0) NOT NULL,
+ CONSTRAINT [PK_BAIVIET] PRIMARY KEY CLUSTERED 
+(
+	[MaBaiViet] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+ CONSTRAINT [UQ_BAIVIET_Slug] UNIQUE NONCLUSTERED 
+(
+	[Slug] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+/****** Object:  Table [dbo].[CHITIET_DONHANG]    Script Date: 5/14/2026 5:11:48 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[CHITIET_DONHANG](
+	[MaChiTietDonHang] [int] IDENTITY(1,1) NOT NULL,
+	[MaDonHang] [int] NOT NULL,
+	[MaSanPham] [int] NOT NULL,
+	[MaBienSanPham] [int] NULL,
+	[TenSanPhamSnapshot] [nvarchar](255) NOT NULL,
+	[SKUSnapshot] [nvarchar](80) NULL,
+	[DonGia] [decimal](18, 2) NOT NULL,
+	[SoLuong] [int] NOT NULL,
+	[ThanhTien]  AS (CONVERT([decimal](18,2),[DonGia]*[SoLuong])) PERSISTED,
+ CONSTRAINT [PK_CHITIET_DONHANG] PRIMARY KEY CLUSTERED 
+(
+	[MaChiTietDonHang] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+/****** Object:  Table [dbo].[CHITIET_GIOHANG]    Script Date: 5/14/2026 5:11:48 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[CHITIET_GIOHANG](
+	[MaChiTietGioHang] [int] IDENTITY(1,1) NOT NULL,
+	[MaGioHang] [int] NOT NULL,
+	[MaSanPham] [int] NOT NULL,
+	[MaBienSanPham] [int] NULL,
+	[SoLuong] [int] NOT NULL,
+	[DonGia] [decimal](18, 2) NOT NULL,
+	[ThanhTien]  AS (CONVERT([decimal](18,2),[DonGia]*[SoLuong])) PERSISTED,
+	[NgayTao] [datetime2](0) NOT NULL,
+	[NgayCapNhat] [datetime2](0) NOT NULL,
+ CONSTRAINT [PK_CHITIET_GIOHANG] PRIMARY KEY CLUSTERED 
+(
+	[MaChiTietGioHang] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+/****** Object:  Table [dbo].[DANHGIASANPHAM]    Script Date: 5/14/2026 5:11:48 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[DANHGIASANPHAM](
+	[MaDanhGia] [int] IDENTITY(1,1) NOT NULL,
+	[MaSanPham] [int] NOT NULL,
+	[MaNguoiDung] [int] NOT NULL,
+	[MaDonHang] [int] NULL,
+	[Diem] [tinyint] NOT NULL,
+	[TieuDe] [nvarchar](255) NULL,
+	[NoiDung] [nvarchar](max) NULL,
+	[TrangThai] [varchar](20) NOT NULL,
+	[NgayTao] [datetime2](0) NOT NULL,
+	[HinhAnhUrl] [nvarchar](max) NULL,
+ CONSTRAINT [PK_DANHGIASANPHAM] PRIMARY KEY CLUSTERED 
+(
+	[MaDanhGia] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+/****** Object:  Table [dbo].[DANHMUC]    Script Date: 5/14/2026 5:11:48 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[DANHMUC](
+	[MaDanhMuc] [int] IDENTITY(1,1) NOT NULL,
+	[MaDanhMucCha] [int] NULL,
+	[TenDanhMuc] [nvarchar](150) NOT NULL,
+	[Slug] [nvarchar](180) NOT NULL,
+	[MoTa] [nvarchar](500) NULL,
+	[ThuTuHienThi] [int] NOT NULL,
+	[DangHoatDong] [bit] NOT NULL,
+	[NgayTao] [datetime2](0) NOT NULL,
+	[NgayCapNhat] [datetime2](0) NOT NULL,
+ CONSTRAINT [PK_DANHMUC] PRIMARY KEY CLUSTERED 
+(
+	[MaDanhMuc] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
+ CONSTRAINT [UQ_DANHMUC_Slug] UNIQUE NONCLUSTERED 
+(
+	[Slug] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY]
+GO
+/****** Object:  Table [dbo].[DONHANG]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -455,259 +614,7 @@ CREATE TABLE [dbo].[DONHANG](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  View [dbo].[v_TRA_GOP_TOMTAT]    Script Date: 5/7/2026 4:04:06 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-
-/* 6) Optional view for admin/customer installment summary */
-CREATE   VIEW [dbo].[v_TRA_GOP_TOMTAT]
-AS
-SELECT
-    tg.MaTraGop,
-    tg.MaDonHang,
-    dh.MaDonHangKinhDoanh,
-    dh.MaNguoiDung,
-    dh.HoTenNhanHang,
-    dh.SoDienThoaiNhanHang,
-    dh.TongThanhToan,
-    tg.SoTienTraTruoc,
-    tg.SoTienTraGop,
-    tg.SoThang,
-    tg.LaiSuatThang,
-    tg.SoTienMoiThang,
-    tg.SoKyDaTra,
-    SoKyConLai = tg.SoThang - tg.SoKyDaTra,
-    SoTienUocTinhDaTra = CONVERT(DECIMAL(18,2), tg.SoKyDaTra * tg.SoTienMoiThang),
-    SoTienUocTinhConLai = CONVERT(DECIMAL(18,2), (tg.SoThang - tg.SoKyDaTra) * tg.SoTienMoiThang),
-    tg.TrangThai,
-    tg.DonViTaiChinh,
-    tg.NgayBatDau,
-    tg.NgayKetThuc,
-    tg.NgayTao,
-    tg.NgayCapNhat
-FROM dbo.TRA_GOP tg
-INNER JOIN dbo.DONHANG dh ON dh.MaDonHang = tg.MaDonHang;
-GO
-/****** Object:  Table [dbo].[VOUCHER_NGUOIDUNG]    Script Date: 5/7/2026 4:04:06 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-CREATE TABLE [dbo].[VOUCHER_NGUOIDUNG](
-	[MaVoucherNguoiDung] [int] IDENTITY(1,1) NOT NULL,
-	[MaVoucher] [int] NOT NULL,
-	[MaNguoiDung] [int] NOT NULL,
-	[MaDonHang] [int] NULL,
-	[MaVoucherCodeSnapshot] [nvarchar](50) NOT NULL,
-	[LoaiGiamGiaSnapshot] [varchar](20) NULL,
-	[GiaTriGiamSnapshot] [decimal](18, 2) NULL,
-	[SoTienGiam] [decimal](18, 2) NOT NULL,
-	[TrangThai] [varchar](20) NOT NULL,
-	[NgaySuDung] [datetime2](0) NULL,
-	[NgayTao] [datetime2](0) NOT NULL,
- CONSTRAINT [PK_VOUCHER_NGUOIDUNG] PRIMARY KEY CLUSTERED 
-(
-	[MaVoucherNguoiDung] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-) ON [PRIMARY]
-GO
-/****** Object:  View [dbo].[v_VOUCHER_USER_USAGE]    Script Date: 5/7/2026 4:04:06 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-
-/* 8. View lich su user da dung voucher */
-CREATE   VIEW [dbo].[v_VOUCHER_USER_USAGE]
-AS
-SELECT
-    MaNguoiDung,
-    MaVoucher,
-    COUNT(*) AS SoLanDaDungHopLe
-FROM dbo.VOUCHER_NGUOIDUNG
-WHERE TrangThai = 'Used'
-GROUP BY MaNguoiDung, MaVoucher;
-
-GO
-/****** Object:  Table [dbo].[THANHTOAN]    Script Date: 5/7/2026 4:04:06 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-CREATE TABLE [dbo].[THANHTOAN](
-	[MaThanhToan] [int] IDENTITY(1,1) NOT NULL,
-	[MaThanhToanKinhDoanh] [nvarchar](50) NOT NULL,
-	[MaDonHang] [int] NOT NULL,
-	[SoTien] [decimal](18, 2) NOT NULL,
-	[PhuongThuc] [varchar](30) NOT NULL,
-	[TrangThai] [varchar](20) NOT NULL,
-	[MaGiaoDich] [nvarchar](120) NULL,
-	[DaThanhToanLuc] [datetime2](0) NULL,
-	[NgayTao] [datetime2](0) NOT NULL,
-	[LoaiThanhToan] [varchar](30) NOT NULL,
-	[SoTienHoan] [decimal](18, 2) NOT NULL,
-	[NoiDungChuyenKhoan] [nvarchar](500) NULL,
-	[MaNganHang] [nvarchar](50) NULL,
-	[LyDoHuy] [nvarchar](500) NULL,
-	[NgayHuy] [datetime2](0) NULL,
-	[ResponseRaw] [nvarchar](max) NULL,
- CONSTRAINT [PK_THANHTOAN] PRIMARY KEY CLUSTERED 
-(
-	[MaThanhToan] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
- CONSTRAINT [UQ_THANHTOAN_Code] UNIQUE NONCLUSTERED 
-(
-	[MaThanhToanKinhDoanh] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
-GO
-/****** Object:  View [dbo].[v_THANHTOAN_DONHANG_TONGHOP]    Script Date: 5/7/2026 4:04:06 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-
-/* 4) View tổng hợp thanh toán thực thu của đơn hàng */
-CREATE   VIEW [dbo].[v_THANHTOAN_DONHANG_TONGHOP]
-AS
-SELECT
-    dh.MaDonHang,
-    dh.MaDonHangKinhDoanh,
-    dh.TongThanhToan,
-    TongDaThanhToan = ISNULL(SUM(CASE WHEN tt.TrangThai IN ('Paid', 'PartiallyRefunded', 'Refunded') THEN tt.SoTien ELSE 0 END), 0),
-    TongDaHoan = ISNULL(SUM(CASE WHEN tt.TrangThai IN ('PartiallyRefunded', 'Refunded') THEN tt.SoTienHoan ELSE 0 END), 0),
-    TongThucThu = ISNULL(SUM(CASE WHEN tt.TrangThai IN ('Paid', 'PartiallyRefunded', 'Refunded') THEN tt.SoTien - tt.SoTienHoan ELSE 0 END), 0),
-    SoTienConPhaiThu = CASE
-        WHEN dh.TongThanhToan - ISNULL(SUM(CASE WHEN tt.TrangThai IN ('Paid', 'PartiallyRefunded', 'Refunded') THEN tt.SoTien - tt.SoTienHoan ELSE 0 END), 0) < 0 THEN 0
-        ELSE dh.TongThanhToan - ISNULL(SUM(CASE WHEN tt.TrangThai IN ('Paid', 'PartiallyRefunded', 'Refunded') THEN tt.SoTien - tt.SoTienHoan ELSE 0 END), 0)
-    END,
-    SoLanThanhToanThanhCong = SUM(CASE WHEN tt.TrangThai IN ('Paid', 'PartiallyRefunded', 'Refunded') THEN 1 ELSE 0 END),
-    SoLanDangCho = SUM(CASE WHEN tt.TrangThai = 'Pending' THEN 1 ELSE 0 END)
-FROM dbo.DONHANG dh
-LEFT JOIN dbo.THANHTOAN tt ON tt.MaDonHang = dh.MaDonHang
-GROUP BY dh.MaDonHang, dh.MaDonHangKinhDoanh, dh.TongThanhToan;
-
-GO
-/****** Object:  Table [dbo].[BAIVIET]    Script Date: 5/7/2026 4:04:06 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-CREATE TABLE [dbo].[BAIVIET](
-	[MaBaiViet] [int] IDENTITY(1,1) NOT NULL,
-	[TieuDe] [nvarchar](255) NOT NULL,
-	[Slug] [nvarchar](280) NOT NULL,
-	[TomTat] [nvarchar](500) NULL,
-	[NoiDung] [nvarchar](max) NOT NULL,
-	[AnhDaiDienUrl] [nvarchar](500) NULL,
-	[DanhMuc] [nvarchar](100) NULL,
-	[MaTacGia] [int] NULL,
-	[XuatBanLuc] [datetime2](0) NULL,
-	[TrangThai] [varchar](20) NOT NULL,
-	[NgayTao] [datetime2](0) NOT NULL,
-	[NgayCapNhat] [datetime2](0) NOT NULL,
- CONSTRAINT [PK_BAIVIET] PRIMARY KEY CLUSTERED 
-(
-	[MaBaiViet] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
- CONSTRAINT [UQ_BAIVIET_Slug] UNIQUE NONCLUSTERED 
-(
-	[Slug] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
-GO
-/****** Object:  Table [dbo].[CHITIET_DONHANG]    Script Date: 5/7/2026 4:04:06 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-CREATE TABLE [dbo].[CHITIET_DONHANG](
-	[MaChiTietDonHang] [int] IDENTITY(1,1) NOT NULL,
-	[MaDonHang] [int] NOT NULL,
-	[MaSanPham] [int] NOT NULL,
-	[MaBienSanPham] [int] NULL,
-	[TenSanPhamSnapshot] [nvarchar](255) NOT NULL,
-	[SKUSnapshot] [nvarchar](80) NULL,
-	[DonGia] [decimal](18, 2) NOT NULL,
-	[SoLuong] [int] NOT NULL,
-	[ThanhTien]  AS (CONVERT([decimal](18,2),[DonGia]*[SoLuong])) PERSISTED,
- CONSTRAINT [PK_CHITIET_DONHANG] PRIMARY KEY CLUSTERED 
-(
-	[MaChiTietDonHang] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-) ON [PRIMARY]
-GO
-/****** Object:  Table [dbo].[CHITIET_GIOHANG]    Script Date: 5/7/2026 4:04:06 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-CREATE TABLE [dbo].[CHITIET_GIOHANG](
-	[MaChiTietGioHang] [int] IDENTITY(1,1) NOT NULL,
-	[MaGioHang] [int] NOT NULL,
-	[MaSanPham] [int] NOT NULL,
-	[MaBienSanPham] [int] NULL,
-	[SoLuong] [int] NOT NULL,
-	[DonGia] [decimal](18, 2) NOT NULL,
-	[ThanhTien]  AS (CONVERT([decimal](18,2),[DonGia]*[SoLuong])) PERSISTED,
-	[NgayTao] [datetime2](0) NOT NULL,
-	[NgayCapNhat] [datetime2](0) NOT NULL,
- CONSTRAINT [PK_CHITIET_GIOHANG] PRIMARY KEY CLUSTERED 
-(
-	[MaChiTietGioHang] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-) ON [PRIMARY]
-GO
-/****** Object:  Table [dbo].[DANHGIASANPHAM]    Script Date: 5/7/2026 4:04:06 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-CREATE TABLE [dbo].[DANHGIASANPHAM](
-	[MaDanhGia] [int] IDENTITY(1,1) NOT NULL,
-	[MaSanPham] [int] NOT NULL,
-	[MaNguoiDung] [int] NOT NULL,
-	[MaDonHang] [int] NULL,
-	[Diem] [tinyint] NOT NULL,
-	[TieuDe] [nvarchar](255) NULL,
-	[NoiDung] [nvarchar](max) NULL,
-	[HinhAnhUrl] [nvarchar](max) NULL,
-	[TrangThai] [varchar](20) NOT NULL,
-	[NgayTao] [datetime2](0) NOT NULL,
- CONSTRAINT [PK_DANHGIASANPHAM] PRIMARY KEY CLUSTERED 
-(
-	[MaDanhGia] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
-GO
-/****** Object:  Table [dbo].[DANHMUC]    Script Date: 5/7/2026 4:04:06 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-CREATE TABLE [dbo].[DANHMUC](
-	[MaDanhMuc] [int] IDENTITY(1,1) NOT NULL,
-	[MaDanhMucCha] [int] NULL,
-	[TenDanhMuc] [nvarchar](150) NOT NULL,
-	[Slug] [nvarchar](180) NOT NULL,
-	[MoTa] [nvarchar](500) NULL,
-	[ThuTuHienThi] [int] NOT NULL,
-	[DangHoatDong] [bit] NOT NULL,
-	[NgayTao] [datetime2](0) NOT NULL,
-	[NgayCapNhat] [datetime2](0) NOT NULL,
- CONSTRAINT [PK_DANHMUC] PRIMARY KEY CLUSTERED 
-(
-	[MaDanhMuc] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
- CONSTRAINT [UQ_DANHMUC_Slug] UNIQUE NONCLUSTERED 
-(
-	[Slug] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-) ON [PRIMARY]
-GO
-/****** Object:  Table [dbo].[DONHANG_VOUCHER]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[DONHANG_VOUCHER]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -727,7 +634,7 @@ CREATE TABLE [dbo].[DONHANG_VOUCHER](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [dbo].[FAQ]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[FAQ]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -747,7 +654,7 @@ CREATE TABLE [dbo].[FAQ](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 GO
-/****** Object:  Table [dbo].[GIOHANG]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[GIOHANG]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -764,7 +671,7 @@ CREATE TABLE [dbo].[GIOHANG](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [dbo].[LIENHE_YEUCAU]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[LIENHE_YEUCAU]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -789,7 +696,7 @@ CREATE TABLE [dbo].[LIENHE_YEUCAU](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 GO
-/****** Object:  Table [dbo].[NGUOIDUNG]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[NGUOIDUNG]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -813,7 +720,7 @@ CREATE TABLE [dbo].[NGUOIDUNG](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [dbo].[NGUOIDUNG_DIACHI]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[NGUOIDUNG_DIACHI]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -837,7 +744,7 @@ PRIMARY KEY CLUSTERED
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [dbo].[NGUOIDUNG_VAITRO]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[NGUOIDUNG_VAITRO]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -853,7 +760,7 @@ CREATE TABLE [dbo].[NGUOIDUNG_VAITRO](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [dbo].[SHOWROOM]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[SHOWROOM]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -879,28 +786,7 @@ CREATE TABLE [dbo].[SHOWROOM](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [dbo].[THANHTOAN_HOANTIEN]    Script Date: 5/7/2026 4:04:06 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-CREATE TABLE [dbo].[THANHTOAN_HOANTIEN](
-	[MaHoanTien] [int] IDENTITY(1,1) NOT NULL,
-	[MaThanhToan] [int] NOT NULL,
-	[MaDonHang] [int] NOT NULL,
-	[SoTienHoan] [decimal](18, 2) NOT NULL,
-	[MaGiaoDichHoanTien] [nvarchar](120) NULL,
-	[LyDo] [nvarchar](500) NULL,
-	[TrangThai] [varchar](20) NOT NULL,
-	[ResponseRaw] [nvarchar](max) NULL,
-	[NgayTao] [datetime2](0) NOT NULL,
- CONSTRAINT [PK_THANHTOAN_HOANTIEN] PRIMARY KEY CLUSTERED 
-(
-	[MaHoanTien] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
-GO
-/****** Object:  Table [dbo].[VAITRO]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[VAITRO]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -919,7 +805,7 @@ CREATE TABLE [dbo].[VAITRO](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [dbo].[VOUCHER]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[VOUCHER]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -952,7 +838,7 @@ CREATE TABLE [dbo].[VOUCHER](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [dbo].[VOUCHER_DANHMUC]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[VOUCHER_DANHMUC]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -968,7 +854,7 @@ CREATE TABLE [dbo].[VOUCHER_DANHMUC](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [dbo].[VOUCHER_HANGXE]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[VOUCHER_HANGXE]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -984,7 +870,7 @@ CREATE TABLE [dbo].[VOUCHER_HANGXE](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [dbo].[VOUCHER_SANPHAM]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[VOUCHER_SANPHAM]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -1000,7 +886,7 @@ CREATE TABLE [dbo].[VOUCHER_SANPHAM](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Table [dbo].[YEUTHICH]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Table [dbo].[YEUTHICH]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -1016,14 +902,14 @@ CREATE TABLE [dbo].[YEUTHICH](
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
-/****** Object:  Index [IX_ANHSANPHAM_Product]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_ANHSANPHAM_Product]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_ANHSANPHAM_Product] ON [dbo].[ANHSANPHAM]
 (
 	[MaSanPham] ASC,
 	[ThuTuHienThi] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-/****** Object:  Index [UX_ANHSANPHAM_OneMainImage_PerVariant]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [UX_ANHSANPHAM_OneMainImage_PerVariant]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE UNIQUE NONCLUSTERED INDEX [UX_ANHSANPHAM_OneMainImage_PerVariant] ON [dbo].[ANHSANPHAM]
 (
 	[MaBienSanPham] ASC
@@ -1031,7 +917,7 @@ CREATE UNIQUE NONCLUSTERED INDEX [UX_ANHSANPHAM_OneMainImage_PerVariant] ON [dbo
 WHERE ([MaBienSanPham] IS NOT NULL AND [LaAnhChinh]=(1))
 WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-/****** Object:  Index [UX_ANHSANPHAM_Primary]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [UX_ANHSANPHAM_Primary]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE UNIQUE NONCLUSTERED INDEX [UX_ANHSANPHAM_Primary] ON [dbo].[ANHSANPHAM]
 (
 	[MaSanPham] ASC
@@ -1041,7 +927,7 @@ WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNOR
 GO
 SET ANSI_PADDING ON
 GO
-/****** Object:  Index [IX_BAIVIET_Category]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_BAIVIET_Category]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_BAIVIET_Category] ON [dbo].[BAIVIET]
 (
 	[DanhMuc] ASC,
@@ -1050,7 +936,7 @@ CREATE NONCLUSTERED INDEX [IX_BAIVIET_Category] ON [dbo].[BAIVIET]
 GO
 SET ANSI_PADDING ON
 GO
-/****** Object:  Index [IX_BAIVIET_Status_Published]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_BAIVIET_Status_Published]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_BAIVIET_Status_Published] ON [dbo].[BAIVIET]
 (
 	[TrangThai] ASC,
@@ -1059,7 +945,7 @@ CREATE NONCLUSTERED INDEX [IX_BAIVIET_Status_Published] ON [dbo].[BAIVIET]
 GO
 SET ANSI_PADDING ON
 GO
-/****** Object:  Index [IX_BIENSANPHAM_MaSanPham_MauSac]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_BIENSANPHAM_MaSanPham_MauSac]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_BIENSANPHAM_MaSanPham_MauSac] ON [dbo].[BIENSANPHAM]
 (
 	[MaSanPham] ASC,
@@ -1069,20 +955,20 @@ CREATE NONCLUSTERED INDEX [IX_BIENSANPHAM_MaSanPham_MauSac] ON [dbo].[BIENSANPHA
 GO
 SET ANSI_PADDING ON
 GO
-/****** Object:  Index [IX_BIENSANPHAM_Product]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_BIENSANPHAM_Product]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_BIENSANPHAM_Product] ON [dbo].[BIENSANPHAM]
 (
 	[MaSanPham] ASC,
 	[TrangThai] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-/****** Object:  Index [IX_CHITIET_DONHANG_Product]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_CHITIET_DONHANG_Product]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_CHITIET_DONHANG_Product] ON [dbo].[CHITIET_DONHANG]
 (
 	[MaSanPham] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-/****** Object:  Index [UX_CHITIET_GIOHANG_NoVariant]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [UX_CHITIET_GIOHANG_NoVariant]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE UNIQUE NONCLUSTERED INDEX [UX_CHITIET_GIOHANG_NoVariant] ON [dbo].[CHITIET_GIOHANG]
 (
 	[MaGioHang] ASC,
@@ -1091,7 +977,7 @@ CREATE UNIQUE NONCLUSTERED INDEX [UX_CHITIET_GIOHANG_NoVariant] ON [dbo].[CHITIE
 WHERE ([MaBienSanPham] IS NULL)
 WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-/****** Object:  Index [UX_CHITIET_GIOHANG_WithVariant]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [UX_CHITIET_GIOHANG_WithVariant]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE UNIQUE NONCLUSTERED INDEX [UX_CHITIET_GIOHANG_WithVariant] ON [dbo].[CHITIET_GIOHANG]
 (
 	[MaGioHang] ASC,
@@ -1103,7 +989,7 @@ WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNOR
 GO
 SET ANSI_PADDING ON
 GO
-/****** Object:  Index [IX_DANHGIA_Product_Status]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_DANHGIA_Product_Status]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_DANHGIA_Product_Status] ON [dbo].[DANHGIASANPHAM]
 (
 	[MaSanPham] ASC,
@@ -1111,14 +997,14 @@ CREATE NONCLUSTERED INDEX [IX_DANHGIA_Product_Status] ON [dbo].[DANHGIASANPHAM]
 	[NgayTao] DESC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-/****** Object:  Index [IX_DANHMUC_Parent]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_DANHMUC_Parent]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_DANHMUC_Parent] ON [dbo].[DANHMUC]
 (
 	[MaDanhMucCha] ASC,
 	[DangHoatDong] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-/****** Object:  Index [IX_DONGXE_Hang]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_DONGXE_Hang]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_DONGXE_Hang] ON [dbo].[DONGXE]
 (
 	[MaHangXe] ASC,
@@ -1127,7 +1013,7 @@ CREATE NONCLUSTERED INDEX [IX_DONGXE_Hang] ON [dbo].[DONGXE]
 GO
 SET ANSI_PADDING ON
 GO
-/****** Object:  Index [IX_DONHANG_DatCoc]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_DONHANG_DatCoc]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_DONHANG_DatCoc] ON [dbo].[DONHANG]
 (
 	[LoaiDonHang] ASC,
@@ -1137,7 +1023,7 @@ CREATE NONCLUSTERED INDEX [IX_DONHANG_DatCoc] ON [dbo].[DONHANG]
 GO
 SET ANSI_PADDING ON
 GO
-/****** Object:  Index [IX_DONHANG_GiaoNhan]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_DONHANG_GiaoNhan]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_DONHANG_GiaoNhan] ON [dbo].[DONHANG]
 (
 	[PhuongThucNhanHang] ASC,
@@ -1145,7 +1031,7 @@ CREATE NONCLUSTERED INDEX [IX_DONHANG_GiaoNhan] ON [dbo].[DONHANG]
 	[NgayHenNhanXe] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-/****** Object:  Index [IX_DONHANG_MaGioHang]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_DONHANG_MaGioHang]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_DONHANG_MaGioHang] ON [dbo].[DONHANG]
 (
 	[MaGioHang] ASC
@@ -1155,21 +1041,21 @@ WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_
 GO
 SET ANSI_PADDING ON
 GO
-/****** Object:  Index [IX_DONHANG_Status_Date]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_DONHANG_Status_Date]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_DONHANG_Status_Date] ON [dbo].[DONHANG]
 (
 	[TrangThaiDonHang] ASC,
 	[NgayTao] DESC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-/****** Object:  Index [IX_DONHANG_User_Date]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_DONHANG_User_Date]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_DONHANG_User_Date] ON [dbo].[DONHANG]
 (
 	[MaNguoiDung] ASC,
 	[NgayTao] DESC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-/****** Object:  Index [UX_DONHANG_MaGioHang_NotNull]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [UX_DONHANG_MaGioHang_NotNull]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE UNIQUE NONCLUSTERED INDEX [UX_DONHANG_MaGioHang_NotNull] ON [dbo].[DONHANG]
 (
 	[MaGioHang] ASC
@@ -1179,7 +1065,7 @@ WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNOR
 GO
 SET ANSI_PADDING ON
 GO
-/****** Object:  Index [IX_FAQ_Category_Active]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_FAQ_Category_Active]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_FAQ_Category_Active] ON [dbo].[FAQ]
 (
 	[DanhMuc] ASC,
@@ -1187,7 +1073,7 @@ CREATE NONCLUSTERED INDEX [IX_FAQ_Category_Active] ON [dbo].[FAQ]
 	[ThuTuHienThi] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-/****** Object:  Index [UX_GIOHANG_User_Active]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [UX_GIOHANG_User_Active]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE UNIQUE NONCLUSTERED INDEX [UX_GIOHANG_User_Active] ON [dbo].[GIOHANG]
 (
 	[MaNguoiDung] ASC
@@ -1195,7 +1081,7 @@ CREATE UNIQUE NONCLUSTERED INDEX [UX_GIOHANG_User_Active] ON [dbo].[GIOHANG]
 WHERE ([TrangThai]='Active')
 WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-/****** Object:  Index [IX_LIENHE_Product]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_LIENHE_Product]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_LIENHE_Product] ON [dbo].[LIENHE_YEUCAU]
 (
 	[MaSanPham] ASC
@@ -1203,7 +1089,7 @@ CREATE NONCLUSTERED INDEX [IX_LIENHE_Product] ON [dbo].[LIENHE_YEUCAU]
 GO
 SET ANSI_PADDING ON
 GO
-/****** Object:  Index [IX_LIENHE_Status_Date]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_LIENHE_Status_Date]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_LIENHE_Status_Date] ON [dbo].[LIENHE_YEUCAU]
 (
 	[TrangThai] ASC,
@@ -1212,13 +1098,13 @@ CREATE NONCLUSTERED INDEX [IX_LIENHE_Status_Date] ON [dbo].[LIENHE_YEUCAU]
 GO
 SET ANSI_PADDING ON
 GO
-/****** Object:  Index [UX_NGUOIDUNG_SoDienThoai]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [UX_NGUOIDUNG_SoDienThoai]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE UNIQUE NONCLUSTERED INDEX [UX_NGUOIDUNG_SoDienThoai] ON [dbo].[NGUOIDUNG]
 (
 	[SoDienThoai] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-/****** Object:  Index [UX_NGUOIDUNG_DIACHI_MacDinh]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [UX_NGUOIDUNG_DIACHI_MacDinh]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE UNIQUE NONCLUSTERED INDEX [UX_NGUOIDUNG_DIACHI_MacDinh] ON [dbo].[NGUOIDUNG_DIACHI]
 (
 	[MaNguoiDung] ASC
@@ -1226,7 +1112,7 @@ CREATE UNIQUE NONCLUSTERED INDEX [UX_NGUOIDUNG_DIACHI_MacDinh] ON [dbo].[NGUOIDU
 WHERE ([LaMacDinh]=(1))
 WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-/****** Object:  Index [IX_PHUTUNG_TUONGTHICH_LocXe]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_PHUTUNG_TUONGTHICH_LocXe]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_PHUTUNG_TUONGTHICH_LocXe] ON [dbo].[PHUTUNG_TUONGTHICH]
 (
 	[MaHangXe] ASC,
@@ -1237,7 +1123,7 @@ CREATE NONCLUSTERED INDEX [IX_PHUTUNG_TUONGTHICH_LocXe] ON [dbo].[PHUTUNG_TUONGT
 )
 INCLUDE([MaPhuTung],[ApDungTatCaXe]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-/****** Object:  Index [IX_PHUTUNG_TUONGTHICH_MaPhuTung]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_PHUTUNG_TUONGTHICH_MaPhuTung]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_PHUTUNG_TUONGTHICH_MaPhuTung] ON [dbo].[PHUTUNG_TUONGTHICH]
 (
 	[MaPhuTung] ASC,
@@ -1245,7 +1131,7 @@ CREATE NONCLUSTERED INDEX [IX_PHUTUNG_TUONGTHICH_MaPhuTung] ON [dbo].[PHUTUNG_TU
 )
 INCLUDE([MaHangXe],[MaDongXe],[NamTu],[NamDen],[ApDungTatCaXe]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-/****** Object:  Index [IX_SANPHAM_Brand_Model]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_SANPHAM_Brand_Model]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_SANPHAM_Brand_Model] ON [dbo].[SANPHAM]
 (
 	[MaHangXe] ASC,
@@ -1253,7 +1139,7 @@ CREATE NONCLUSTERED INDEX [IX_SANPHAM_Brand_Model] ON [dbo].[SANPHAM]
 	[DangHoatDong] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-/****** Object:  Index [IX_SANPHAM_Price]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_SANPHAM_Price]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_SANPHAM_Price] ON [dbo].[SANPHAM]
 (
 	[GiaGoc] ASC,
@@ -1262,35 +1148,7 @@ CREATE NONCLUSTERED INDEX [IX_SANPHAM_Price] ON [dbo].[SANPHAM]
 GO
 SET ANSI_PADDING ON
 GO
-/****** Object:  Index [IX_THANHTOAN_MaDonHang_Loai_TrangThai]    Script Date: 5/7/2026 4:04:06 PM ******/
-CREATE NONCLUSTERED INDEX [IX_THANHTOAN_MaDonHang_Loai_TrangThai] ON [dbo].[THANHTOAN]
-(
-	[MaDonHang] ASC,
-	[LoaiThanhToan] ASC,
-	[TrangThai] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-GO
-SET ANSI_PADDING ON
-GO
-/****** Object:  Index [IX_THANHTOAN_Order]    Script Date: 5/7/2026 4:04:06 PM ******/
-CREATE NONCLUSTERED INDEX [IX_THANHTOAN_Order] ON [dbo].[THANHTOAN]
-(
-	[MaDonHang] ASC,
-	[TrangThai] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-GO
-SET ANSI_PADDING ON
-GO
-/****** Object:  Index [IX_THANHTOAN_HOANTIEN_MaThanhToan]    Script Date: 5/7/2026 4:04:06 PM ******/
-CREATE NONCLUSTERED INDEX [IX_THANHTOAN_HOANTIEN_MaThanhToan] ON [dbo].[THANHTOAN_HOANTIEN]
-(
-	[MaThanhToan] ASC,
-	[TrangThai] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-GO
-SET ANSI_PADDING ON
-GO
-/****** Object:  Index [IX_TONKHO_GIUCHO_Active_ByVariant]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_TONKHO_GIUCHO_Active_ByVariant]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_TONKHO_GIUCHO_Active_ByVariant] ON [dbo].[TONKHO_GIUCHO]
 (
 	[MaSanPham] ASC,
@@ -1300,7 +1158,7 @@ CREATE NONCLUSTERED INDEX [IX_TONKHO_GIUCHO_Active_ByVariant] ON [dbo].[TONKHO_G
 )
 INCLUDE([SoLuong],[MaDonHang]) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-/****** Object:  Index [UX_TONKHO_GIUCHO_Active_OrderDetail]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [UX_TONKHO_GIUCHO_Active_OrderDetail]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE UNIQUE NONCLUSTERED INDEX [UX_TONKHO_GIUCHO_Active_OrderDetail] ON [dbo].[TONKHO_GIUCHO]
 (
 	[MaChiTietDonHang] ASC
@@ -1308,7 +1166,7 @@ CREATE UNIQUE NONCLUSTERED INDEX [UX_TONKHO_GIUCHO_Active_OrderDetail] ON [dbo].
 WHERE ([TrangThai]='Active' AND [MaChiTietDonHang] IS NOT NULL)
 WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
-/****** Object:  Index [IX_VOUCHER_Active_Time]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [IX_VOUCHER_Active_Time]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE NONCLUSTERED INDEX [IX_VOUCHER_Active_Time] ON [dbo].[VOUCHER]
 (
 	[DangHoatDong] ASC,
@@ -1318,7 +1176,7 @@ CREATE NONCLUSTERED INDEX [IX_VOUCHER_Active_Time] ON [dbo].[VOUCHER]
 GO
 SET ANSI_PADDING ON
 GO
-/****** Object:  Index [UX_VOUCHER_MaVoucherCode]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Index [UX_VOUCHER_MaVoucherCode]    Script Date: 5/14/2026 5:11:48 PM ******/
 CREATE UNIQUE NONCLUSTERED INDEX [UX_VOUCHER_MaVoucherCode] ON [dbo].[VOUCHER]
 (
 	[MaVoucherCode] ASC
@@ -1448,21 +1306,13 @@ ALTER TABLE [dbo].[SANPHAM] ADD  CONSTRAINT [DF_SANPHAM_NgayTao]  DEFAULT (sysut
 GO
 ALTER TABLE [dbo].[SANPHAM] ADD  CONSTRAINT [DF_SANPHAM_NgayCapNhat]  DEFAULT (sysutcdatetime()) FOR [NgayCapNhat]
 GO
+ALTER TABLE [dbo].[SANPHAM] ADD  DEFAULT ('XeMay') FOR [LoaiSanPham]
+GO
 ALTER TABLE [dbo].[SHOWROOM] ADD  CONSTRAINT [DF_SHOWROOM_DangHoatDong]  DEFAULT ((1)) FOR [DangHoatDong]
 GO
 ALTER TABLE [dbo].[SHOWROOM] ADD  CONSTRAINT [DF_SHOWROOM_NgayTao]  DEFAULT (sysutcdatetime()) FOR [NgayTao]
 GO
 ALTER TABLE [dbo].[SHOWROOM] ADD  CONSTRAINT [DF_SHOWROOM_NgayCapNhat]  DEFAULT (sysutcdatetime()) FOR [NgayCapNhat]
-GO
-ALTER TABLE [dbo].[THANHTOAN] ADD  CONSTRAINT [DF_THANHTOAN_TrangThai]  DEFAULT ('Pending') FOR [TrangThai]
-GO
-ALTER TABLE [dbo].[THANHTOAN] ADD  CONSTRAINT [DF_THANHTOAN_NgayTao]  DEFAULT (sysutcdatetime()) FOR [NgayTao]
-GO
-ALTER TABLE [dbo].[THANHTOAN] ADD  CONSTRAINT [DF_THANHTOAN_SoTienHoan]  DEFAULT ((0)) FOR [SoTienHoan]
-GO
-ALTER TABLE [dbo].[THANHTOAN_HOANTIEN] ADD  CONSTRAINT [DF_THANHTOAN_HOANTIEN_TrangThai]  DEFAULT ('Succeeded') FOR [TrangThai]
-GO
-ALTER TABLE [dbo].[THANHTOAN_HOANTIEN] ADD  CONSTRAINT [DF_THANHTOAN_HOANTIEN_NgayTao]  DEFAULT (sysdatetime()) FOR [NgayTao]
 GO
 ALTER TABLE [dbo].[TONKHO_GIUCHO] ADD  CONSTRAINT [DF_TONKHO_GIUCHO_TrangThai]  DEFAULT ('Active') FOR [TrangThai]
 GO
@@ -1666,22 +1516,6 @@ REFERENCES [dbo].[SHOWROOM] ([MaShowroom])
 GO
 ALTER TABLE [dbo].[SANPHAM] CHECK CONSTRAINT [FK_SANPHAM_SHOWROOM]
 GO
-ALTER TABLE [dbo].[THANHTOAN]  WITH NOCHECK ADD  CONSTRAINT [FK_THANHTOAN_DONHANG] FOREIGN KEY([MaDonHang])
-REFERENCES [dbo].[DONHANG] ([MaDonHang])
-ON DELETE CASCADE
-GO
-ALTER TABLE [dbo].[THANHTOAN] CHECK CONSTRAINT [FK_THANHTOAN_DONHANG]
-GO
-ALTER TABLE [dbo].[THANHTOAN_HOANTIEN]  WITH NOCHECK ADD  CONSTRAINT [FK_THANHTOAN_HOANTIEN_DONHANG] FOREIGN KEY([MaDonHang])
-REFERENCES [dbo].[DONHANG] ([MaDonHang])
-GO
-ALTER TABLE [dbo].[THANHTOAN_HOANTIEN] CHECK CONSTRAINT [FK_THANHTOAN_HOANTIEN_DONHANG]
-GO
-ALTER TABLE [dbo].[THANHTOAN_HOANTIEN]  WITH NOCHECK ADD  CONSTRAINT [FK_THANHTOAN_HOANTIEN_THANHTOAN] FOREIGN KEY([MaThanhToan])
-REFERENCES [dbo].[THANHTOAN] ([MaThanhToan])
-GO
-ALTER TABLE [dbo].[THANHTOAN_HOANTIEN] CHECK CONSTRAINT [FK_THANHTOAN_HOANTIEN_THANHTOAN]
-GO
 ALTER TABLE [dbo].[TONKHO_GIUCHO]  WITH NOCHECK ADD  CONSTRAINT [FK_TONKHO_GIUCHO_BIENSANPHAM] FOREIGN KEY([MaBienSanPham])
 REFERENCES [dbo].[BIENSANPHAM] ([MaBienSanPham])
 GO
@@ -1870,34 +1704,6 @@ ALTER TABLE [dbo].[SHOWROOM]  WITH NOCHECK ADD  CONSTRAINT [CK_SHOWROOM_Email] C
 GO
 ALTER TABLE [dbo].[SHOWROOM] CHECK CONSTRAINT [CK_SHOWROOM_Email]
 GO
-ALTER TABLE [dbo].[THANHTOAN]  WITH CHECK ADD  CONSTRAINT [CK_THANHTOAN_LoaiThanhToan] CHECK  (([LoaiThanhToan]='Installment' OR [LoaiThanhToan]='Remaining' OR [LoaiThanhToan]='Deposit' OR [LoaiThanhToan]='Full'))
-GO
-ALTER TABLE [dbo].[THANHTOAN] CHECK CONSTRAINT [CK_THANHTOAN_LoaiThanhToan]
-GO
-ALTER TABLE [dbo].[THANHTOAN]  WITH NOCHECK ADD  CONSTRAINT [CK_THANHTOAN_Method] CHECK  (([PhuongThuc]='VNPay' OR [PhuongThuc]='Momo' OR [PhuongThuc]='Card' OR [PhuongThuc]='BankTransfer' OR [PhuongThuc]='COD'))
-GO
-ALTER TABLE [dbo].[THANHTOAN] CHECK CONSTRAINT [CK_THANHTOAN_Method]
-GO
-ALTER TABLE [dbo].[THANHTOAN]  WITH NOCHECK ADD  CONSTRAINT [CK_THANHTOAN_SoTien] CHECK  (([SoTien]>=(0)))
-GO
-ALTER TABLE [dbo].[THANHTOAN] CHECK CONSTRAINT [CK_THANHTOAN_SoTien]
-GO
-ALTER TABLE [dbo].[THANHTOAN]  WITH NOCHECK ADD  CONSTRAINT [CK_THANHTOAN_SoTienHoan] CHECK  (([SoTienHoan]>=(0) AND [SoTienHoan]<=[SoTien]))
-GO
-ALTER TABLE [dbo].[THANHTOAN] CHECK CONSTRAINT [CK_THANHTOAN_SoTienHoan]
-GO
-ALTER TABLE [dbo].[THANHTOAN]  WITH NOCHECK ADD  CONSTRAINT [CK_THANHTOAN_Status] CHECK  (([TrangThai]='PartiallyRefunded' OR [TrangThai]='Refunded' OR [TrangThai]='Cancelled' OR [TrangThai]='Failed' OR [TrangThai]='Paid' OR [TrangThai]='Pending'))
-GO
-ALTER TABLE [dbo].[THANHTOAN] CHECK CONSTRAINT [CK_THANHTOAN_Status]
-GO
-ALTER TABLE [dbo].[THANHTOAN_HOANTIEN]  WITH NOCHECK ADD  CONSTRAINT [CK_THANHTOAN_HOANTIEN_SoTien] CHECK  (([SoTienHoan]>(0)))
-GO
-ALTER TABLE [dbo].[THANHTOAN_HOANTIEN] CHECK CONSTRAINT [CK_THANHTOAN_HOANTIEN_SoTien]
-GO
-ALTER TABLE [dbo].[THANHTOAN_HOANTIEN]  WITH NOCHECK ADD  CONSTRAINT [CK_THANHTOAN_HOANTIEN_TrangThai] CHECK  (([TrangThai]='Cancelled' OR [TrangThai]='Failed' OR [TrangThai]='Succeeded' OR [TrangThai]='Pending'))
-GO
-ALTER TABLE [dbo].[THANHTOAN_HOANTIEN] CHECK CONSTRAINT [CK_THANHTOAN_HOANTIEN_TrangThai]
-GO
 ALTER TABLE [dbo].[TONKHO_GIUCHO]  WITH NOCHECK ADD  CONSTRAINT [CK_TONKHO_GIUCHO_SoLuong] CHECK  (([SoLuong]>(0)))
 GO
 ALTER TABLE [dbo].[TONKHO_GIUCHO] CHECK CONSTRAINT [CK_TONKHO_GIUCHO_SoLuong]
@@ -1942,7 +1748,7 @@ ALTER TABLE [dbo].[VOUCHER_NGUOIDUNG]  WITH CHECK ADD  CONSTRAINT [CK_VOUCHER_NG
 GO
 ALTER TABLE [dbo].[VOUCHER_NGUOIDUNG] CHECK CONSTRAINT [CK_VOUCHER_NGUOIDUNG_TrangThai]
 GO
-/****** Object:  StoredProcedure [dbo].[sp_DonHang_BatDauCheckout]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  StoredProcedure [dbo].[sp_DonHang_BatDauCheckout]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -2079,117 +1885,7 @@ BEGIN
 END
 
 GO
-/****** Object:  StoredProcedure [dbo].[sp_DonHang_DongBoTrangThaiThanhToan]    Script Date: 5/7/2026 4:04:06 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE PROCEDURE [dbo].[sp_DonHang_DongBoTrangThaiThanhToan]
-    @MaDonHang INT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    IF @MaDonHang IS NULL
-        THROW 51100, N'MaDonHang không được để trống.', 1;
-
-    DECLARE
-        @TongThanhToan DECIMAL(18,2),
-        @LoaiDonHang VARCHAR(20),
-        @TienDatCoc DECIMAL(18,2),
-        @TongDaGhiNhan DECIMAL(18,2),
-        @TongDaHoan DECIMAL(18,2),
-        @TongThucThu DECIMAL(18,2),
-        @SoTienConLai DECIMAL(18,2),
-        @SoGiaoDichPending INT,
-        @SoGiaoDichFailed INT,
-        @SoGiaoDichThanhCong INT,
-        @SoGiaoDichTong INT,
-        @TrangThaiMoi VARCHAR(20);
-
-    SELECT
-        @TongThanhToan = TongThanhToan,
-        @LoaiDonHang = LoaiDonHang,
-        @TienDatCoc = TienDatCoc
-    FROM dbo.DONHANG WITH (UPDLOCK, ROWLOCK)
-    WHERE MaDonHang = @MaDonHang;
-
-    IF @TongThanhToan IS NULL
-        THROW 51101, N'Không tìm thấy đơn hàng cần đồng bộ trạng thái thanh toán.', 1;
-
-    SELECT
-        @TongDaGhiNhan = ISNULL(SUM(CASE
-            WHEN TrangThai IN ('Paid', 'PartiallyRefunded', 'Refunded') THEN SoTien
-            ELSE 0
-        END), 0),
-        @TongDaHoan = ISNULL(SUM(CASE
-            WHEN TrangThai IN ('PartiallyRefunded', 'Refunded') THEN SoTienHoan
-            ELSE 0
-        END), 0),
-        @SoGiaoDichPending = ISNULL(SUM(CASE WHEN TrangThai = 'Pending' THEN 1 ELSE 0 END), 0),
-        @SoGiaoDichFailed = ISNULL(SUM(CASE WHEN TrangThai = 'Failed' THEN 1 ELSE 0 END), 0),
-        @SoGiaoDichThanhCong = ISNULL(SUM(CASE WHEN TrangThai IN ('Paid', 'PartiallyRefunded', 'Refunded') THEN 1 ELSE 0 END), 0),
-        @SoGiaoDichTong = COUNT(1)
-    FROM dbo.THANHTOAN WITH (READCOMMITTEDLOCK)
-    WHERE MaDonHang = @MaDonHang;
-
-    SET @TongThucThu = ISNULL(@TongDaGhiNhan, 0) - ISNULL(@TongDaHoan, 0);
-    IF @TongThucThu < 0 SET @TongThucThu = 0;
-
-    SET @SoTienConLai = @TongThanhToan - @TongThucThu;
-    IF @SoTienConLai < 0 SET @SoTienConLai = 0;
-
-    SET @TrangThaiMoi = CASE
-        WHEN @TongThanhToan <= 0 THEN 'Paid'
-        WHEN @TongThucThu >= @TongThanhToan THEN 'Paid'
-        WHEN @TongDaGhiNhan > 0 AND @TongThucThu = 0 AND @TongDaHoan >= @TongDaGhiNhan THEN 'Refunded'
-        WHEN @TongThucThu > 0 THEN 'PartiallyPaid'
-        WHEN @SoGiaoDichTong > 0
-             AND @SoGiaoDichPending = 0
-             AND @SoGiaoDichThanhCong = 0
-             AND @SoGiaoDichFailed > 0 THEN 'Failed'
-        ELSE 'Unpaid'
-    END;
-
-    UPDATE dbo.DONHANG
-    SET
-        TrangThaiThanhToan = @TrangThaiMoi,
-        TienDatCoc = CASE
-            -- Với đơn đặt cọc, ghi nhận số tiền đã thu nhưng không vượt quá mức tiền cọc cấu hình.
-            WHEN @LoaiDonHang = 'Deposit' THEN
-                CASE
-                    WHEN @TongThucThu >= ISNULL(@TienDatCoc, 0) THEN ISNULL(@TienDatCoc, 0)
-                    ELSE @TongThucThu
-                END
-            ELSE 0
-        END,
-        SoTienConLai = @SoTienConLai,
-        NgayThanhToanThanhCong = CASE
-            WHEN @TrangThaiMoi = 'Paid' AND NgayThanhToanThanhCong IS NULL THEN SYSDATETIME()
-            ELSE NgayThanhToanThanhCong
-        END,
-        NgayCapNhat = SYSDATETIME()
-    WHERE MaDonHang = @MaDonHang;
-
-    SELECT
-        dh.MaDonHang,
-        dh.MaDonHangKinhDoanh,
-        dh.LoaiDonHang,
-        dh.TongThanhToan,
-        dh.TienDatCoc,
-        TongDaGhiNhan = @TongDaGhiNhan,
-        TongDaHoan = @TongDaHoan,
-        TongThucThu = @TongThucThu,
-        dh.SoTienConLai,
-        dh.TrangThaiThanhToan
-    FROM dbo.DONHANG dh
-    WHERE dh.MaDonHang = @MaDonHang;
-END
-
-GO
-/****** Object:  StoredProcedure [dbo].[sp_DonHang_HuyVaNhaGiuCho]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  StoredProcedure [dbo].[sp_DonHang_HuyVaNhaGiuCho]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -2235,143 +1931,7 @@ BEGIN
 END
 
 GO
-/****** Object:  StoredProcedure [dbo].[sp_DonHang_XacNhanThanhToanTruTon]    Script Date: 5/7/2026 4:04:06 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-
-CREATE PROCEDURE [dbo].[sp_DonHang_XacNhanThanhToanTruTon]
-    @MaDonHang INT
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    BEGIN TRY
-        BEGIN TRANSACTION;
-
-        EXEC dbo.sp_TonKho_DonGiuChoHetHan;
-
-        IF NOT EXISTS
-        (
-            SELECT 1
-            FROM dbo.TONKHO_GIUCHO
-            WHERE MaDonHang = @MaDonHang
-              AND TrangThai = 'Active'
-              AND HetHanLuc > SYSDATETIME()
-        )
-            THROW 52000, N'Đơn hàng không có giữ chỗ tồn kho còn hiệu lực. Vui lòng checkout lại.', 1;
-
-        DECLARE
-            @LoaiDonHang VARCHAR(20),
-            @TongThanhToan DECIMAL(18,2),
-            @TienDatCocCanThu DECIMAL(18,2),
-            @TongThucThu DECIMAL(18,2),
-            @TrangThaiThanhToan VARCHAR(20);
-
-        SELECT
-            @LoaiDonHang = LoaiDonHang,
-            @TongThanhToan = TongThanhToan,
-            @TienDatCocCanThu = TienDatCoc
-        FROM dbo.DONHANG WITH (UPDLOCK, ROWLOCK)
-        WHERE MaDonHang = @MaDonHang;
-
-        IF @LoaiDonHang IS NULL
-            THROW 52001, N'Không tìm thấy đơn hàng cần xác nhận thanh toán.', 1;
-
-        SELECT @TongThucThu = ISNULL(SUM(CASE
-            WHEN TrangThai IN ('Paid', 'PartiallyRefunded', 'Refunded')
-                THEN SoTien - SoTienHoan
-            ELSE 0
-        END), 0)
-        FROM dbo.THANHTOAN WITH (READCOMMITTEDLOCK)
-        WHERE MaDonHang = @MaDonHang;
-
-        IF @LoaiDonHang = 'FullPayment' AND @TongThucThu < @TongThanhToan
-            THROW 52002, N'Đơn thanh toán toàn bộ chưa thu đủ tiền, không được xác nhận đã thanh toán đủ.', 1;
-
-        IF @LoaiDonHang = 'Deposit' AND @TongThucThu < @TienDatCocCanThu
-            THROW 52003, N'Đơn đặt cọc chưa thu đủ tiền cọc, không được xác nhận đơn.', 1;
-
-        -- Trừ tồn kho biến thể.
-        UPDATE bt
-        SET bt.SoLuongTon = bt.SoLuongTon - x.SoLuong,
-            bt.NgayCapNhat = SYSDATETIME()
-        FROM dbo.BIENSANPHAM bt WITH (UPDLOCK, HOLDLOCK)
-        INNER JOIN
-        (
-            SELECT MaBienSanPham, SUM(SoLuong) AS SoLuong
-            FROM dbo.TONKHO_GIUCHO
-            WHERE MaDonHang = @MaDonHang
-              AND MaBienSanPham IS NOT NULL
-              AND TrangThai = 'Active'
-              AND HetHanLuc > SYSDATETIME()
-            GROUP BY MaBienSanPham
-        ) x ON x.MaBienSanPham = bt.MaBienSanPham;
-
-        -- Trừ tồn kho sản phẩm nếu dòng hàng không dùng biến thể.
-        UPDATE sp
-        SET sp.SoLuongTon = sp.SoLuongTon - x.SoLuong,
-            sp.NgayCapNhat = SYSDATETIME()
-        FROM dbo.SANPHAM sp WITH (UPDLOCK, HOLDLOCK)
-        INNER JOIN
-        (
-            SELECT MaSanPham, SUM(SoLuong) AS SoLuong
-            FROM dbo.TONKHO_GIUCHO
-            WHERE MaDonHang = @MaDonHang
-              AND MaBienSanPham IS NULL
-              AND TrangThai = 'Active'
-              AND HetHanLuc > SYSDATETIME()
-            GROUP BY MaSanPham
-        ) x ON x.MaSanPham = sp.MaSanPham;
-
-        UPDATE dbo.TONKHO_GIUCHO
-        SET TrangThai = 'Confirmed',
-            NgayCapNhat = SYSDATETIME(),
-            GhiChu = ISNULL(GhiChu + N' | ', N'') +
-                     CASE
-                        WHEN @LoaiDonHang = 'Deposit'
-                            THEN N'Đã nhận đủ tiền cọc, đã giữ/trừ tồn kho thật'
-                        ELSE N'Đã thanh toán đủ, đã trừ tồn kho thật'
-                     END
-        WHERE MaDonHang = @MaDonHang
-          AND TrangThai = 'Active';
-
-        -- Đồng bộ đúng trạng thái thanh toán trước, tránh set Paid cứng.
-        EXEC dbo.sp_DonHang_DongBoTrangThaiThanhToan @MaDonHang = @MaDonHang;
-
-        SELECT @TrangThaiThanhToan = TrangThaiThanhToan
-        FROM dbo.DONHANG
-        WHERE MaDonHang = @MaDonHang;
-
-        UPDATE dbo.DONHANG
-        SET TrangThaiDonHang = 'Confirmed',
-            NgayCapNhat = SYSDATETIME()
-        WHERE MaDonHang = @MaDonHang;
-
-        COMMIT TRANSACTION;
-
-        SELECT
-            @MaDonHang AS MaDonHang,
-            @LoaiDonHang AS LoaiDonHang,
-            @TongThucThu AS TongThucThu,
-            @TongThanhToan AS TongThanhToan,
-            @TrangThaiThanhToan AS TrangThaiThanhToan,
-            CASE
-                WHEN @TrangThaiThanhToan = 'Paid'
-                    THEN N'Đã thanh toán đủ và xác nhận đơn hàng.'
-                ELSE N'Đã nhận tiền cọc và xác nhận đơn hàng. Đơn vẫn còn số tiền cần thanh toán.'
-            END AS ThongBao;
-    END TRY
-    BEGIN CATCH
-        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
-        THROW;
-    END CATCH
-END
-
-GO
-/****** Object:  StoredProcedure [dbo].[sp_PhuTung_LayTheoXe]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  StoredProcedure [dbo].[sp_PhuTung_LayTheoXe]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -2416,7 +1976,7 @@ BEGIN
 END
 
 GO
-/****** Object:  StoredProcedure [dbo].[sp_PhuTung_UpsertTuongThich]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  StoredProcedure [dbo].[sp_PhuTung_UpsertTuongThich]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -2481,7 +2041,7 @@ BEGIN
 END
 
 GO
-/****** Object:  StoredProcedure [dbo].[sp_SANPHAM_DongBoSoLuongTon]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  StoredProcedure [dbo].[sp_SANPHAM_DongBoSoLuongTon]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -2520,7 +2080,7 @@ BEGIN
 END;
 
 GO
-/****** Object:  StoredProcedure [dbo].[sp_SANPHAM_DongBoTatCaSoLuongTon]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  StoredProcedure [dbo].[sp_SANPHAM_DongBoTatCaSoLuongTon]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -2551,254 +2111,7 @@ BEGIN
 END;
 
 GO
-/****** Object:  StoredProcedure [dbo].[sp_ThanhToan_HoanTien]    Script Date: 5/7/2026 4:04:06 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-
-/* 9) Hoàn tiền một phần hoặc toàn phần cho giao dịch Paid/PartiallyRefunded */
-CREATE   PROCEDURE [dbo].[sp_ThanhToan_HoanTien]
-    @MaThanhToan int,
-    @SoTienHoan decimal(18,2),
-    @LyDo nvarchar(500) = NULL,
-    @MaGiaoDichHoanTien nvarchar(120) = NULL,
-    @ResponseRaw nvarchar(max) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    IF @SoTienHoan <= 0
-        THROW 51040, N'Số tiền hoàn phải lớn hơn 0.', 1;
-
-    DECLARE @MaDonHang int,
-            @SoTien decimal(18,2),
-            @SoTienHoanHienTai decimal(18,2),
-            @TrangThai varchar(20),
-            @TongHoanSau decimal(18,2),
-            @TrangThaiMoi varchar(20);
-
-    BEGIN TRAN;
-
-    SELECT
-        @MaDonHang = MaDonHang,
-        @SoTien = SoTien,
-        @SoTienHoanHienTai = SoTienHoan,
-        @TrangThai = TrangThai
-    FROM dbo.THANHTOAN WITH (UPDLOCK, ROWLOCK)
-    WHERE MaThanhToan = @MaThanhToan;
-
-    IF @MaDonHang IS NULL
-        THROW 51041, N'Không tìm thấy giao dịch thanh toán.', 1;
-
-    IF @TrangThai NOT IN ('Paid', 'PartiallyRefunded')
-        THROW 51042, N'Chỉ được hoàn tiền giao dịch đã thanh toán.', 1;
-
-    SET @TongHoanSau = @SoTienHoanHienTai + @SoTienHoan;
-
-    IF @TongHoanSau > @SoTien
-        THROW 51043, N'Số tiền hoàn vượt quá số tiền đã thanh toán.', 1;
-
-    SET @TrangThaiMoi = CASE WHEN @TongHoanSau = @SoTien THEN 'Refunded' ELSE 'PartiallyRefunded' END;
-
-    INSERT INTO dbo.THANHTOAN_HOANTIEN
-    (
-        MaThanhToan, MaDonHang, SoTienHoan, MaGiaoDichHoanTien,
-        LyDo, TrangThai, ResponseRaw, NgayTao
-    )
-    VALUES
-    (
-        @MaThanhToan, @MaDonHang, @SoTienHoan, @MaGiaoDichHoanTien,
-        @LyDo, 'Succeeded', @ResponseRaw, SYSDATETIME()
-    );
-
-    UPDATE dbo.THANHTOAN
-    SET SoTienHoan = @TongHoanSau,
-        TrangThai = @TrangThaiMoi,
-        MaGiaoDichHoanTien = COALESCE(@MaGiaoDichHoanTien, MaGiaoDichHoanTien),
-        NgayHoanTien = SYSDATETIME(),
-        ResponseRaw = COALESCE(@ResponseRaw, ResponseRaw)
-    WHERE MaThanhToan = @MaThanhToan;
-
-    EXEC dbo.sp_DonHang_DongBoTrangThaiThanhToan @MaDonHang = @MaDonHang;
-
-    COMMIT;
-
-    SELECT * FROM dbo.v_THANHTOAN_DONHANG_TONGHOP WHERE MaDonHang = @MaDonHang;
-END
-
-GO
-/****** Object:  StoredProcedure [dbo].[sp_ThanhToan_HuyGiaoDich]    Script Date: 5/7/2026 4:04:06 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-
-/* 8) Hủy giao dịch: chỉ nên hủy giao dịch Pending hoặc Failed */
-CREATE   PROCEDURE [dbo].[sp_ThanhToan_HuyGiaoDich]
-    @MaThanhToan int,
-    @LyDoHuy nvarchar(500) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    DECLARE @MaDonHang int, @TrangThai varchar(20);
-
-    BEGIN TRAN;
-
-    SELECT @MaDonHang = MaDonHang, @TrangThai = TrangThai
-    FROM dbo.THANHTOAN WITH (UPDLOCK, ROWLOCK)
-    WHERE MaThanhToan = @MaThanhToan;
-
-    IF @MaDonHang IS NULL
-        THROW 51030, N'Không tìm thấy giao dịch thanh toán.', 1;
-
-    IF @TrangThai NOT IN ('Pending', 'Failed')
-        THROW 51031, N'Chỉ được hủy giao dịch Pending hoặc Failed. Giao dịch đã Paid thì dùng nghiệp vụ hoàn tiền.', 1;
-
-    UPDATE dbo.THANHTOAN
-    SET TrangThai = 'Cancelled',
-        LyDoHuy = @LyDoHuy,
-        NgayHuy = SYSDATETIME()
-    WHERE MaThanhToan = @MaThanhToan;
-
-    EXEC dbo.sp_DonHang_DongBoTrangThaiThanhToan @MaDonHang = @MaDonHang;
-
-    COMMIT;
-
-    SELECT * FROM dbo.THANHTOAN WHERE MaThanhToan = @MaThanhToan;
-END
-
-GO
-/****** Object:  StoredProcedure [dbo].[sp_ThanhToan_TaoGiaoDich]    Script Date: 5/7/2026 4:04:06 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-
-/* 6) Tạo giao dịch thanh toán: dùng cho đặt cọc, trả phần còn lại, hoặc trả toàn bộ */
-CREATE   PROCEDURE [dbo].[sp_ThanhToan_TaoGiaoDich]
-    @MaDonHang int,
-    @LoaiThanhToan varchar(30),      -- Deposit / Remaining / Full
-    @SoTien decimal(18,2),
-    @PhuongThuc varchar(30),         -- COD / BankTransfer / Card / Momo / VNPay
-    @MaGiaoDich nvarchar(120) = NULL,
-    @NoiDungChuyenKhoan nvarchar(500) = NULL,
-    @MaNganHang nvarchar(50) = NULL,
-    @ResponseRaw nvarchar(max) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    IF @LoaiThanhToan NOT IN ('Deposit', 'Remaining', 'Full')
-        THROW 51010, N'LoaiThanhToan không hợp lệ.', 1;
-
-    IF @SoTien <= 0
-        THROW 51011, N'Số tiền thanh toán phải lớn hơn 0.', 1;
-
-    IF @PhuongThuc NOT IN ('COD', 'BankTransfer', 'Card', 'Momo', 'VNPay')
-        THROW 51012, N'Phương thức thanh toán không hợp lệ.', 1;
-
-    DECLARE @TongThanhToan decimal(18,2),
-            @TongThucThu decimal(18,2),
-            @ConPhaiThu decimal(18,2),
-            @MaThanhToan int,
-            @Code nvarchar(50);
-
-    BEGIN TRAN;
-
-    SELECT @TongThanhToan = TongThanhToan
-    FROM dbo.DONHANG WITH (UPDLOCK, ROWLOCK)
-    WHERE MaDonHang = @MaDonHang;
-
-    IF @TongThanhToan IS NULL
-        THROW 51013, N'Không tìm thấy đơn hàng.', 1;
-
-    SELECT @TongThucThu = TongThucThu
-    FROM dbo.v_THANHTOAN_DONHANG_TONGHOP
-    WHERE MaDonHang = @MaDonHang;
-
-    SET @ConPhaiThu = CASE WHEN @TongThanhToan - ISNULL(@TongThucThu,0) < 0 THEN 0 ELSE @TongThanhToan - ISNULL(@TongThucThu,0) END;
-
-    IF @ConPhaiThu <= 0
-        THROW 51014, N'Đơn hàng đã thanh toán đủ.', 1;
-
-    IF @SoTien > @ConPhaiThu
-        THROW 51015, N'Số tiền thanh toán vượt quá số tiền còn phải thu.', 1;
-
-    IF @LoaiThanhToan = 'Full' AND ISNULL(@TongThucThu,0) > 0
-        THROW 51016, N'Đơn hàng đã có thanh toán trước đó, không thể tạo thanh toán Full.', 1;
-
-    SET @Code = CONCAT(N'PAY', FORMAT(SYSDATETIME(), 'yyyyMMddHHmmss'), RIGHT(CONVERT(varchar(36), NEWID()), 6));
-
-    INSERT INTO dbo.THANHTOAN
-    (
-        MaThanhToanKinhDoanh, MaDonHang, SoTien, PhuongThuc, TrangThai,
-        MaGiaoDich, DaThanhToanLuc, NgayTao, LoaiThanhToan,
-        NoiDungChuyenKhoan, MaNganHang, ResponseRaw
-    )
-    VALUES
-    (
-        @Code, @MaDonHang, @SoTien, @PhuongThuc, 'Pending',
-        @MaGiaoDich, NULL, SYSDATETIME(), @LoaiThanhToan,
-        @NoiDungChuyenKhoan, @MaNganHang, @ResponseRaw
-    );
-
-    SET @MaThanhToan = SCOPE_IDENTITY();
-
-    COMMIT;
-
-    SELECT * FROM dbo.THANHTOAN WHERE MaThanhToan = @MaThanhToan;
-END
-
-GO
-/****** Object:  StoredProcedure [dbo].[sp_ThanhToan_XacNhanThanhCong]    Script Date: 5/7/2026 4:04:06 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-
-/* 7) Xác nhận giao dịch thành công */
-CREATE   PROCEDURE [dbo].[sp_ThanhToan_XacNhanThanhCong]
-    @MaThanhToan int,
-    @MaGiaoDich nvarchar(120) = NULL,
-    @ResponseRaw nvarchar(max) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
-    DECLARE @MaDonHang int;
-
-    BEGIN TRAN;
-
-    SELECT @MaDonHang = MaDonHang
-    FROM dbo.THANHTOAN WITH (UPDLOCK, ROWLOCK)
-    WHERE MaThanhToan = @MaThanhToan
-      AND TrangThai = 'Pending';
-
-    IF @MaDonHang IS NULL
-        THROW 51020, N'Không tìm thấy giao dịch Pending cần xác nhận.', 1;
-
-    UPDATE dbo.THANHTOAN
-    SET TrangThai = 'Paid',
-        MaGiaoDich = COALESCE(@MaGiaoDich, MaGiaoDich),
-        DaThanhToanLuc = SYSDATETIME(),
-        ResponseRaw = COALESCE(@ResponseRaw, ResponseRaw)
-    WHERE MaThanhToan = @MaThanhToan;
-
-    EXEC dbo.sp_DonHang_DongBoTrangThaiThanhToan @MaDonHang = @MaDonHang;
-
-    COMMIT;
-
-    SELECT * FROM dbo.v_THANHTOAN_DONHANG_TONGHOP WHERE MaDonHang = @MaDonHang;
-END
-
-GO
-/****** Object:  StoredProcedure [dbo].[sp_TonKho_DonGiuChoHetHan]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  StoredProcedure [dbo].[sp_TonKho_DonGiuChoHetHan]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -2839,7 +2152,7 @@ BEGIN
 END
 
 GO
-/****** Object:  StoredProcedure [dbo].[sp_Voucher_GhiNhanSuDung]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  StoredProcedure [dbo].[sp_Voucher_GhiNhanSuDung]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -2911,7 +2224,7 @@ BEGIN
 END
 
 GO
-/****** Object:  StoredProcedure [dbo].[sp_Voucher_HuySuDungTheoDon]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  StoredProcedure [dbo].[sp_Voucher_HuySuDungTheoDon]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -2952,7 +2265,7 @@ BEGIN
 END
 
 GO
-/****** Object:  StoredProcedure [dbo].[sp_Voucher_KiemTraTruocKhiTaoDon]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  StoredProcedure [dbo].[sp_Voucher_KiemTraTruocKhiTaoDon]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -3080,7 +2393,7 @@ BEGIN
 END
 
 GO
-/****** Object:  Trigger [dbo].[trg_ANHSANPHAM_Validate_MaBienSanPham]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Trigger [dbo].[trg_ANHSANPHAM_Validate_MaBienSanPham]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -3110,7 +2423,7 @@ END
 GO
 ALTER TABLE [dbo].[ANHSANPHAM] ENABLE TRIGGER [trg_ANHSANPHAM_Validate_MaBienSanPham]
 GO
-/****** Object:  Trigger [dbo].[trg_BIENSANPHAM_Sync_SoLuongTon_SANPHAM]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Trigger [dbo].[trg_BIENSANPHAM_Sync_SoLuongTon_SANPHAM]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -3153,7 +2466,7 @@ END;
 GO
 ALTER TABLE [dbo].[BIENSANPHAM] ENABLE TRIGGER [trg_BIENSANPHAM_Sync_SoLuongTon_SANPHAM]
 GO
-/****** Object:  Trigger [dbo].[trg_CHITIET_DONHANG_Validate_MaBienSanPham]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Trigger [dbo].[trg_CHITIET_DONHANG_Validate_MaBienSanPham]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -3188,7 +2501,7 @@ END;
 GO
 ALTER TABLE [dbo].[CHITIET_DONHANG] ENABLE TRIGGER [trg_CHITIET_DONHANG_Validate_MaBienSanPham]
 GO
-/****** Object:  Trigger [dbo].[trg_CHITIET_GIOHANG_Validate_MaBienSanPham]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Trigger [dbo].[trg_CHITIET_GIOHANG_Validate_MaBienSanPham]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -3223,7 +2536,7 @@ END;
 GO
 ALTER TABLE [dbo].[CHITIET_GIOHANG] ENABLE TRIGGER [trg_CHITIET_GIOHANG_Validate_MaBienSanPham]
 GO
-/****** Object:  Trigger [dbo].[trg_PHUTUNG_TUONGTHICH_Validate]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Trigger [dbo].[trg_PHUTUNG_TUONGTHICH_Validate]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -3318,7 +2631,7 @@ END;
 GO
 ALTER TABLE [dbo].[PHUTUNG_TUONGTHICH] ENABLE TRIGGER [trg_PHUTUNG_TUONGTHICH_Validate]
 GO
-/****** Object:  Trigger [dbo].[trg_SANPHAM_Validate_HangXe_DongXe]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Trigger [dbo].[trg_SANPHAM_Validate_HangXe_DongXe]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -3360,7 +2673,7 @@ END;
 GO
 ALTER TABLE [dbo].[SANPHAM] ENABLE TRIGGER [trg_SANPHAM_Validate_HangXe_DongXe]
 GO
-/****** Object:  Trigger [dbo].[trg_TONKHO_GIUCHO_Validate_MaBienSanPham]    Script Date: 5/7/2026 4:04:06 PM ******/
+/****** Object:  Trigger [dbo].[trg_TONKHO_GIUCHO_Validate_MaBienSanPham]    Script Date: 5/14/2026 5:11:48 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON

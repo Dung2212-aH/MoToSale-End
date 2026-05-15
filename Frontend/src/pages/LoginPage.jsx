@@ -40,7 +40,18 @@ function LoginPage() {
         error={error}
         onSubmit={handleSubmit}
         footer={<p>Chưa có tài khoản? <Link to="/register">Đăng ký</Link></p>}
-      />
+      >
+        <label className="flex cursor-pointer items-center gap-3 text-sm font-bold text-zinc-600">
+          <input
+            type="checkbox"
+            name="rememberMe"
+            value="true"
+            disabled={loading}
+            className="h-4 w-4 rounded border-zinc-300 text-[#d71920] focus:ring-[#d71920]"
+          />
+          <span>Ghi nhớ tôi</span>
+        </label>
+      </AuthForm>
     </>
   );
 }
