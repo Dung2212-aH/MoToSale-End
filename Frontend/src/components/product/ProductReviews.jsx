@@ -301,16 +301,9 @@ function ReviewForm({ productId, reviewState, stateLoading, isAuthenticated, myR
     );
   }
 
-  /* --- Not purchased --- */
+  /* --- Not purchased: don't show anything --- */
   if (!reviewState?.hasPurchased) {
-    return (
-      <div className="rounded-2xl border border-gray-200 bg-gray-50/60 p-5">
-        <h4 className="mb-2 text-sm font-bold text-gray-700">Chưa thể đánh giá</h4>
-        <p className="text-sm text-gray-500">
-          {reviewState?.reason || 'Bạn cần mua sản phẩm này và đơn hàng phải hoàn tất trước khi đánh giá.'}
-        </p>
-      </div>
-    );
+    return null;
   }
 
   /* --- Form (can review / can update) --- */
