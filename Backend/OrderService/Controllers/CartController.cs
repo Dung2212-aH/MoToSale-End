@@ -18,7 +18,6 @@ public class CartController : ControllerBase
     }
 
     [HttpGet]
-    [HttpGet("me")]
     public async Task<IActionResult> GetMyCart()
     {
         try

@@ -12,7 +12,6 @@ public class PaymentDbContext : DbContext
     public DbSet<User> Users { get; set; }
     public DbSet<Order> Orders { get; set; }
     public DbSet<Payment> Payments { get; set; }
-    public DbSet<PaymentRefund> PaymentRefunds { get; set; }
     public DbSet<InventoryHold> InventoryHolds { get; set; }
     public DbSet<Product> Products { get; set; }
     public DbSet<ProductVariant> ProductVariants { get; set; }
@@ -24,7 +23,6 @@ public class PaymentDbContext : DbContext
         ConfigureUsers(modelBuilder);
         ConfigureOrders(modelBuilder);
         ConfigurePayments(modelBuilder);
-        ConfigurePaymentRefunds(modelBuilder);
         ConfigureInventoryHolds(modelBuilder);
         ConfigureProducts(modelBuilder);
         ConfigureProductVariants(modelBuilder);
@@ -69,7 +67,8 @@ public class PaymentDbContext : DbContext
 
             e.HasMany(x => x.Payments)
                 .WithOne(x => x.Order)
-                .HasForeignKey(x => x.MaDonHang);
+                .HasForeignKey(x => x.MaDonHang)
+                .OnDelete(DeleteBehavior.NoAction);
 
             e.HasMany(x => x.InventoryHolds)
                 .WithOne(x => x.Order)
@@ -81,47 +80,33 @@ public class PaymentDbContext : DbContext
     {
         modelBuilder.Entity<Payment>(e =>
         {
-            e.ToTable("THANHTOAN");
+            e.ToTable("THANHTOAN", t =>
+            {
+                t.HasCheckConstraint("CK_THANHTOAN_SoTien", "[SoTien] > 0");
+                t.HasCheckConstraint("CK_THANHTOAN_PhuongThuc", "[PhuongThuc] IN ('COD','BankTransfer','Card','Momo','VNPay')");
+                t.HasCheckConstraint("CK_THANHTOAN_TrangThai", "[TrangThai] IN ('Pending','Paid','Failed','Cancelled')");
+                t.HasCheckConstraint("CK_THANHTOAN_LoaiThanhToan", "[LoaiThanhToan] IN ('Full','Deposit','Remaining','Installment')");
+            });
             e.HasKey(x => x.MaThanhToan);
             e.Property(x => x.MaThanhToan).ValueGeneratedOnAdd();
             e.Property(x => x.MaThanhToanKinhDoanh).HasMaxLength(50).IsRequired();
-            e.Property(x => x.SoTien).HasPrecision(18, 2);
+            e.Property(x => x.SoTien).HasPrecision(18, 2).IsRequired();
             e.Property(x => x.PhuongThuc).HasMaxLength(30).IsUnicode(false).IsRequired();
             e.Property(x => x.TrangThai).HasMaxLength(20).IsUnicode(false).IsRequired();
             e.Property(x => x.MaGiaoDich).HasMaxLength(120);
             e.Property(x => x.DaThanhToanLuc).HasColumnType("datetime2(0)");
-            e.Property(x => x.NgayTao).HasColumnType("datetime2(0)");
+            e.Property(x => x.NgayTao).HasColumnType("datetime2(0)").HasDefaultValueSql("sysutcdatetime()");
             e.Property(x => x.LoaiThanhToan).HasMaxLength(30).IsUnicode(false).IsRequired();
-            e.Property(x => x.SoTienHoan).HasPrecision(18, 2);
             e.Property(x => x.NoiDungChuyenKhoan).HasMaxLength(500);
             e.Property(x => x.MaNganHang).HasMaxLength(50);
             e.Property(x => x.LyDoHuy).HasMaxLength(500);
             e.Property(x => x.NgayHuy).HasColumnType("datetime2(0)");
 
             e.HasIndex(x => x.MaThanhToanKinhDoanh).IsUnique();
-
-            e.HasMany(x => x.Refunds)
-                .WithOne(x => x.Payment)
-                .HasForeignKey(x => x.MaThanhToan);
-        });
-    }
-
-    private static void ConfigurePaymentRefunds(ModelBuilder modelBuilder)
-    {
-        modelBuilder.Entity<PaymentRefund>(e =>
-        {
-            e.ToTable("THANHTOAN_HOANTIEN");
-            e.HasKey(x => x.MaHoanTien);
-            e.Property(x => x.MaHoanTien).ValueGeneratedOnAdd();
-            e.Property(x => x.SoTienHoan).HasPrecision(18, 2);
-            e.Property(x => x.MaGiaoDichHoanTien).HasMaxLength(120);
-            e.Property(x => x.LyDo).HasMaxLength(500);
-            e.Property(x => x.TrangThai).HasMaxLength(20).IsUnicode(false).IsRequired();
-            e.Property(x => x.NgayTao).HasColumnType("datetime2(0)");
-
-            e.HasOne(x => x.Order)
-                .WithMany()
-                .HasForeignKey(x => x.MaDonHang);
+            e.HasIndex(x => new { x.MaDonHang, x.TrangThai, x.NgayTao });
+            e.HasIndex(x => x.MaGiaoDich)
+                .IsUnique()
+                .HasFilter("[MaGiaoDich] IS NOT NULL");
         });
     }
 

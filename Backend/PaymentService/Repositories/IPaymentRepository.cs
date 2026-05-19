@@ -16,7 +16,6 @@ public interface IPaymentRepository
     Task<Product?> GetProductAsync(int maSanPham);
     Task<ProductVariant?> GetVariantAsync(int maBienSanPham);
     Task AddPaymentAsync(Payment payment);
-    Task AddRefundAsync(PaymentRefund refund);
     Task CleanupExpiredInventoryHoldsAsync();
     Task SaveChangesAsync();
 }

@@ -12,4 +12,9 @@ public class ProductReview
     public string? HinhAnhUrl { get; set; }
     public string TrangThai { get; set; } = string.Empty;
     public DateTime NgayTao { get; set; }
+    public DateTime NgayCapNhat { get; set; }
+
+    public Product? Product { get; set; }
+    public ReviewUser? User { get; set; }
+    public ReviewOrder? Order { get; set; }
 }

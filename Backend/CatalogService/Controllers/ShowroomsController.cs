@@ -18,7 +18,6 @@ public class ShowroomsController : ControllerBase
     }
 
     [HttpGet]
-    [HttpGet("~/api/stores")]
     public async Task<IActionResult> GetShowrooms([FromQuery] bool activeOnly = true)
     {
         var query = _dbContext.Showrooms.AsNoTracking();

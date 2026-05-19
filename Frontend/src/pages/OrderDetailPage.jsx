@@ -18,11 +18,12 @@ function Badge({ label, colorClass }) {
   return <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${colorClass}`}>{label}</span>;
 }
 
-const SHIPPING_STEPS = ['NotShipped', 'AwaitingPickup', 'Preparing', 'InTransit', 'Delivered'];
+const DELIVERY_SHIPPING_STEPS = ['NotShipped', 'Preparing', 'Shipping', 'Delivered'];
+const PICKUP_SHIPPING_STEPS = ['NotShipped', 'Preparing', 'PickupReady', 'PickedUp'];
 
 function getOrderPaymentDisplay(order) {
   if (order.paymentMethod) return getPaymentMethodLabel(order.paymentMethod);
-  if (order.orderType === 'Deposit') return getOrderTypeLabel(order.orderType);
+  if (order.orderType) return getOrderTypeLabel(order.orderType);
   return 'Chưa cập nhật';
 }
 
@@ -104,8 +105,9 @@ function OrderDetailPage() {
 
   if (!order) return null;
 
-  const canCancel = ['Pending', 'AwaitingPayment'].includes(order.orderStatus);
-  const currentShipIdx = SHIPPING_STEPS.indexOf(order.shippingStatus);
+  const canCancel = order.orderStatus === 'AwaitingPayment';
+  const shippingSteps = order.receivingMethod === 'Pickup' ? PICKUP_SHIPPING_STEPS : DELIVERY_SHIPPING_STEPS;
+  const currentShipIdx = shippingSteps.indexOf(order.shippingStatus);
 
   return (
     <>
@@ -141,7 +143,7 @@ function OrderDetailPage() {
               <Badge label={getShippingStatusLabel(order.shippingStatus)} colorClass={getShippingStatusColor(order.shippingStatus)} />
             </div>
             <div className="flex items-center gap-0">
-              {SHIPPING_STEPS.map((step, i) => {
+              {shippingSteps.map((step, i) => {
                 const done = i <= currentShipIdx && currentShipIdx >= 0;
                 const active = i === currentShipIdx;
                 return (
@@ -191,7 +193,7 @@ function OrderDetailPage() {
                       <td className="py-3">
                         <div className="font-bold text-zinc-900">{d.productNameSnapshot || d.productName || 'Sản phẩm'}</div>
                         {d.skuSnapshot && <div className="text-xs text-zinc-400 mt-0.5">SKU: {d.skuSnapshot}</div>}
-                        {(order.orderStatus === 'Completed' || order.orderStatus === 'Delivered') && (
+                        {order.orderStatus === 'Completed' && (
                           <button
                             onClick={() => setReviewProduct(d)}
                             className="mt-2 text-xs font-bold text-[#d71920] hover:underline"

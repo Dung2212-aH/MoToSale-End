@@ -12,7 +12,6 @@ public class Payment
     public DateTime? DaThanhToanLuc { get; set; }
     public DateTime NgayTao { get; set; }
     public string LoaiThanhToan { get; set; } = string.Empty;
-    public decimal SoTienHoan { get; set; }
     public string? NoiDungChuyenKhoan { get; set; }
     public string? MaNganHang { get; set; }
     public string? LyDoHuy { get; set; }
@@ -20,5 +19,4 @@ public class Payment
     public string? ResponseRaw { get; set; }
 
     public Order? Order { get; set; }
-    public ICollection<PaymentRefund> Refunds { get; set; } = new List<PaymentRefund>();
 }

@@ -11,8 +11,6 @@ public class PaymentOrderSummaryDto
     public decimal TongThanhToan { get; set; }
     public decimal TienDatCoc { get; set; }
     public decimal TongDaThanhToan { get; set; }
-    public decimal TongDaHoan { get; set; }
-    public decimal TongThucThu { get; set; }
     public decimal SoTienConPhaiThu { get; set; }
     public int SoLanThanhToanThanhCong { get; set; }
     public int SoLanDangCho { get; set; }

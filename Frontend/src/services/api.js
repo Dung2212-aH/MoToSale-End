@@ -7,6 +7,7 @@ import {
   normalizeProductList,
 } from '../utils/productMappers.js';
 import { notifyCartChanged } from '../utils/cartEvents.js';
+import { normalizeImageUrl } from '../utils/formatters.js';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 const TOKEN_KEY = 'token';
@@ -160,6 +161,46 @@ const normalizeFavorite = (raw = {}) => {
     createdAt: field(raw, 'createdAt', 'CreatedAt', 'ngayTao', 'NgayTao'),
     product,
   };
+};
+
+const normalizeReview = (raw = {}) => ({
+  ...raw,
+  id: field(raw, 'id', 'Id', 'maDanhGia', 'MaDanhGia'),
+  productId: field(raw, 'productId', 'ProductId', 'maSanPham', 'MaSanPham'),
+  userId: field(raw, 'userId', 'UserId', 'maNguoiDung', 'MaNguoiDung'),
+  userName: field(raw, 'userName', 'UserName', 'tenNguoiDung', 'TenNguoiDung'),
+  orderId: field(raw, 'orderId', 'OrderId', 'maDonHang', 'MaDonHang'),
+  rating: Number(field(raw, 'rating', 'Rating', 'diem', 'Diem') || 0),
+  title: field(raw, 'title', 'Title', 'tieuDe', 'TieuDe'),
+  comment: field(raw, 'comment', 'Comment', 'noiDung', 'NoiDung'),
+  imageUrl: normalizeImageUrl(field(raw, 'imageUrl', 'ImageUrl', 'hinhAnhUrl', 'HinhAnhUrl')),
+  status: field(raw, 'status', 'Status', 'trangThai', 'TrangThai'),
+  createdAt: field(raw, 'createdAt', 'CreatedAt', 'ngayTao', 'NgayTao'),
+  updatedAt: field(raw, 'updatedAt', 'UpdatedAt', 'ngayCapNhat', 'NgayCapNhat'),
+});
+
+const normalizeReviewPayload = (payload = {}) => {
+  const formData = new FormData();
+  formData.append('Diem', payload.rating ?? payload.diem);
+  formData.append('NoiDung', payload.comment ?? payload.noiDung ?? '');
+
+  if (payload.productId ?? payload.maSanPham) {
+    formData.append('MaSanPham', payload.productId ?? payload.maSanPham);
+  }
+
+  if (payload.orderId ?? payload.maDonHang) {
+    formData.append('MaDonHang', payload.orderId ?? payload.maDonHang);
+  }
+
+  if (payload.title ?? payload.tieuDe) {
+    formData.append('TieuDe', payload.title ?? payload.tieuDe);
+  }
+
+  if (payload.image) {
+    formData.append('Image', payload.image);
+  }
+
+  return formData;
 };
 
 const cleanParams = (params = {}) => {
@@ -432,10 +473,6 @@ export const productApi = {
     return normalizeProductList(responseData(response));
   },
 
-  async search(params) {
-    return productApi.getAll(params);
-  },
-
   async getById(id) {
     const response = await api.get(`/products/${id}`);
     return normalizeProduct(responseData(response));
@@ -454,32 +491,63 @@ export const productApi = {
     return productApi.getById(id);
   },
 
-  async uploadImage(productId, data) {
-    const formData = new FormData();
-    formData.append('MaSanPham', productId);
-    formData.append('Image', data.image);
+};
 
-    if (data.variantId ?? data.productVariantId) {
-      formData.append('MaBienSanPham', data.variantId ?? data.productVariantId);
-    }
-
-    if (data.altText) {
-      formData.append('AltText', data.altText);
-    }
-
-    formData.append('LaAnhChinh', data.isPrimary ?? data.laAnhChinh ?? false);
-    formData.append('ThuTuHienThi', data.sortOrder ?? data.thuTuHienThi ?? 0);
-
-    const response = await api.post(`/products/${productId}/images`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-
-    return responseData(response);
+export const reviewApi = {
+  async getByProduct(productId) {
+    const response = await api.get(`/products/${productId}/reviews`);
+    const data = responseData(response);
+    return (Array.isArray(data) ? data : data?.items || data?.Items || []).map(normalizeReview);
   },
 
-  async getCategories() {
-    const response = await categoryApi.getAll();
-    return response.data;
+  async getSummary(productId) {
+    const response = await api.get(`/products/${productId}/reviews/summary`);
+    const data = responseData(response);
+    return {
+      productId: field(data, 'productId', 'ProductId', 'maSanPham', 'MaSanPham'),
+      totalReviews: Number(field(data, 'totalReviews', 'TotalReviews', 'tongDanhGia', 'TongDanhGia') || 0),
+      averageRating: Number(field(data, 'averageRating', 'AverageRating', 'diemTrungBinh', 'DiemTrungBinh') || 0),
+    };
+  },
+
+  async getMine(productId) {
+    const response = await api.get(`/reviews/product/${productId}/me`);
+    const data = responseData(response);
+    const myReview = field(data, 'myReview', 'MyReview', 'danhGiaCuaToi', 'DanhGiaCuaToi');
+
+    return {
+      productId: field(data, 'productId', 'ProductId', 'maSanPham', 'MaSanPham'),
+      isAuthenticated: field(data, 'isAuthenticated', 'IsAuthenticated', 'daDangNhap', 'DaDangNhap') === true,
+      hasPurchased: field(data, 'hasPurchased', 'HasPurchased', 'daMua', 'DaMua') === true,
+      canReview: field(data, 'canReview', 'CanReview', 'coTheDanhGia', 'CoTheDanhGia') === true,
+      eligibleOrderId: field(data, 'eligibleOrderId', 'EligibleOrderId', 'maDonHangDuDieuKien', 'MaDonHangDuDieuKien'),
+      reason: field(data, 'reason', 'Reason', 'lyDo', 'LyDo'),
+      myReview: myReview ? normalizeReview(myReview) : null,
+    };
+  },
+
+  async create(productId, payload) {
+    const formData = normalizeReviewPayload({ ...payload, productId });
+    const response = await api.post(`/products/${productId}/reviews`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    const data = responseData(response);
+    return {
+      ...data,
+      review: data?.review || data?.Review ? normalizeReview(data.review || data.Review) : null,
+    };
+  },
+
+  async updateMine(productId, payload) {
+    const formData = normalizeReviewPayload(payload);
+    const response = await api.patch(`/products/${productId}/reviews/me`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    const data = responseData(response);
+    return {
+      ...data,
+      review: data?.review || data?.Review ? normalizeReview(data.review || data.Review) : null,
+    };
   },
 };
 
@@ -698,6 +766,7 @@ export const userApi = {
       soDienThoaiNhanHang: data.phoneNumber,
       diaChiNhanHang: data.addressLine,
       ward: data.ward,
+      district: data.district,
       province: data.province,
       ghiChu: data.note,
       laMacDinh: true,

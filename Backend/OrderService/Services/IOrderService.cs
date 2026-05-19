@@ -15,6 +15,4 @@ public interface IOrderService
     Task<PagedResultDto<OrderSummaryDto>> GetOrdersAsync(OrderSearchDto search, int currentUserId, bool canViewAll);
     Task<OrderDto> GetOrderByIdAsync(int maDonHang, int currentUserId, bool canViewAll);
     Task<OrderDto> CancelOrderAsync(int maDonHang, int currentUserId, bool canManageAll, CancelOrderRequest request);
-    Task<OrderDto> UpdateOrderStatusAsync(int maDonHang, UpdateOrderStatusRequest request);
-    Task<OrderDto> UpdateShippingStatusAsync(int maDonHang, UpdateShippingStatusRequest request);
 }

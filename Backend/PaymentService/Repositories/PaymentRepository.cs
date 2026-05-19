@@ -30,7 +30,6 @@ public class PaymentRepository : IPaymentRepository
     {
         return await _dbContext.Orders
             .Include(o => o.Payments)
-            .ThenInclude(p => p.Refunds)
             .Include(o => o.InventoryHolds)
             .FirstOrDefaultAsync(o => o.MaDonHang == maDonHang);
     }
@@ -38,10 +37,8 @@ public class PaymentRepository : IPaymentRepository
     public async Task<Payment?> GetPaymentByIdAsync(int maThanhToan)
     {
         return await _dbContext.Payments
-            .Include(p => p.Refunds)
             .Include(p => p.Order)
             .ThenInclude(o => o!.Payments)
-            .ThenInclude(p => p.Refunds)
             .Include(p => p.Order)
             .ThenInclude(o => o!.InventoryHolds)
             .FirstOrDefaultAsync(p => p.MaThanhToan == maThanhToan);
@@ -77,11 +74,6 @@ public class PaymentRepository : IPaymentRepository
     public async Task AddPaymentAsync(Payment payment)
     {
         await _dbContext.Payments.AddAsync(payment);
-    }
-
-    public async Task AddRefundAsync(PaymentRefund refund)
-    {
-        await _dbContext.PaymentRefunds.AddAsync(refund);
     }
 
     public async Task CleanupExpiredInventoryHoldsAsync()
@@ -141,7 +133,6 @@ public class PaymentRepository : IPaymentRepository
     {
         var query = _dbContext.Payments
             .Include(p => p.Order)
-            .Include(p => p.Refunds)
             .AsQueryable();
 
         if (maNguoiDung.HasValue)

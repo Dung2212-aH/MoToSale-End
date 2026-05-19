@@ -1,4 +1,5 @@
 using OrderService.Data;
+using OrderService.DTOs.Vouchers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -108,15 +109,4 @@ public class VouchersController : ControllerBase
             return this.ToErrorResult(ex);
         }
     }
-}
-
-public class ApplicableVoucherRequest
-{
-    public string? OrderType { get; set; }
-}
-
-public class ValidateVoucherRequest
-{
-    public string Code { get; set; } = string.Empty;
-    public decimal ShippingFee { get; set; }
 }

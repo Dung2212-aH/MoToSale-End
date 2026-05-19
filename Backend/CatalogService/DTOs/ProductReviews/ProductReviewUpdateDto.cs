@@ -2,11 +2,8 @@ using System.ComponentModel.DataAnnotations;
 
 namespace CatalogService.DTOs.ProductReviews;
 
-public class ProductReviewCreateDto
+public class ProductReviewUpdateDto
 {
-    public int MaSanPham { get; set; }
-    public int? MaDonHang { get; set; }
-
     [Range(1, 5)]
     public byte Diem { get; set; }
 

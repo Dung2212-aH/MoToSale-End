@@ -22,7 +22,7 @@ function StatusBadge({ label, colorClass }) {
 
 function getOrderPaymentDisplay(order) {
   if (order.paymentMethod) return getPaymentMethodLabel(order.paymentMethod);
-  if (order.orderType === 'Deposit') return getOrderTypeLabel(order.orderType);
+  if (order.orderType) return getOrderTypeLabel(order.orderType);
   return 'Chưa cập nhật';
 }
 

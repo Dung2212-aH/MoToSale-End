@@ -44,7 +44,6 @@ public class OrdersController : ControllerBase
     }
 
     [HttpPost]
-    [HttpPost("from-cart")]
     public async Task<IActionResult> CreateFromCart(CreateOrderFromCartRequest request)
     {
         try
@@ -58,7 +57,6 @@ public class OrdersController : ControllerBase
         }
     }
 
-    [HttpPost("{id:int}/cancel")]
     [HttpPut("{id:int}/cancel")]
     public async Task<IActionResult> Cancel(int id, CancelOrderRequest request)
     {
@@ -72,31 +70,4 @@ public class OrdersController : ControllerBase
         }
     }
 
-    [Authorize(Roles = "Admin,Staff")]
-    [HttpPatch("{id:int}/status")]
-    public async Task<IActionResult> UpdateStatus(int id, UpdateOrderStatusRequest request)
-    {
-        try
-        {
-            return Ok(await _orderService.UpdateOrderStatusAsync(id, request));
-        }
-        catch (Exception ex)
-        {
-            return this.ToErrorResult(ex);
-        }
-    }
-
-    [Authorize(Roles = "Admin,Staff")]
-    [HttpPatch("{id:int}/shipping")]
-    public async Task<IActionResult> UpdateShipping(int id, UpdateShippingStatusRequest request)
-    {
-        try
-        {
-            return Ok(await _orderService.UpdateShippingStatusAsync(id, request));
-        }
-        catch (Exception ex)
-        {
-            return this.ToErrorResult(ex);
-        }
-    }
 }

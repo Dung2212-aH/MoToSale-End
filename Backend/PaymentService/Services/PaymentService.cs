@@ -14,8 +14,6 @@ public class PaymentService : IPaymentService
     private const string PaidPaymentStatus = "Paid";
     private const string FailedPaymentStatus = "Failed";
     private const string CancelledPaymentStatus = "Cancelled";
-    private const string RefundedPaymentStatus = "Refunded";
-    private const string PartiallyRefundedPaymentStatus = "PartiallyRefunded";
     private const string CancelledOrderStatus = "Cancelled";
     private const string ConfirmedOrderStatus = "Confirmed";
 
@@ -38,9 +36,7 @@ public class PaymentService : IPaymentService
 
     private static readonly HashSet<string> SuccessfulPaymentStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
-        PaidPaymentStatus,
-        PartiallyRefundedPaymentStatus,
-        RefundedPaymentStatus
+        PaidPaymentStatus
     };
 
     private static readonly HashSet<string> InitialPaymentOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
@@ -120,7 +116,6 @@ public class PaymentService : IPaymentService
             DaThanhToanLuc = null,
             NgayTao = now,
             LoaiThanhToan = paymentType,
-            SoTienHoan = 0,
             NoiDungChuyenKhoan = TrimToNull(request.NoiDungChuyenKhoan),
             MaNganHang = TrimToNull(request.MaNganHang),
             ResponseRaw = TrimToNull(request.ResponseRaw),
@@ -163,7 +158,7 @@ public class PaymentService : IPaymentService
         SyncOrderPaymentStatus(order, now);
 
         var summary = CalculateSummary(order);
-        if (ShouldConfirmOrder(order, summary.TongThucThu))
+        if (ShouldConfirmOrder(order, summary.TongDaThanhToan))
         {
             await ConfirmOrderAndDeductStockAsync(order, now);
         }
@@ -216,7 +211,7 @@ public class PaymentService : IPaymentService
         var payment = await GetPaymentForUserAsync(maThanhToan, currentUserId, canManagePayments);
         if (payment.TrangThai is not PendingPaymentStatus and not FailedPaymentStatus)
         {
-            throw new BusinessException("Chi co the huy giao dich Pending hoac Failed. Giao dich da thanh toan thi dung nghiep vu hoan tien.");
+            throw new BusinessException("Chi co the huy giao dich Pending hoac Failed.");
         }
 
         payment.TrangThai = CancelledPaymentStatus;
@@ -230,64 +225,6 @@ public class PaymentService : IPaymentService
 
         await _paymentRepository.SaveChangesAsync();
         return MapPayment(payment);
-    }
-
-    public async Task<PaymentOrderSummaryDto> RefundPaymentAsync(
-        int maThanhToan,
-        int currentUserId,
-        bool canManagePayments,
-        RefundPaymentRequest request)
-    {
-        await EnsureActiveUserAsync(currentUserId);
-        if (!canManagePayments)
-        {
-            throw new ForbiddenException("Ban khong co quyen hoan tien giao dich.");
-        }
-
-        await using var transaction = await _paymentRepository.BeginTransactionAsync(IsolationLevel.Serializable);
-
-        var payment = await GetPaymentForUserAsync(maThanhToan, currentUserId, canManagePayments);
-        if (payment.TrangThai is not PaidPaymentStatus and not PartiallyRefundedPaymentStatus)
-        {
-            throw new BusinessException("Chi co the hoan tien giao dich da thanh toan.");
-        }
-
-        var order = payment.Order ?? throw new NotFoundException("Khong tim thay don hang cua giao dich.");
-        var totalRefundAfter = payment.SoTienHoan + request.SoTienHoan;
-        if (totalRefundAfter > payment.SoTien)
-        {
-            throw new BusinessException("So tien hoan vuot qua so tien da thanh toan.");
-        }
-
-        var now = DateTime.UtcNow;
-        var refund = new PaymentRefund
-        {
-            MaThanhToan = payment.MaThanhToan,
-            MaDonHang = payment.MaDonHang,
-            SoTienHoan = request.SoTienHoan,
-            MaGiaoDichHoanTien = TrimToNull(request.MaGiaoDichHoanTien),
-            LyDo = TrimToNull(request.LyDo),
-            TrangThai = "Succeeded",
-            ResponseRaw = TrimToNull(request.ResponseRaw),
-            NgayTao = now,
-            Payment = payment,
-            Order = order
-        };
-
-        payment.SoTienHoan = totalRefundAfter;
-        payment.TrangThai = totalRefundAfter == payment.SoTien
-            ? RefundedPaymentStatus
-            : PartiallyRefundedPaymentStatus;
-        payment.ResponseRaw = TrimToNull(request.ResponseRaw) ?? payment.ResponseRaw;
-
-        await _paymentRepository.AddRefundAsync(refund);
-
-        SyncOrderPaymentStatus(order, now);
-
-        await _paymentRepository.SaveChangesAsync();
-        await transaction.CommitAsync();
-
-        return MapOrderPaymentSummary(order);
     }
 
     private async Task EnsureActiveUserAsync(int maNguoiDung)
@@ -353,7 +290,7 @@ public class PaymentService : IPaymentService
             throw new BusinessException("So tien thanh toan vuot qua so tien con phai thu.");
         }
 
-        if (paymentType == "Full" && summary.TongThucThu > 0)
+        if (paymentType == "Full" && summary.TongDaThanhToan > 0)
         {
             throw new BusinessException("Don hang da co thanh toan truoc do, khong the tao thanh toan Full.");
         }
@@ -376,9 +313,8 @@ public class PaymentService : IPaymentService
         var status = summary switch
         {
             _ when total <= 0 => "Paid",
-            _ when summary.TongThucThu >= total => "Paid",
-            _ when summary.TongDaThanhToan > 0 && summary.TongThucThu == 0 && summary.TongDaHoan >= summary.TongDaThanhToan => "Refunded",
-            _ when summary.TongThucThu > 0 => "PartiallyPaid",
+            _ when summary.TongDaThanhToan >= total => "Paid",
+            _ when summary.TongDaThanhToan > 0 => "PartiallyPaid",
             _ when order.Payments.Any(p => p.TrangThai == FailedPaymentStatus) &&
                    order.Payments.All(p => p.TrangThai is FailedPaymentStatus or CancelledPaymentStatus) => "Failed",
             _ => "Unpaid"
@@ -477,8 +413,6 @@ public class PaymentService : IPaymentService
             TongThanhToan = order.TongThanhToan,
             TienDatCoc = order.TienDatCoc,
             TongDaThanhToan = summary.TongDaThanhToan,
-            TongDaHoan = summary.TongDaHoan,
-            TongThucThu = summary.TongThucThu,
             SoTienConPhaiThu = summary.SoTienConPhaiThu,
             SoLanThanhToanThanhCong = summary.SoLanThanhToanThanhCong,
             SoLanDangCho = summary.SoLanDangCho,
@@ -496,15 +430,11 @@ public class PaymentService : IPaymentService
             .Where(p => SuccessfulPaymentStatuses.Contains(p.TrangThai))
             .ToList();
         var totalPaid = successfulPayments.Sum(p => p.SoTien);
-        var totalRefunded = successfulPayments.Sum(p => p.SoTienHoan);
-        var netPaid = Math.Max(0, totalPaid - totalRefunded);
-        var remaining = Math.Max(0, order.TongThanhToan - netPaid);
+        var remaining = Math.Max(0, order.TongThanhToan - totalPaid);
 
         return new PaymentSummary
         {
             TongDaThanhToan = totalPaid,
-            TongDaHoan = totalRefunded,
-            TongThucThu = netPaid,
             SoTienConPhaiThu = remaining,
             SoLanThanhToanThanhCong = successfulPayments.Count,
             SoLanDangCho = order.Payments.Count(p => p.TrangThai == PendingPaymentStatus)
@@ -527,30 +457,10 @@ public class PaymentService : IPaymentService
             DaThanhToanLuc = payment.DaThanhToanLuc,
             NgayTao = payment.NgayTao,
             LoaiThanhToan = payment.LoaiThanhToan,
-            SoTienHoan = payment.SoTienHoan,
             NoiDungChuyenKhoan = payment.NoiDungChuyenKhoan,
             MaNganHang = payment.MaNganHang,
             LyDoHuy = payment.LyDoHuy,
-            NgayHuy = payment.NgayHuy,
-            Refunds = payment.Refunds
-                .OrderByDescending(r => r.NgayTao)
-                .Select(MapRefund)
-                .ToList()
-        };
-    }
-
-    private static PaymentRefundDto MapRefund(PaymentRefund refund)
-    {
-        return new PaymentRefundDto
-        {
-            MaHoanTien = refund.MaHoanTien,
-            MaThanhToan = refund.MaThanhToan,
-            MaDonHang = refund.MaDonHang,
-            SoTienHoan = refund.SoTienHoan,
-            MaGiaoDichHoanTien = refund.MaGiaoDichHoanTien,
-            LyDo = refund.LyDo,
-            TrangThai = refund.TrangThai,
-            NgayTao = refund.NgayTao
+            NgayHuy = payment.NgayHuy
         };
     }
 
@@ -583,8 +493,6 @@ public class PaymentService : IPaymentService
     private sealed class PaymentSummary
     {
         public decimal TongDaThanhToan { get; init; }
-        public decimal TongDaHoan { get; init; }
-        public decimal TongThucThu { get; init; }
         public decimal SoTienConPhaiThu { get; init; }
         public int SoLanThanhToanThanhCong { get; init; }
         public int SoLanDangCho { get; init; }

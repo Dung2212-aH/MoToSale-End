@@ -12,5 +12,4 @@ public interface IPaymentService
     Task<PaymentOrderSummaryDto> ConfirmPaymentSuccessAsync(int maThanhToan, int currentUserId, bool canManagePayments, ConfirmPaymentRequest request);
     Task<PaymentDto> MarkPaymentFailedAsync(int maThanhToan, int currentUserId, bool canManagePayments, FailPaymentRequest request);
     Task<PaymentDto> CancelPaymentAsync(int maThanhToan, int currentUserId, bool canManagePayments, CancelPaymentRequest request);
-    Task<PaymentOrderSummaryDto> RefundPaymentAsync(int maThanhToan, int currentUserId, bool canManagePayments, RefundPaymentRequest request);
 }

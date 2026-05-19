@@ -33,33 +33,9 @@ public class OrderService : IOrderService
         "Installment"
     };
 
-    private static readonly HashSet<string> AllowedOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Pending",
-        "Checkout",
-        "AwaitingPayment",
-        "Confirmed",
-        "Processing",
-        "Completed",
-        "Cancelled"
-    };
-
     private static readonly HashSet<string> CustomerCancelableStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Pending",
-        "Checkout",
-        "AwaitingPayment"
-    };
-
-    private static readonly HashSet<string> AllowedShippingStatuses = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "NotShipped",
-        "Preparing",
-        "Shipping",
-        "Delivered",
-        "PickupReady",
-        "PickedUp",
-        "Cancelled"
+        AwaitingPaymentStatus
     };
 
     private readonly IOrderRepository _orderRepository;
@@ -346,53 +322,6 @@ public class OrderService : IOrderService
             ?? throw new NotFoundException("Khong tim thay don hang.");
 
         return MapOrder(updatedOrder);
-    }
-
-    public async Task<OrderDto> UpdateOrderStatusAsync(int maDonHang, UpdateOrderStatusRequest request)
-    {
-        var status = NormalizeAllowedValue(request.TrangThaiDonHang, AllowedOrderStatuses);
-        var order = await _orderRepository.GetOrderByIdAsync(maDonHang)
-            ?? throw new NotFoundException("Khong tim thay don hang.");
-
-        order.TrangThaiDonHang = status;
-        order.NgayCapNhat = DateTime.UtcNow;
-
-        if (status == CancelledOrderStatus)
-        {
-            var now = DateTime.UtcNow;
-            order.NgayHuyDon ??= now;
-            order.TrangThaiVanChuyen = "Cancelled";
-            await ReleaseInventoryForCancelledOrderAsync(order, now, "Admin huy don", "Admin huy don, hoan ton kho");
-        }
-
-        await _orderRepository.SaveChangesAsync();
-
-        if (status == CancelledOrderStatus && order.Vouchers.Any())
-        {
-            await _orderRepository.CancelVoucherUseAsync(order.MaDonHang);
-        }
-
-        return MapOrder(order);
-    }
-
-    public async Task<OrderDto> UpdateShippingStatusAsync(int maDonHang, UpdateShippingStatusRequest request)
-    {
-        var status = NormalizeAllowedValue(request.TrangThaiVanChuyen, AllowedShippingStatuses);
-        var order = await _orderRepository.GetOrderByIdAsync(maDonHang)
-            ?? throw new NotFoundException("Khong tim thay don hang.");
-
-        order.TrangThaiVanChuyen = status;
-        order.NgayHenNhanXe = request.NgayHenNhanXe;
-        order.GhiChuGiaoNhan = TrimToNull(request.GhiChuGiaoNhan);
-        order.NgayCapNhat = DateTime.UtcNow;
-
-        if (status is "Delivered" or "PickedUp")
-        {
-            order.TrangThaiDonHang = "Completed";
-        }
-
-        await _orderRepository.SaveChangesAsync();
-        return MapOrder(order);
     }
 
     private async Task EnsureActiveUserAsync(int maNguoiDung)

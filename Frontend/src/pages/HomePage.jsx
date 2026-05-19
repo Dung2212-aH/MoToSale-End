@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FiAlertCircle } from 'react-icons/fi';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { orderApi, productApi } from '../services/api.js';
+import { categoryApi, orderApi, productApi } from '../services/api.js';
 import { brandAssets, homeCategoryReferences, serviceHighlights } from '../assets/siteData.js';
 import CategoryMenu from '../components/CategoryMenu.jsx';
 import ErrorState from '../components/ErrorState.jsx';
@@ -64,7 +64,7 @@ function HomePage() {
     try {
       const tasks = [
         productApi.getProducts({ page: 1, pageSize: 12 }),
-        productApi.getCategories(),
+        categoryApi.getAll().then((res) => res.data),
       ];
 
       if (isAuthenticated) {
@@ -84,7 +84,7 @@ function HomePage() {
           ordersResponse.filter(
             (order) =>
               order.orderType === 'Deposit' &&
-              order.paymentStatus === 'PartiallyPaid' &&
+              ['DepositPaid', 'PartiallyPaid'].includes(order.paymentStatus) &&
               order.remainingAmount > 0 &&
               order.orderStatus !== 'Cancelled',
           ),
@@ -194,17 +194,19 @@ function HomePage() {
   return (
     <>
       {pendingOrders.length > 0 && (
-        <div className="bg-[#fff6e6] px-4 py-3 border-b border-[#f0a327]/30">
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
           <div className="mx-auto flex max-w-[1200px] flex-col items-center justify-between gap-3 sm:flex-row">
-            <div className="flex items-center gap-2 text-sm font-medium text-[#d71920]">
-              <FiAlertCircle className="h-5 w-5 shrink-0" />
-              <span>Bạn có {pendingOrders.length} đơn hàng đang đặt cọc chưa thanh toán phần còn lại.</span>
+            <div className="flex items-center gap-2 text-sm font-medium text-amber-800">
+              <FiAlertCircle className="h-5 w-5 shrink-0 text-amber-600" />
+              <span>
+                Bạn có {pendingOrders.length} đơn hàng đã đặt cọc và còn số tiền cần thanh toán.
+              </span>
             </div>
             <Link
               to={`/orders/${pendingOrders[0].id}`}
-              className="whitespace-nowrap rounded-full bg-[#d71920] px-4 py-1.5 text-xs font-bold uppercase text-white transition hover:bg-[#b61016]"
+              className="whitespace-nowrap rounded-full bg-[#d71920] px-4 py-2 text-xs font-bold uppercase tracking-[0.08em] text-white transition hover:bg-[#b61016]"
             >
-              Thanh toán ngay
+              Thanh toán phần còn lại
             </Link>
           </div>
         </div>

@@ -1,27 +1,29 @@
 export const ORDER_STATUS_MAP = {
-  Pending: 'Chờ xử lý',
   AwaitingPayment: 'Chờ thanh toán',
   Confirmed: 'Đã xác nhận',
-  Processing: 'Đang xử lý',
-  Shipping: 'Đang giao hàng',
   Completed: 'Hoàn thành',
   Cancelled: 'Đã hủy',
+  Pending: 'Chờ xử lý',
+  Processing: 'Đang xử lý',
 };
 
 export const SHIPPING_STATUS_MAP = {
-  NotShipped: 'Chưa giao',
-  AwaitingPickup: 'Chờ lấy hàng',
+  NotShipped: 'Chưa giao hàng',
   Preparing: 'Đang chuẩn bị hàng',
-  InTransit: 'Đang giao hàng',
+  Shipping: 'Đang giao hàng',
   Delivered: 'Đã giao thành công',
-  Returned: 'Đã trả hàng',
-  Failed: 'Giao thất bại',
+  PickupReady: 'Sẵn sàng nhận tại showroom',
+  PickedUp: 'Đã nhận tại showroom',
+  Cancelled: 'Đã hủy',
+  AwaitingPickup: 'Chờ lấy hàng',
+  InTransit: 'Đang giao hàng',
 };
 
 export const PAYMENT_STATUS_MAP = {
   Unpaid: 'Chưa thanh toán',
   Pending: 'Đang chờ xử lý',
   Paid: 'Đã thanh toán',
+  DepositPaid: 'Đã thanh toán tiền cọc',
   PartiallyPaid: 'Thanh toán một phần',
   Refunded: 'Đã hoàn tiền',
   PartiallyRefunded: 'Hoàn tiền một phần',
@@ -38,6 +40,7 @@ export const PAYMENT_METHOD_MAP = {
 export const ORDER_TYPE_MAP = {
   FullPayment: 'Thanh toán toàn bộ',
   Deposit: 'Đặt cọc',
+  Installment: 'Trả góp',
 };
 
 export const RECEIVING_METHOD_MAP = {
@@ -46,30 +49,32 @@ export const RECEIVING_METHOD_MAP = {
 };
 
 const ORDER_STATUS_COLOR_MAP = {
-  Pending: 'bg-amber-100 text-amber-700',
   AwaitingPayment: 'bg-amber-100 text-amber-700',
   Confirmed: 'bg-blue-100 text-blue-700',
-  Processing: 'bg-blue-100 text-blue-700',
   Completed: 'bg-green-100 text-green-700',
-  Delivered: 'bg-green-100 text-green-700',
   Cancelled: 'bg-red-100 text-red-700',
+  Pending: 'bg-amber-100 text-amber-700',
+  Processing: 'bg-blue-100 text-blue-700',
   Failed: 'bg-red-100 text-red-700',
 };
 
 const SHIPPING_STATUS_COLOR_MAP = {
   NotShipped: 'bg-zinc-100 text-zinc-600',
-  AwaitingPickup: 'bg-zinc-100 text-zinc-600',
   Preparing: 'bg-amber-100 text-amber-700',
-  InTransit: 'bg-blue-100 text-blue-700',
+  Shipping: 'bg-blue-100 text-blue-700',
   Delivered: 'bg-green-100 text-green-700',
-  Returned: 'bg-red-100 text-red-700',
-  Failed: 'bg-red-100 text-red-700',
+  PickupReady: 'bg-sky-100 text-sky-700',
+  PickedUp: 'bg-green-100 text-green-700',
+  Cancelled: 'bg-red-100 text-red-700',
+  AwaitingPickup: 'bg-zinc-100 text-zinc-600',
+  InTransit: 'bg-blue-100 text-blue-700',
 };
 
 const PAYMENT_STATUS_COLOR_MAP = {
   Unpaid: 'bg-red-100 text-red-700',
   Pending: 'bg-red-100 text-red-700',
   Paid: 'bg-green-100 text-green-700',
+  DepositPaid: 'bg-orange-100 text-orange-700',
   PartiallyPaid: 'bg-orange-100 text-orange-700',
   Refunded: 'bg-purple-100 text-purple-700',
   PartiallyRefunded: 'bg-purple-100 text-purple-700',

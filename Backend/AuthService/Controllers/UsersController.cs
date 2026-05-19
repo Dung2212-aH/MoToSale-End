@@ -15,7 +15,6 @@ namespace AuthService.Controllers;
 public class UsersController : ControllerBase
 {
     private const string ActiveStatus = "Active";
-    private const string InactiveStatus = "Inactive";
 
     private readonly AuthDbContext _dbContext;
     private readonly IPasswordHasher _passwordHasher;
@@ -31,70 +30,6 @@ public class UsersController : ControllerBase
     {
         var user = await GetCurrentUserAsync();
         return user is null ? Unauthorized() : Ok(ToProfile(user));
-    }
-
-    [Authorize(Roles = "Admin")]
-    [HttpGet("~/api/admin/users")]
-    public async Task<IActionResult> GetAdminUsers(
-        [FromQuery] string? keyword = null,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 15)
-    {
-        page = page <= 0 ? 1 : page;
-        pageSize = pageSize <= 0 ? 15 : Math.Min(pageSize, 100);
-
-        var query = _dbContext.Users
-            .AsNoTracking()
-            .Include(u => u.UserRoles)
-                .ThenInclude(ur => ur.Role)
-            .AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(keyword))
-        {
-            var term = keyword.Trim();
-            query = query.Where(u =>
-                u.HoTen.Contains(term) ||
-                u.Email.Contains(term) ||
-                u.SoDienThoai.Contains(term));
-        }
-
-        var totalItems = await query.CountAsync();
-        var users = await query
-            .OrderByDescending(u => u.NgayTao)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync();
-
-        return Ok(new
-        {
-            items = users.Select(ToAdminUser),
-            page,
-            pageSize,
-            totalItems,
-            totalCount = totalItems,
-            totalPages = Math.Max(1, (int)Math.Ceiling(totalItems / (double)pageSize))
-        });
-    }
-
-    [Authorize(Roles = "Admin")]
-    [HttpPut("~/api/admin/users/{id:int}/toggle-status")]
-    public async Task<IActionResult> ToggleUserStatus(int id)
-    {
-        var user = await _dbContext.Users
-            .Include(u => u.UserRoles)
-                .ThenInclude(ur => ur.Role)
-            .FirstOrDefaultAsync(u => u.Id == id);
-
-        if (user is null)
-        {
-            return NotFound(new { message = "Khong tim thay nguoi dung." });
-        }
-
-        user.TrangThai = user.TrangThai == ActiveStatus ? InactiveStatus : ActiveStatus;
-        user.NgayCapNhat = DateTime.UtcNow;
-        await _dbContext.SaveChangesAsync();
-
-        return Ok(ToAdminUser(user));
     }
 
     [HttpPut("me")]
@@ -233,26 +168,6 @@ public class UsersController : ControllerBase
             email = user.Email,
             phone = user.SoDienThoai,
             status = user.TrangThai,
-            created = user.NgayTao
-        };
-    }
-
-    private static object ToAdminUser(User user)
-    {
-        var roles = user.UserRoles.Select(ur => ur.Role.TenVaiTro).ToList();
-
-        return new
-        {
-            id = user.Id,
-            userId = user.Id,
-            username = user.Email,
-            name = user.HoTen,
-            email = user.Email,
-            phone = user.SoDienThoai,
-            role = roles.FirstOrDefault() ?? "Customer",
-            roles,
-            status = user.TrangThai,
-            isActive = user.TrangThai == ActiveStatus,
             created = user.NgayTao
         };
     }

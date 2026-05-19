@@ -21,6 +21,8 @@ public class ProductDetailDto
     public int SoLuongTon { get; set; }
     public string? AnhChinhUrl { get; set; }
     public bool DangHoatDong { get; set; }
+    public double DiemTrungBinh { get; set; }
+    public int TongDanhGia { get; set; }
     public List<ProductVariantDto> BienThe { get; set; } = new();
     public List<ProductImageDto> Anh { get; set; } = new();
 }

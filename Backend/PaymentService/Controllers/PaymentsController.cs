@@ -84,7 +84,6 @@ public class PaymentsController : ControllerBase
         }
     }
 
-    [HttpPatch("{id:int}/success")]
     [HttpPost("{id:int}/confirm-success")]
     public async Task<IActionResult> ConfirmSuccess(int id, ConfirmPaymentRequest request)
     {
@@ -118,20 +117,6 @@ public class PaymentsController : ControllerBase
         try
         {
             return Ok(await _paymentService.CancelPaymentAsync(id, this.GetCurrentUserId(), this.CanManagePayments(), request));
-        }
-        catch (Exception ex)
-        {
-            return this.ToErrorResult(ex);
-        }
-    }
-
-    [Authorize(Roles = "Admin,Staff")]
-    [HttpPost("{id:int}/refunds")]
-    public async Task<IActionResult> Refund(int id, RefundPaymentRequest request)
-    {
-        try
-        {
-            return Ok(await _paymentService.RefundPaymentAsync(id, this.GetCurrentUserId(), this.CanManagePayments(), request));
         }
         catch (Exception ex)
         {

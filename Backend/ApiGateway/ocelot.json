@@ -47,14 +47,14 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5002 }],
       "UpstreamPathTemplate": "/api/products",
-      "UpstreamHttpMethod": [ "GET", "POST", "OPTIONS" ]
+      "UpstreamHttpMethod": [ "GET", "OPTIONS" ]
     },
     {
       "DownstreamPathTemplate": "/api/products/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5002 }],
       "UpstreamPathTemplate": "/api/products/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "OPTIONS" ]
+      "UpstreamHttpMethod": [ "GET", "POST", "PATCH", "OPTIONS" ]
     },
     {
       "DownstreamPathTemplate": "/uploads/{everything}",
@@ -82,34 +82,13 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5002 }],
       "UpstreamPathTemplate": "/api/categories",
-      "UpstreamHttpMethod": [ "GET", "POST", "OPTIONS" ]
+      "UpstreamHttpMethod": [ "GET", "OPTIONS" ]
     },
     {
       "DownstreamPathTemplate": "/api/categories/{everything}",
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5002 }],
       "UpstreamPathTemplate": "/api/categories/{everything}",
-      "UpstreamHttpMethod": [ "GET", "PUT", "DELETE", "OPTIONS" ]
-    },
-    {
-      "DownstreamPathTemplate": "/api/admin/users",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5001 }],
-      "UpstreamPathTemplate": "/api/admin/users",
-      "UpstreamHttpMethod": [ "GET", "POST", "OPTIONS" ]
-    },
-    {
-      "DownstreamPathTemplate": "/api/admin/users/{everything}",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5001 }],
-      "UpstreamPathTemplate": "/api/admin/users/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "OPTIONS" ]
-    },
-    {
-      "DownstreamPathTemplate": "/api/stores",
-      "DownstreamScheme": "http",
-      "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5002 }],
-      "UpstreamPathTemplate": "/api/stores",
       "UpstreamHttpMethod": [ "GET", "OPTIONS" ]
     },
     {
@@ -173,7 +152,7 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5003 }],
       "UpstreamPathTemplate": "/api/orders/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS" ]
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "OPTIONS" ]
     },
     {
       "DownstreamPathTemplate": "/api/vouchers",

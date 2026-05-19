@@ -144,9 +144,7 @@ public class OrderRepository : IOrderRepository
             .Include(o => o.InventoryHolds)
             .Where(o =>
                 expiredOrderIds.Contains(o.MaDonHang) &&
-                (o.TrangThaiDonHang == "Pending" ||
-                 o.TrangThaiDonHang == "Checkout" ||
-                 o.TrangThaiDonHang == "AwaitingPayment"))
+                o.TrangThaiDonHang == "AwaitingPayment")
             .ToListAsync();
 
         foreach (var order in orders)

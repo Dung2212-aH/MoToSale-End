@@ -20,6 +20,9 @@ public class CatalogDbContext : DbContext
     public DbSet<ProductImage> ProductImages { get; set; }
     public DbSet<ProductReview> ProductReviews { get; set; }
     public DbSet<ProductVariant> ProductVariants { get; set; }
+    public DbSet<ReviewOrder> ReviewOrders { get; set; }
+    public DbSet<ReviewOrderItem> ReviewOrderItems { get; set; }
+    public DbSet<ReviewUser> ReviewUsers { get; set; }
     public DbSet<Showroom> Showrooms { get; set; }
     public DbSet<VehicleModel> VehicleModels { get; set; }
 
@@ -38,6 +41,9 @@ public class CatalogDbContext : DbContext
         ConfigureProductImage(modelBuilder);
         ConfigureProductReview(modelBuilder);
         ConfigureProductVariant(modelBuilder);
+        ConfigureReviewOrder(modelBuilder);
+        ConfigureReviewOrderItem(modelBuilder);
+        ConfigureReviewUser(modelBuilder);
         ConfigureShowroom(modelBuilder);
         ConfigureVehicleModel(modelBuilder);
     }
@@ -214,6 +220,22 @@ public class CatalogDbContext : DbContext
             e.Property(e => e.TieuDe).HasMaxLength(255);
             e.Property(e => e.TrangThai).HasMaxLength(20).IsUnicode(false).IsRequired();
             e.Property(e => e.NgayTao).HasColumnType("datetime2(0)");
+            e.Property(e => e.NgayCapNhat).HasColumnType("datetime2(0)");
+
+            e.HasIndex(e => new { e.MaSanPham, e.TrangThai, e.NgayTao });
+            e.HasIndex(e => new { e.MaNguoiDung, e.MaSanPham }).IsUnique();
+
+            e.HasOne(e => e.Product)
+                .WithMany()
+                .HasForeignKey(e => e.MaSanPham);
+
+            e.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.MaNguoiDung);
+
+            e.HasOne(e => e.Order)
+                .WithMany()
+                .HasForeignKey(e => e.MaDonHang);
         });
     }
 
@@ -234,6 +256,42 @@ public class CatalogDbContext : DbContext
             e.Property(e => e.MauSac).HasMaxLength(80);
 
             e.HasIndex(e => e.SKU).IsUnique();
+        });
+    }
+
+    private void ConfigureReviewOrder(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ReviewOrder>(e =>
+        {
+            e.ToTable("DONHANG");
+            e.HasKey(e => e.MaDonHang);
+            e.Property(e => e.TrangThaiDonHang).HasMaxLength(20).IsUnicode(false).IsRequired();
+            e.Property(e => e.TrangThaiVanChuyen).HasMaxLength(30).IsUnicode(false).IsRequired();
+            e.Property(e => e.NgayTao).HasColumnType("datetime2(0)");
+
+            e.HasMany(e => e.Items)
+                .WithOne(e => e.Order)
+                .HasForeignKey(e => e.MaDonHang);
+        });
+    }
+
+    private void ConfigureReviewOrderItem(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ReviewOrderItem>(e =>
+        {
+            e.ToTable("CHITIET_DONHANG");
+            e.HasKey(e => e.MaChiTietDonHang);
+            e.HasIndex(e => e.MaSanPham);
+        });
+    }
+
+    private void ConfigureReviewUser(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ReviewUser>(e =>
+        {
+            e.ToTable("NGUOIDUNG");
+            e.HasKey(e => e.MaNguoiDung);
+            e.Property(e => e.HoTen).HasMaxLength(150).IsRequired();
         });
     }
 

@@ -89,7 +89,7 @@ function hasStoreContent(store) {
 }
 
 export async function fetchStores() {
-  const response = await api.get('/stores');
+  const response = await api.get('/showrooms');
   const data = response.data;
   const items = Array.isArray(data) ? data : data?.items || data?.Items || [];
 
