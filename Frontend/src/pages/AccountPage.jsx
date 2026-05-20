@@ -3,6 +3,7 @@ import {
   FiCheck,
   FiHome,
   FiLock,
+  FiLogOut,
   FiMail,
   FiMapPin,
   FiPhone,
@@ -10,10 +11,12 @@ import {
   FiSave,
   FiUser,
 } from 'react-icons/fi';
+import { useNavigate } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb.jsx';
 import ErrorState from '../components/ErrorState.jsx';
 import LoadingState from '../components/LoadingState.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { useCart } from '../contexts/CartContext.jsx';
 import { useNotification } from '../contexts/NotificationContext.jsx';
 import { userApi } from '../services/api.js';
 
@@ -108,8 +111,10 @@ function validateAddress(form) {
 }
 
 function AccountPage() {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, logout } = useAuth();
+  const { resetCart } = useCart();
   const { notify } = useNotification();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile');
   const [profile, setProfile] = useState(emptyProfile);
   const [address, setAddress] = useState(emptyAddress);
@@ -307,6 +312,21 @@ function AccountPage() {
                 <div className="mt-4 rounded-2xl bg-zinc-50 px-4 py-4 text-sm text-zinc-600">
                   <div className="font-extrabold text-zinc-950">Địa chỉ hiện tại</div>
                   <p className="mt-2 leading-6">{addressText || 'Chưa lưu địa chỉ nhận hàng.'}</p>
+                </div>
+
+                <div className="mt-4 border-t border-zinc-200 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      logout();
+                      resetCart();
+                      navigate('/');
+                    }}
+                    className="flex w-full min-h-12 items-center gap-3 rounded-2xl px-4 text-left text-sm font-extrabold text-red-600 transition hover:bg-red-50"
+                  >
+                    <FiLogOut className="h-5 w-5 shrink-0" />
+                    <span>Đăng xuất</span>
+                  </button>
                 </div>
               </aside>
 

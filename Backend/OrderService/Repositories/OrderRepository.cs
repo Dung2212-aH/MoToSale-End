@@ -210,8 +210,17 @@ public class OrderRepository : IOrderRepository
 
     public async Task RecordVoucherUseAsync(int maNguoiDung, int maDonHang, string maVoucherCode, decimal soTienGiam)
     {
+        // Call the SP to record voucher usage (inserts VOUCHER_NGUOIDUNG + DONHANG_VOUCHER + increments SoLanDaDung)
         await _dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"EXEC dbo.sp_Voucher_GhiNhanSuDung @MaNguoiDung={maNguoiDung}, @MaDonHang={maDonHang}, @MaVoucherCode={maVoucherCode}, @SoTienGiam={soTienGiam}");
+
+        // Mark the user's "Saved" record as "Used" so the voucher count in header decreases
+        await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $@"UPDATE TOP(1) dbo.VOUCHER_NGUOIDUNG
+               SET TrangThai = 'Used', MaDonHang = {maDonHang}, NgaySuDung = SYSDATETIME()
+               WHERE MaNguoiDung = {maNguoiDung}
+                 AND MaVoucherCodeSnapshot = {maVoucherCode}
+                 AND TrangThai = 'Saved'");
     }
 
     public async Task CancelVoucherUseAsync(int maDonHang)

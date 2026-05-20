@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Navigate, Route, Routes } from 'react-router-dom';
+import ScrollToTop from './components/ScrollToTop.jsx';
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx';
 import { CartProvider } from './contexts/CartContext.jsx';
 import { FavoriteProvider } from './contexts/FavoriteContext.jsx';
@@ -19,6 +20,7 @@ import ProductDetailPage from './pages/ProductDetailPage.jsx';
 import ProductListPage from './pages/ProductListPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import StoreSystemPage from './pages/StoreSystemPage.jsx';
+import VouchersPage from './pages/VouchersPage.jsx';
 
 const authPaths = ['/login', '/register'];
 
@@ -52,6 +54,7 @@ function AppRoutes() {
         <Route path="/he-thong-cua-hang" element={<StoreSystemPage />} />
         <Route path="/products" element={<ProductListPage />} />
         <Route path="/products/:id" element={<ProductDetailPage />} />
+        <Route path="/vouchers" element={<VouchersPage />} />
         <Route
           path="/cart"
           element={
@@ -128,6 +131,7 @@ function AppRoutes() {
 function App() {
   return (
     <Router>
+      <ScrollToTop />
       <AuthProvider>
         <NotificationProvider>
           <FavoriteProvider>

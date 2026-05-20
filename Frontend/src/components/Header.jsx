@@ -1,19 +1,22 @@
 import { useEffect, useState } from 'react';
 import {
   FiChevronDown,
-  FiClipboard,
+  FiFileText,
   FiHeart,
   FiLogIn,
   FiMapPin,
   FiMenu,
-  FiShoppingBag,
+  FiShoppingCart,
+  FiUser,
   FiUserPlus,
 } from 'react-icons/fi';
+import { RiDiscountPercentLine } from 'react-icons/ri';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { brandAssets, navItems, productBrandGroups, socialLinks } from '../assets/siteData.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { useCart } from '../contexts/CartContext.jsx';
 import { useFavorite } from '../contexts/FavoriteContext.jsx';
+import { voucherApi } from '../services/api.js';
 
 function getDisplayName(user) {
   return user?.name || user?.username || user?.email || 'Tài khoản';
@@ -31,21 +34,24 @@ function navItemBaseClass(isActive = false) {
 function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [productMenuOpen, setProductMenuOpen] = useState(false);
-  const { user: currentUser, isAuthenticated, logout } = useAuth();
-  const { count: cartCount, resetCart } = useCart();
+  const [voucherCount, setVoucherCount] = useState(0);
+  const { user: currentUser, isAuthenticated } = useAuth();
+  const { count: cartCount } = useCart();
   const { count: favoriteCount } = useFavorite();
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
+    if (isAuthenticated) {
+      voucherApi.getMyVoucherCount().then(setVoucherCount).catch(() => setVoucherCount(0));
+    } else {
+      setVoucherCount(0);
+    }
+  }, [isAuthenticated, location.pathname]);
+
+  useEffect(() => {
     setProductMenuOpen(false);
   }, [location.pathname, location.search, location.hash]);
-
-  function handleLogout() {
-    logout();
-    resetCart();
-    navigate('/');
-  }
 
   function handleNavClick(item, event) {
     setMenuOpen(false);
@@ -74,22 +80,13 @@ function Header() {
                 </Link>
 
                 {isAuthenticated ? (
-                  <>
-                    <Link
-                      className="inline-flex items-center gap-1.5 px-0 font-semibold transition hover:text-[#ffe082] lg:px-3"
-                      to="/account"
-                    >
-                      Xin chào, <span className="underline decoration-white/50 decoration-1 underline-offset-4">{getDisplayName(currentUser)}</span>
-                    </Link>
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1.5 bg-transparent px-0 transition hover:text-[#ffe082] lg:px-3"
-                      onClick={handleLogout}
-                    >
-                      <FiLogIn className="h-4 w-4" />
-                      Đăng xuất
-                    </button>
-                  </>
+                  <Link
+                    className="inline-flex items-center gap-1.5 px-0 font-semibold transition hover:text-[#ffe082] lg:px-3"
+                    to="/account"
+                  >
+                    <FiUser className="h-4 w-4" />
+                    <span className="underline decoration-white/50 decoration-1 underline-offset-4">{getDisplayName(currentUser)}</span>
+                  </Link>
                 ) : (
                   <>
                     <Link className="inline-flex items-center gap-1.5 border-white/60 px-0 transition hover:text-[#ffe082] lg:border-r lg:px-3" to="/login">
@@ -201,12 +198,22 @@ function Header() {
                 </span>
               </Link>
               {isAuthenticated && (
+                <Link className="group relative inline-grid h-11 w-11 place-items-center rounded-full text-[#111] transition duration-300 hover:bg-zinc-100 hover:text-[#d71920]" to="/vouchers" aria-label="Voucher">
+                  <RiDiscountPercentLine className="h-7 w-7" />
+                  {voucherCount > 0 && (
+                    <span className="absolute right-0 top-1 grid h-[18px] w-[18px] place-items-center rounded-full bg-[#d71920] text-[11px] font-extrabold text-white">
+                      {voucherCount}
+                    </span>
+                  )}
+                </Link>
+              )}
+              {isAuthenticated && (
                 <Link className="group relative inline-grid h-11 w-11 place-items-center rounded-full text-[#111] transition duration-300 hover:bg-zinc-100 hover:text-[#d71920]" to="/orders" aria-label="Đơn hàng">
-                  <FiClipboard className="h-7 w-7" />
+                  <FiFileText className="h-7 w-7" />
                 </Link>
               )}
               <Link className="group relative inline-grid h-11 w-11 place-items-center rounded-full text-[#111] transition duration-300 hover:bg-zinc-100 hover:text-[#d71920]" to="/cart" aria-label="Giỏ hàng">
-                <FiShoppingBag className="h-7 w-7" />
+                <FiShoppingCart className="h-7 w-7" />
                 <span className="absolute right-0 top-1 grid h-[18px] w-[18px] place-items-center rounded-full bg-[#d71920] text-[11px] font-extrabold text-white">
                   {cartCount}
                 </span>

@@ -148,6 +148,7 @@ const normalizeVoucher = (raw = {}) => ({
   discountValue: Number(field(raw, 'discountValue', 'DiscountValue', 'giaTriGiam', 'GiaTriGiam') || 0),
   maxDiscountValue: field(raw, 'maxDiscountValue', 'MaxDiscountValue', 'giaTriGiamToiDa', 'GiaTriGiamToiDa'),
   minOrderValue: Number(field(raw, 'minOrderValue', 'MinOrderValue', 'giaTriDonToiThieu', 'GiaTriDonToiThieu') || 0),
+  remainingUses: field(raw, 'remainingUses', 'RemainingUses') ?? null,
 });
 
 const normalizeFavorite = (raw = {}) => {
@@ -729,6 +730,24 @@ export const voucherApi = {
     const result = responseData(response);
     const items = result?.items || result?.Items || result;
     return Array.isArray(items) ? items.map(normalizeVoucher) : items;
+  },
+
+  async saveVoucher(code) {
+    const response = await api.post('/vouchers/save', { code });
+    return responseData(response);
+  },
+
+  async getMyVouchers() {
+    const response = await api.get('/vouchers/my');
+    const data = responseData(response);
+    const items = data?.items || data?.Items || data;
+    return Array.isArray(items) ? items.map(normalizeVoucher) : items;
+  },
+
+  async getMyVoucherCount() {
+    const response = await api.get('/vouchers/my/count');
+    const data = responseData(response);
+    return data?.count ?? 0;
   },
 };
 

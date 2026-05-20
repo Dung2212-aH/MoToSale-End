@@ -20,6 +20,7 @@ public class OrderDbContext : DbContext
     public DbSet<InventoryHold> InventoryHolds { get; set; }
     public DbSet<OrderVoucher> OrderVouchers { get; set; }
     public DbSet<Voucher> Vouchers { get; set; }
+    public DbSet<VoucherUser> VoucherUsers { get; set; }
     public DbSet<VoucherValidationResult> VoucherValidationResults { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -37,6 +38,7 @@ public class OrderDbContext : DbContext
         ConfigureInventoryHolds(modelBuilder);
         ConfigureOrderVouchers(modelBuilder);
         ConfigureVouchers(modelBuilder);
+        ConfigureVoucherUsers(modelBuilder);
         ConfigureStoredProcedureResults(modelBuilder);
     }
 
@@ -291,6 +293,27 @@ public class OrderDbContext : DbContext
             e.Property(x => x.NgayTao).HasColumnType("datetime2(0)");
             e.Property(x => x.LoaiGiamGiaSnapshot).HasMaxLength(20).IsUnicode(false);
             e.Property(x => x.GiaTriGiamSnapshot).HasPrecision(18, 2);
+        });
+    }
+
+    private static void ConfigureVoucherUsers(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<VoucherUser>(e =>
+        {
+            e.ToTable("VOUCHER_NGUOIDUNG");
+            e.HasKey(x => x.MaVoucherNguoiDung);
+            e.Property(x => x.MaVoucherNguoiDung).ValueGeneratedOnAdd();
+            e.Property(x => x.MaVoucherCodeSnapshot).HasMaxLength(50).IsRequired();
+            e.Property(x => x.LoaiGiamGiaSnapshot).HasMaxLength(20).IsUnicode(false);
+            e.Property(x => x.GiaTriGiamSnapshot).HasPrecision(18, 2);
+            e.Property(x => x.SoTienGiam).HasPrecision(18, 2);
+            e.Property(x => x.TrangThai).HasMaxLength(20).IsUnicode(false).IsRequired();
+            e.Property(x => x.NgaySuDung).HasColumnType("datetime2(0)");
+            e.Property(x => x.NgayTao).HasColumnType("datetime2(0)");
+
+            e.HasOne(x => x.Voucher)
+                .WithMany()
+                .HasForeignKey(x => x.MaVoucher);
         });
     }
 

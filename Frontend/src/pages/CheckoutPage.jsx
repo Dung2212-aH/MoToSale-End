@@ -437,7 +437,7 @@ function CheckoutPage() {
                         type="text"
                         value={voucherCode}
                         onChange={handleVoucherCodeChange}
-                        placeholder="Nhập mã voucher khác (nếu có)"
+                        placeholder="Nhập mã voucher"
                         className="flex-1 min-w-0 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none transition placeholder:text-zinc-400 focus:border-[#d71920] focus:ring-2 focus:ring-[#d71920]/20"
                       />
                       <button
@@ -451,7 +451,6 @@ function CheckoutPage() {
                     </div>
                   </>
                 )}
-                {voucherError && <p className="mt-1.5 text-xs font-medium text-red-500">{voucherError}</p>}
               </div>
 
               {/* Price Breakdown */}

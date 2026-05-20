@@ -166,7 +166,7 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5003 }],
       "UpstreamPathTemplate": "/api/vouchers/{everything}",
-      "UpstreamHttpMethod": [ "POST", "OPTIONS" ]
+      "UpstreamHttpMethod": [ "GET", "POST", "OPTIONS" ]
     },
     {
       "DownstreamPathTemplate": "/api/payments",
