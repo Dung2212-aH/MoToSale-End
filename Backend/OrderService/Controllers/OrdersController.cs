@@ -103,15 +103,20 @@ public class OrdersController : ControllerBase
     public async Task<IActionResult> UpdateStatus(int id, UpdateOrderStatusRequest request)
     {
         var status = request.TrangThaiDonHang ?? request.Status;
-        if (string.IsNullOrWhiteSpace(status))
+        var paymentStatus = request.TrangThaiThanhToan ?? request.PaymentStatus;
+        if (string.IsNullOrWhiteSpace(status) && string.IsNullOrWhiteSpace(paymentStatus))
         {
-            return BadRequest(new { message = "Trang thai don hang la bat buoc." });
+            return BadRequest(new { message = "Trang thai don hang hoac trang thai thanh toan la bat buoc." });
         }
 
-        var normalizedStatus = AllowedAdminOrderStatuses.FirstOrDefault(x => x.Equals(status.Trim(), StringComparison.OrdinalIgnoreCase));
-        if (normalizedStatus is null)
+        string? normalizedStatus = null;
+        if (!string.IsNullOrWhiteSpace(status))
         {
-            return BadRequest(new { message = "Trang thai don hang khong hop le." });
+            normalizedStatus = AllowedAdminOrderStatuses.FirstOrDefault(x => x.Equals(status.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (normalizedStatus is null)
+            {
+                return BadRequest(new { message = "Trang thai don hang khong hop le." });
+            }
         }
 
         var order = await _dbContext.Orders.FirstOrDefaultAsync(o => o.MaDonHang == id);
@@ -120,7 +125,10 @@ public class OrdersController : ControllerBase
             return NotFound(new { message = "Khong tim thay don hang." });
         }
 
-        order.TrangThaiDonHang = normalizedStatus;
+        if (normalizedStatus is not null)
+        {
+            order.TrangThaiDonHang = normalizedStatus;
+        }
         if (!string.IsNullOrWhiteSpace(request.TrangThaiVanChuyen))
         {
             order.TrangThaiVanChuyen = request.TrangThaiVanChuyen.Trim();
@@ -131,7 +139,6 @@ public class OrdersController : ControllerBase
             order.GhiChuGiaoNhan = request.GhiChuGiaoNhan.Trim();
         }
 
-        var paymentStatus = request.TrangThaiThanhToan ?? request.PaymentStatus;
         if (!string.IsNullOrWhiteSpace(paymentStatus))
         {
             var normalizedPaymentStatus = AllowedAdminPaymentStatuses.FirstOrDefault(x => x.Equals(paymentStatus.Trim(), StringComparison.OrdinalIgnoreCase));
@@ -147,7 +154,7 @@ public class OrdersController : ControllerBase
             }
         }
 
-        if (normalizedStatus.Equals("Cancelled", StringComparison.OrdinalIgnoreCase))
+        if (normalizedStatus?.Equals("Cancelled", StringComparison.OrdinalIgnoreCase) == true)
         {
             order.NgayHuyDon ??= DateTime.UtcNow;
             order.LyDoHuyDon = string.IsNullOrWhiteSpace(request.LyDoHuyDon) ? order.LyDoHuyDon : request.LyDoHuyDon.Trim();

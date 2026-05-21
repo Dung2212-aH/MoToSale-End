@@ -1,0 +1,27 @@
+SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+SET ANSI_PADDING ON;
+SET ANSI_WARNINGS ON;
+SET ARITHABORT ON;
+SET CONCAT_NULL_YIELDS_NULL ON;
+SET NUMERIC_ROUNDABORT OFF;
+GO
+
+IF OBJECT_ID(N'dbo.DONHANG', N'U') IS NOT NULL
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM sys.check_constraints
+        WHERE name = N'CK_DONHANG_PaymentStatus'
+          AND parent_object_id = OBJECT_ID(N'dbo.DONHANG')
+    )
+    BEGIN
+        ALTER TABLE dbo.DONHANG DROP CONSTRAINT CK_DONHANG_PaymentStatus;
+    END;
+
+    ALTER TABLE dbo.DONHANG WITH CHECK ADD CONSTRAINT CK_DONHANG_PaymentStatus
+    CHECK (TrangThaiThanhToan IN ('Unpaid', 'PartiallyPaid', 'Paid', 'Failed', 'Refunded', 'Cancelled'));
+
+    ALTER TABLE dbo.DONHANG CHECK CONSTRAINT CK_DONHANG_PaymentStatus;
+END;
+GO

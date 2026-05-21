@@ -1706,7 +1706,7 @@ ALTER TABLE [dbo].[DONHANG]  WITH NOCHECK ADD  CONSTRAINT [CK_DONHANG_OrderStatu
 GO
 ALTER TABLE [dbo].[DONHANG] CHECK CONSTRAINT [CK_DONHANG_OrderStatus]
 GO
-ALTER TABLE [dbo].[DONHANG]  WITH NOCHECK ADD  CONSTRAINT [CK_DONHANG_PaymentStatus] CHECK  (([TrangThaiThanhToan]='Refunded' OR [TrangThaiThanhToan]='Failed' OR [TrangThaiThanhToan]='Paid' OR [TrangThaiThanhToan]='PartiallyPaid' OR [TrangThaiThanhToan]='Unpaid'))
+ALTER TABLE [dbo].[DONHANG]  WITH NOCHECK ADD  CONSTRAINT [CK_DONHANG_PaymentStatus] CHECK  (([TrangThaiThanhToan]='Cancelled' OR [TrangThaiThanhToan]='Refunded' OR [TrangThaiThanhToan]='Failed' OR [TrangThaiThanhToan]='Paid' OR [TrangThaiThanhToan]='PartiallyPaid' OR [TrangThaiThanhToan]='Unpaid'))
 GO
 ALTER TABLE [dbo].[DONHANG] CHECK CONSTRAINT [CK_DONHANG_PaymentStatus]
 GO
