@@ -11,4 +11,14 @@ public class PaymentSearchDto
     public string? LoaiThanhToan { get; set; }
     public DateTime? TuNgay { get; set; }
     public DateTime? DenNgay { get; set; }
+    public DateTime? StartDate
+    {
+        get => TuNgay;
+        set => TuNgay = value;
+    }
+    public DateTime? EndDate
+    {
+        get => DenNgay;
+        set => DenNgay = value?.Date.AddDays(1).AddTicks(-1);
+    }
 }

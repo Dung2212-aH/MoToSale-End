@@ -98,6 +98,20 @@ public class PaymentsController : ControllerBase
     }
 
     [Authorize(Roles = "Admin,Staff")]
+    [HttpPatch("{id:int}/confirm")]
+    public async Task<IActionResult> Confirm(int id, ConfirmPaymentRequest? request)
+    {
+        try
+        {
+            return Ok(await _paymentService.ConfirmPaymentSuccessAsync(id, this.GetCurrentUserId(), this.CanManagePayments(), request ?? new ConfirmPaymentRequest()));
+        }
+        catch (Exception ex)
+        {
+            return this.ToErrorResult(ex);
+        }
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPatch("{id:int}/failed")]
     public async Task<IActionResult> MarkFailed(int id, FailPaymentRequest request)
     {

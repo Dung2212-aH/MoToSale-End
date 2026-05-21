@@ -14,12 +14,15 @@ public class ReviewsController : ControllerBase
 {
     private const string PendingReviewStatus = "Pending";
     private const string ApprovedReviewStatus = "Approved";
+    private const string RejectedReviewStatus = "Rejected";
+    private const string HiddenReviewStatus = "Hidden";
 
     private static readonly HashSet<string> AllowedReviewStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
         PendingReviewStatus,
         ApprovedReviewStatus,
-        "Rejected"
+        RejectedReviewStatus,
+        HiddenReviewStatus
     };
 
     // Trang thai hoan tat lay theo OrderService: Delivered/PickedUp tu dong dua don hang ve Completed.
@@ -55,7 +58,7 @@ public class ReviewsController : ControllerBase
                 TieuDe = r.TieuDe,
                 NoiDung = r.NoiDung,
                 HinhAnhUrl = r.HinhAnhUrl,
-                TrangThai = r.TrangThai,
+                TrangThai = r.TrangThai == RejectedReviewStatus ? HiddenReviewStatus : r.TrangThai,
                 NgayTao = r.NgayTao,
                 NgayCapNhat = r.NgayCapNhat
             })
@@ -118,7 +121,7 @@ public class ReviewsController : ControllerBase
                 TieuDe = r.TieuDe,
                 NoiDung = r.NoiDung,
                 HinhAnhUrl = r.HinhAnhUrl,
-                TrangThai = r.TrangThai,
+                TrangThai = r.TrangThai == RejectedReviewStatus ? HiddenReviewStatus : r.TrangThai,
                 NgayTao = r.NgayTao,
                 NgayCapNhat = r.NgayCapNhat
             })
@@ -315,7 +318,7 @@ public class ReviewsController : ControllerBase
     [HttpPatch("{id:int}/status")]
     public async Task<IActionResult> UpdateReviewStatus(int id, ProductReviewStatusUpdateDto request)
     {
-        var status = NormalizeReviewStatus(request.TrangThai);
+        var status = NormalizeReviewStatus(request.TrangThai) ?? NormalizeReviewStatus(request.Status);
         if (status is null)
         {
             return BadRequest(new { message = "Trang thai danh gia khong hop le." });
@@ -342,10 +345,26 @@ public class ReviewsController : ControllerBase
             TieuDe = review.TieuDe,
             NoiDung = review.NoiDung,
             HinhAnhUrl = review.HinhAnhUrl,
-            TrangThai = review.TrangThai,
+            TrangThai = ToClientReviewStatus(review.TrangThai),
             NgayTao = review.NgayTao,
             NgayCapNhat = review.NgayCapNhat
         });
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeleteReview(int id)
+    {
+        var review = await _dbContext.ProductReviews.FirstOrDefaultAsync(r => r.MaDanhGia == id);
+        if (review is null)
+        {
+            return NotFound(new { message = "Khong tim thay danh gia." });
+        }
+
+        _dbContext.ProductReviews.Remove(review);
+        await _dbContext.SaveChangesAsync();
+
+        return NoContent();
     }
 
     private async Task<bool> ProductExistsAsync(int productId)
@@ -391,7 +410,7 @@ public class ReviewsController : ControllerBase
             TieuDe = review.TieuDe,
             NoiDung = review.NoiDung,
             HinhAnhUrl = review.HinhAnhUrl,
-            TrangThai = review.TrangThai,
+            TrangThai = ToClientReviewStatus(review.TrangThai),
             NgayTao = review.NgayTao,
             NgayCapNhat = review.NgayCapNhat
         };
@@ -412,9 +431,25 @@ public class ReviewsController : ControllerBase
         return null;
     }
 
-    private static string? NormalizeReviewStatus(string value)
+    private static string? NormalizeReviewStatus(string? value)
     {
-        return AllowedReviewStatuses.FirstOrDefault(status => status.Equals(value.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var normalized = value.Trim();
+        if (normalized.Equals(HiddenReviewStatus, StringComparison.OrdinalIgnoreCase))
+        {
+            return RejectedReviewStatus;
+        }
+
+        return AllowedReviewStatuses.FirstOrDefault(status => status.Equals(normalized, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string ToClientReviewStatus(string status)
+    {
+        return status.Equals(RejectedReviewStatus, StringComparison.OrdinalIgnoreCase) ? HiddenReviewStatus : status;
     }
 
     private static string? TrimToNull(string? value)

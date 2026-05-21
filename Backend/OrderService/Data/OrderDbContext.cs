@@ -12,7 +12,6 @@ public class OrderDbContext : DbContext
     public DbSet<User> Users { get; set; }
     public DbSet<Product> Products { get; set; }
     public DbSet<ProductVariant> ProductVariants { get; set; }
-    public DbSet<Showroom> Showrooms { get; set; }
     public DbSet<Cart> Carts { get; set; }
     public DbSet<CartItem> CartItems { get; set; }
     public DbSet<Order> Orders { get; set; }
@@ -30,7 +29,6 @@ public class OrderDbContext : DbContext
         ConfigureUsers(modelBuilder);
         ConfigureProducts(modelBuilder);
         ConfigureProductVariants(modelBuilder);
-        ConfigureShowrooms(modelBuilder);
         ConfigureCarts(modelBuilder);
         ConfigureCartItems(modelBuilder);
         ConfigureOrders(modelBuilder);
@@ -127,24 +125,6 @@ public class OrderDbContext : DbContext
         });
     }
 
-    private static void ConfigureShowrooms(ModelBuilder modelBuilder)
-    {
-        modelBuilder.Entity<Showroom>(e =>
-        {
-            e.ToTable("SHOWROOM");
-            e.HasKey(x => x.MaShowroom);
-            e.Property(x => x.MaShowroom).ValueGeneratedOnAdd();
-            e.Property(x => x.TenShowroom).HasMaxLength(180).IsRequired();
-            e.Property(x => x.Slug).HasMaxLength(220).IsRequired();
-            e.Property(x => x.DiaChi).HasMaxLength(255).IsRequired();
-            e.Property(x => x.SoDienThoai).HasMaxLength(20);
-            e.Property(x => x.Email).HasMaxLength(255);
-            e.Property(x => x.GioMoCua).HasMaxLength(255);
-            e.Property(x => x.NgayTao).HasColumnType("datetime2(0)");
-            e.Property(x => x.NgayCapNhat).HasColumnType("datetime2(0)");
-        });
-    }
-
     private static void ConfigureCarts(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Cart>(e =>
@@ -195,6 +175,7 @@ public class OrderDbContext : DbContext
         {
             e.ToTable("DONHANG");
             e.HasKey(x => x.MaDonHang);
+            e.Ignore(x => x.MaShowroom);
             e.Property(x => x.MaDonHang).ValueGeneratedOnAdd();
             e.Property(x => x.MaDonHangKinhDoanh).HasMaxLength(50).IsRequired();
             e.Property(x => x.HoTenNhanHang).HasMaxLength(150).IsRequired();

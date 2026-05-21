@@ -10,7 +10,6 @@ public class ContactRequestDto
     public string NoiDung { get; set; } = string.Empty;
     public string LoaiYeuCau { get; set; } = string.Empty;
     public int? MaSanPham { get; set; }
-    public int? MaShowroom { get; set; }
     public string TrangThai { get; set; } = string.Empty;
     public DateTime NgayTao { get; set; }
     public DateTime? DaXuLyLuc { get; set; }

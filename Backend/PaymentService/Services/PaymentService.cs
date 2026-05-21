@@ -308,6 +308,13 @@ public class PaymentService : IPaymentService
 
     private void SyncOrderPaymentStatus(Order order, DateTime now)
     {
+        if (string.Equals(order.TrangThaiDonHang, CancelledOrderStatus, StringComparison.OrdinalIgnoreCase))
+        {
+            order.TrangThaiThanhToan = CancelledPaymentStatus;
+            order.NgayCapNhat = now;
+            return;
+        }
+
         var summary = CalculateSummary(order);
         var total = order.TongThanhToan;
         var status = summary switch

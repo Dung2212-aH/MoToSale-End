@@ -43,11 +43,6 @@ public class OrderRepository : IOrderRepository
         return await _dbContext.ProductVariants.AnyAsync(v => v.MaSanPham == maSanPham);
     }
 
-    public async Task<bool> ShowroomExistsAsync(int maShowroom)
-    {
-        return await _dbContext.Showrooms.AnyAsync(s => s.MaShowroom == maShowroom && s.DangHoatDong);
-    }
-
     public async Task<Cart?> GetActiveCartByUserIdAsync(int maNguoiDung)
     {
         return await _dbContext.Carts
@@ -156,6 +151,7 @@ public class OrderRepository : IOrderRepository
             }
 
             order.TrangThaiDonHang = "Cancelled";
+            order.TrangThaiThanhToan = "Cancelled";
             order.NgayHuyDon ??= now;
             order.LyDoHuyDon ??= "Het thoi gian thanh toan";
             order.NgayCapNhat = now;

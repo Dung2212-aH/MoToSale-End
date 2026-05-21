@@ -10,7 +10,6 @@ public class ProductSearchDto
     public int? MaHangXe { get; set; }
     public int? MaDongXe { get; set; }
     public int? MaDongXeTuongThich { get; set; }
-    public int? MaShowroom { get; set; }
     public string? LoaiSanPham { get; set; }
     public string? TrangThaiSanPham { get; set; }
     public decimal? GiaTu { get; set; }

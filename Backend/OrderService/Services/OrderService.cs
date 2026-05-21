@@ -18,6 +18,7 @@ public class OrderService : IOrderService
     private const string ConfirmedOrderStatus = "Confirmed";
     private const string CancelledOrderStatus = "Cancelled";
     private const string UnpaidStatus = "Unpaid";
+    private const string CancelledPaymentStatus = "Cancelled";
     private const string NotShippedStatus = "NotShipped";
 
     private static readonly HashSet<string> AllowedReceiveMethods = new(StringComparer.OrdinalIgnoreCase)
@@ -184,11 +185,6 @@ public class OrderService : IOrderService
             throw new BusinessException("Gio hang dang trong.");
         }
 
-        if (request.MaShowroom.HasValue && !await _orderRepository.ShowroomExistsAsync(request.MaShowroom.Value))
-        {
-            throw new BusinessException("Showroom khong ton tai hoac da ngung hoat dong.");
-        }
-
         var now = DateTime.UtcNow;
         await RefreshAndValidateCartItemsAsync(cart);
 
@@ -302,6 +298,7 @@ public class OrderService : IOrderService
 
         var now = DateTime.UtcNow;
         order.TrangThaiDonHang = CancelledOrderStatus;
+        order.TrangThaiThanhToan = CancelledPaymentStatus;
         order.TrangThaiVanChuyen = "Cancelled";
         order.NgayHuyDon = now;
         order.LyDoHuyDon = TrimToNull(request.LyDoHuyDon) ?? "Khach hang huy don";
@@ -478,11 +475,6 @@ public class OrderService : IOrderService
         if (!AllowedOrderTypes.Contains(request.LoaiDonHang))
         {
             throw new BusinessException("Loai don hang khong hop le.");
-        }
-
-        if (request.PhuongThucNhanHang.Equals("Pickup", StringComparison.OrdinalIgnoreCase) && !request.MaShowroom.HasValue)
-        {
-            throw new BusinessException("Don nhan tai showroom can co MaShowroom.");
         }
     }
 

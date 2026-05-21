@@ -63,11 +63,6 @@ public class ProductRepository : IProductRepository
                     )));
         }
 
-        if (search.MaShowroom.HasValue)
-        {
-            query = query.Where(p => p.MaShowroom == search.MaShowroom.Value);
-        }
-
         if (!string.IsNullOrWhiteSpace(search.LoaiSanPham))
         {
             var loaiSanPham = search.LoaiSanPham.Trim();

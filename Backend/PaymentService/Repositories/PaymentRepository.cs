@@ -118,6 +118,7 @@ public class PaymentRepository : IPaymentRepository
             }
 
             order.TrangThaiDonHang = "Cancelled";
+            order.TrangThaiThanhToan = "Cancelled";
             order.NgayHuyDon ??= now;
             order.LyDoHuyDon ??= "Het thoi gian thanh toan";
             order.NgayCapNhat = now;

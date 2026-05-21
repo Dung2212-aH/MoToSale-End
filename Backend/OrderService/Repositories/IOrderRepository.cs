@@ -12,7 +12,6 @@ public interface IOrderRepository
     Task<Product?> GetProductAsync(int maSanPham);
     Task<ProductVariant?> GetVariantAsync(int maBienSanPham);
     Task<bool> ProductHasVariantsAsync(int maSanPham);
-    Task<bool> ShowroomExistsAsync(int maShowroom);
     Task<Cart?> GetActiveCartByUserIdAsync(int maNguoiDung);
     Task<CartItem?> GetCartItemForUserAsync(int maNguoiDung, int maChiTietGioHang);
     Task AddCartAsync(Cart cart);

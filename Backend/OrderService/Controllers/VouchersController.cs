@@ -22,6 +22,149 @@ public class VouchersController : ControllerBase
     /// Get all active vouchers (public, for display/claim purposes)
     /// </summary>
     [HttpGet]
+    public async Task<IActionResult> GetAll([FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        var query = _dbContext.Vouchers.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLowerInvariant();
+            query = query.Where(v => v.MaVoucherCode.ToLower().Contains(s) || (v.MoTa != null && v.MoTa.ToLower().Contains(s)));
+        }
+
+        var total = await query.CountAsync();
+        var items = await query
+            .OrderByDescending(v => v.NgayTao)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(v => new
+            {
+                id = v.MaVoucher,
+                code = v.MaVoucherCode,
+                discountType = v.LoaiGiamGia,
+                discountValue = v.GiaTriGiam,
+                minOrderValue = v.GiaTriDonToiThieu,
+                maxDiscountValue = v.GiaTriGiamToiDa,
+                description = v.MoTa,
+                startsAt = v.NgayBatDau,
+                endsAt = v.NgayKetThuc,
+                scope = v.PhamViApDung,
+                usageLimit = v.GioiHanSuDung,
+                usedCount = v.SoLanDaDung,
+                status = v.DangHoatDong ? "Active" : "Inactive",
+                dangHoatDong = v.DangHoatDong,
+                ngayTao = v.NgayTao
+            })
+            .ToListAsync();
+
+        return Ok(new { items, page, pageSize, totalItems = total, totalPages = (int)Math.Ceiling(total / (double)pageSize) });
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpGet("{id:int}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var voucher = await _dbContext.Vouchers.AsNoTracking().FirstOrDefaultAsync(v => v.MaVoucher == id);
+        return voucher is null ? NotFound(new { message = "Khong tim thay voucher." }) : Ok(MapVoucher(voucher));
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPost]
+    public async Task<IActionResult> Create(VoucherRequest request)
+    {
+        var code = request.Code?.Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            return BadRequest(new { message = "Ma voucher la bat buoc." });
+        }
+
+        if (await _dbContext.Vouchers.AnyAsync(v => v.MaVoucherCode == code))
+        {
+            return BadRequest(new { message = "Ma voucher da ton tai." });
+        }
+
+        var now = DateTime.UtcNow;
+        var voucher = new Voucher
+        {
+            MaVoucherCode = code,
+            LoaiGiamGia = NormalizeDiscountType(request.DiscountType),
+            GiaTriGiam = request.DiscountValue,
+            GiaTriDonToiThieu = request.MinOrderValue ?? 0,
+            GiaTriGiamToiDa = request.MaxDiscountValue,
+            NgayBatDau = request.StartDate ?? now,
+            NgayKetThuc = request.EndDate ?? now.AddYears(1),
+            GioiHanSuDung = request.UsageLimit,
+            SoLanDaDung = 0,
+            DangHoatDong = NormalizeStatus(request.Status),
+            NgayTao = now,
+            NgayCapNhat = now,
+            MoTa = TrimToNull(request.Description),
+            SoLanToiDaMoiNguoiDung = request.MaxUsagePerUser ?? 1,
+            PhamViApDung = NormalizeScope(request.Scope),
+            ApDungLoaiDonHang = TrimToNull(request.OrderType)
+        };
+
+        _dbContext.Vouchers.Add(voucher);
+        await _dbContext.SaveChangesAsync();
+        return CreatedAtAction(nameof(GetById), new { id = voucher.MaVoucher }, MapVoucher(voucher));
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(int id, VoucherRequest request)
+    {
+        var voucher = await _dbContext.Vouchers.FirstOrDefaultAsync(v => v.MaVoucher == id);
+        if (voucher is null)
+        {
+            return NotFound(new { message = "Khong tim thay voucher." });
+        }
+
+        var code = request.Code?.Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            return BadRequest(new { message = "Ma voucher la bat buoc." });
+        }
+
+        if (await _dbContext.Vouchers.AnyAsync(v => v.MaVoucher != id && v.MaVoucherCode == code))
+        {
+            return BadRequest(new { message = "Ma voucher da ton tai." });
+        }
+
+        voucher.MaVoucherCode = code;
+        voucher.LoaiGiamGia = NormalizeDiscountType(request.DiscountType);
+        voucher.GiaTriGiam = request.DiscountValue;
+        voucher.GiaTriDonToiThieu = request.MinOrderValue ?? 0;
+        voucher.GiaTriGiamToiDa = request.MaxDiscountValue;
+        voucher.NgayBatDau = request.StartDate ?? voucher.NgayBatDau;
+        voucher.NgayKetThuc = request.EndDate ?? voucher.NgayKetThuc;
+        voucher.GioiHanSuDung = request.UsageLimit;
+        voucher.DangHoatDong = NormalizeStatus(request.Status);
+        voucher.MoTa = TrimToNull(request.Description);
+        voucher.SoLanToiDaMoiNguoiDung = request.MaxUsagePerUser ?? voucher.SoLanToiDaMoiNguoiDung;
+        voucher.PhamViApDung = NormalizeScope(request.Scope);
+        voucher.ApDungLoaiDonHang = TrimToNull(request.OrderType);
+        voucher.NgayCapNhat = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync();
+        return Ok(MapVoucher(voucher));
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var voucher = await _dbContext.Vouchers.FirstOrDefaultAsync(v => v.MaVoucher == id);
+        if (voucher is null)
+        {
+            return NotFound(new { message = "Khong tim thay voucher." });
+        }
+
+        _dbContext.Vouchers.Remove(voucher);
+        await _dbContext.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpGet("active")]
     public async Task<IActionResult> GetActiveVouchers([FromQuery] string? orderType = null)
     {
         var now = DateTime.UtcNow;
@@ -326,4 +469,63 @@ public class VouchersController : ControllerBase
             return this.ToErrorResult(ex);
         }
     }
+    private static object MapVoucher(Voucher v)
+    {
+        return new
+        {
+            id = v.MaVoucher,
+            code = v.MaVoucherCode,
+            discountType = v.LoaiGiamGia,
+            discountValue = v.GiaTriGiam,
+            minOrderValue = v.GiaTriDonToiThieu,
+            maxDiscountValue = v.GiaTriGiamToiDa,
+            startDate = v.NgayBatDau,
+            endDate = v.NgayKetThuc,
+            description = v.MoTa,
+            scope = v.PhamViApDung,
+            usageLimit = v.GioiHanSuDung,
+            usedCount = v.SoLanDaDung,
+            status = v.DangHoatDong ? "Active" : "Inactive",
+            dangHoatDong = v.DangHoatDong,
+            ngayTao = v.NgayTao
+        };
+    }
+
+    private static string NormalizeDiscountType(string? value)
+    {
+        return value?.Equals("Fixed", StringComparison.OrdinalIgnoreCase) == true ? "Amount" : "Percent";
+    }
+
+    private static bool NormalizeStatus(string? value)
+    {
+        return !string.Equals(value, "Inactive", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeScope(string? value)
+    {
+        var scope = string.IsNullOrWhiteSpace(value) ? "All" : value.Trim();
+        return scope.Length > 20 ? scope[..20] : scope;
+    }
+
+    private static string? TrimToNull(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+}
+
+public class VoucherRequest
+{
+    public string? Code { get; set; }
+    public string? DiscountType { get; set; }
+    public decimal DiscountValue { get; set; }
+    public decimal? MinOrderValue { get; set; }
+    public decimal? MaxDiscountValue { get; set; }
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+    public int? UsageLimit { get; set; }
+    public string? Description { get; set; }
+    public string? Scope { get; set; }
+    public string? Status { get; set; }
+    public int? MaxUsagePerUser { get; set; }
+    public string? OrderType { get; set; }
 }

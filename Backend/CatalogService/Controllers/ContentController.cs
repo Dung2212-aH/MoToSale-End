@@ -138,12 +138,6 @@ public class ContentController : ControllerBase
             return BadRequest(new { message = "San pham khong ton tai hoac da ngung hoat dong." });
         }
 
-        if (request.MaShowroom.HasValue &&
-            !await _dbContext.Showrooms.AsNoTracking().AnyAsync(s => s.MaShowroom == request.MaShowroom.Value && s.DangHoatDong))
-        {
-            return BadRequest(new { message = "Showroom khong ton tai hoac da ngung hoat dong." });
-        }
-
         var contactRequest = new ContactRequest
         {
             HoTen = request.HoTen.Trim(),
@@ -153,7 +147,6 @@ public class ContentController : ControllerBase
             NoiDung = request.NoiDung.Trim(),
             LoaiYeuCau = contactType,
             MaSanPham = request.MaSanPham,
-            MaShowroom = request.MaShowroom,
             TrangThai = "New",
             NgayTao = DateTime.UtcNow
         };
@@ -191,15 +184,302 @@ public class ContentController : ControllerBase
             NoiDung = contact.NoiDung,
             LoaiYeuCau = contact.LoaiYeuCau,
             MaSanPham = contact.MaSanPham,
-            MaShowroom = contact.MaShowroom,
             TrangThai = contact.TrangThai,
             NgayTao = contact.NgayTao,
             DaXuLyLuc = contact.DaXuLyLuc
         };
     }
 
+    // ===== Admin: Posts =====
+
+    [HttpGet("posts")]
+    public async Task<IActionResult> GetPosts([FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        page = page <= 0 ? 1 : page;
+        pageSize = pageSize <= 0 ? 20 : Math.Min(pageSize, 100);
+
+        var query = _dbContext.Posts.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(status))
+            query = query.Where(p => p.TrangThai == status);
+
+        var totalItems = await query.CountAsync();
+        var items = await query
+            .OrderByDescending(p => p.NgayTao)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(p => new
+            {
+                id = p.MaBaiViet,
+                tieuDe = p.TieuDe,
+                slug = p.Slug,
+                tomTat = p.TomTat,
+                anhDaiDienUrl = p.AnhDaiDienUrl,
+                danhMuc = p.DanhMuc,
+                trangThai = p.TrangThai,
+                xuatBanLuc = p.XuatBanLuc,
+                ngayTao = p.NgayTao
+            })
+            .ToListAsync();
+
+        return Ok(new { items, page, pageSize, totalItems, totalPages = (int)Math.Ceiling(totalItems / (double)pageSize) });
+    }
+
+    [HttpGet("posts/{id:int}")]
+    public async Task<IActionResult> GetPostById(int id)
+    {
+        var post = await _dbContext.Posts.AsNoTracking().FirstOrDefaultAsync(p => p.MaBaiViet == id);
+        if (post == null) return NotFound();
+        return Ok(new
+        {
+            id = post.MaBaiViet,
+            tieuDe = post.TieuDe,
+            slug = post.Slug,
+            tomTat = post.TomTat,
+            noiDung = post.NoiDung,
+            anhDaiDienUrl = post.AnhDaiDienUrl,
+            danhMuc = post.DanhMuc,
+            maTacGia = post.MaTacGia,
+            trangThai = post.TrangThai,
+            xuatBanLuc = post.XuatBanLuc,
+            ngayTao = post.NgayTao,
+            ngayCapNhat = post.NgayCapNhat
+        });
+    }
+
+    [HttpPost("posts")]
+    public async Task<IActionResult> CreatePost([FromBody] CreatePostRequest request)
+    {
+        var post = new Post
+        {
+            TieuDe = request.TieuDe.Trim(),
+            Slug = request.Slug.Trim(),
+            TomTat = TrimToNull(request.TomTat),
+            NoiDung = request.NoiDung,
+            AnhDaiDienUrl = TrimToNull(request.AnhDaiDienUrl),
+            DanhMuc = TrimToNull(request.DanhMuc),
+            MaTacGia = request.MaTacGia,
+            TrangThai = request.TrangThai ?? "Draft",
+            XuatBanLuc = request.XuatBanLuc,
+            NgayTao = DateTime.UtcNow,
+            NgayCapNhat = DateTime.UtcNow
+        };
+
+        _dbContext.Posts.Add(post);
+        await _dbContext.SaveChangesAsync();
+        return CreatedAtAction(nameof(GetPostById), new { id = post.MaBaiViet }, new { id = post.MaBaiViet });
+    }
+
+    [HttpPut("posts/{id:int}")]
+    public async Task<IActionResult> UpdatePost(int id, [FromBody] UpdatePostRequest request)
+    {
+        var post = await _dbContext.Posts.FirstOrDefaultAsync(p => p.MaBaiViet == id);
+        if (post == null) return NotFound();
+
+        post.TieuDe = request.TieuDe.Trim();
+        post.Slug = request.Slug.Trim();
+        post.TomTat = TrimToNull(request.TomTat);
+        post.NoiDung = request.NoiDung;
+        post.AnhDaiDienUrl = TrimToNull(request.AnhDaiDienUrl);
+        post.DanhMuc = TrimToNull(request.DanhMuc);
+        post.TrangThai = request.TrangThai ?? post.TrangThai;
+        post.XuatBanLuc = request.XuatBanLuc;
+        post.NgayCapNhat = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync();
+        return Ok(new { id = post.MaBaiViet });
+    }
+
+    [HttpDelete("posts/{id:int}")]
+    public async Task<IActionResult> DeletePost(int id)
+    {
+        var post = await _dbContext.Posts.FirstOrDefaultAsync(p => p.MaBaiViet == id);
+        if (post == null) return NotFound();
+
+        _dbContext.Posts.Remove(post);
+        await _dbContext.SaveChangesAsync();
+        return NoContent();
+    }
+
+    // ===== Admin: FAQ =====
+
+    [HttpGet("faq")]
+    public async Task<IActionResult> GetFaqAdmin([FromQuery] string? category, [FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        var query = _dbContext.Faqs.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(category))
+            query = query.Where(f => f.DanhMuc == category.Trim());
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLowerInvariant();
+            query = query.Where(f => f.CauHoi.ToLower().Contains(s) || f.CauTraLoi.ToLower().Contains(s));
+        }
+
+        var total = await query.CountAsync();
+        var items = await query
+            .OrderBy(f => f.ThuTuHienThi)
+            .ThenBy(f => f.MaFAQ)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(f => new
+            {
+                id = f.MaFAQ,
+                cauHoi = f.CauHoi,
+                cauTraLoi = f.CauTraLoi,
+                danhMuc = f.DanhMuc,
+                thuTu = f.ThuTuHienThi,
+                dangHoatDong = f.DangHoatDong
+            })
+            .ToListAsync();
+
+        return Ok(new { items, page, pageSize, totalItems = total, totalPages = (int)Math.Ceiling(total / (double)pageSize) });
+    }
+
+    [HttpPost("faq")]
+    public async Task<IActionResult> CreateFaq([FromBody] CreateFaqRequest request)
+    {
+        var faq = new Faq
+        {
+            CauHoi = request.CauHoi.Trim(),
+            CauTraLoi = request.CauTraLoi.Trim(),
+            DanhMuc = TrimToNull(request.DanhMuc),
+            ThuTuHienThi = request.ThuTuHienThi,
+            DangHoatDong = request.DangHoatDong,
+            NgayTao = DateTime.UtcNow,
+            NgayCapNhat = DateTime.UtcNow
+        };
+
+        _dbContext.Faqs.Add(faq);
+        await _dbContext.SaveChangesAsync();
+        return CreatedAtAction(nameof(GetFaqAdmin), null, new { id = faq.MaFAQ });
+    }
+
+    [HttpPut("faq/{id:int}")]
+    public async Task<IActionResult> UpdateFaq(int id, [FromBody] UpdateFaqRequest request)
+    {
+        var faq = await _dbContext.Faqs.FirstOrDefaultAsync(f => f.MaFAQ == id);
+        if (faq == null) return NotFound();
+
+        faq.CauHoi = request.CauHoi.Trim();
+        faq.CauTraLoi = request.CauTraLoi.Trim();
+        faq.DanhMuc = TrimToNull(request.DanhMuc);
+        faq.ThuTuHienThi = request.ThuTuHienThi;
+        faq.DangHoatDong = request.DangHoatDong;
+        faq.NgayCapNhat = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync();
+        return Ok(new { id = faq.MaFAQ });
+    }
+
+    [HttpDelete("faq/{id:int}")]
+    public async Task<IActionResult> DeleteFaq(int id)
+    {
+        var faq = await _dbContext.Faqs.FirstOrDefaultAsync(f => f.MaFAQ == id);
+        if (faq == null) return NotFound();
+
+        _dbContext.Faqs.Remove(faq);
+        await _dbContext.SaveChangesAsync();
+        return NoContent();
+    }
+
+    // ===== Admin: Contacts =====
+
+    [HttpGet("contacts")]
+    public async Task<IActionResult> GetContacts([FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        page = page <= 0 ? 1 : page;
+        pageSize = pageSize <= 0 ? 20 : Math.Min(pageSize, 100);
+
+        var query = _dbContext.ContactRequests.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(status))
+            query = query.Where(c => c.TrangThai == status);
+
+        var totalItems = await query.CountAsync();
+        var items = await query
+            .OrderByDescending(c => c.NgayTao)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(c => new
+            {
+                id = c.MaLienHe,
+                hoTen = c.HoTen,
+                soDienThoai = c.SoDienThoai,
+                email = c.Email,
+                tieuDe = c.TieuDe,
+                noiDung = c.NoiDung,
+                loaiYeuCau = c.LoaiYeuCau,
+                trangThai = c.TrangThai,
+                ngayTao = c.NgayTao,
+                daXuLyLuc = c.DaXuLyLuc
+            })
+            .ToListAsync();
+
+        return Ok(new { items, page, pageSize, totalItems, totalPages = (int)Math.Ceiling(totalItems / (double)pageSize) });
+    }
+
+    [HttpPatch("contacts/{id:int}/process")]
+    public async Task<IActionResult> MarkContactProcessed(int id)
+    {
+        var contact = await _dbContext.ContactRequests.FirstOrDefaultAsync(c => c.MaLienHe == id);
+        if (contact == null) return NotFound();
+
+        contact.TrangThai = "Processed";
+        contact.DaXuLyLuc = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync();
+
+        return Ok(new { id = contact.MaLienHe, trangThai = contact.TrangThai, daXuLyLuc = contact.DaXuLyLuc });
+    }
+
     private static string? TrimToNull(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
+}
+
+// ===== Request DTOs for admin endpoints =====
+
+public class CreatePostRequest
+{
+    public string TieuDe { get; set; } = string.Empty;
+    public string Slug { get; set; } = string.Empty;
+    public string? TomTat { get; set; }
+    public string NoiDung { get; set; } = string.Empty;
+    public string? AnhDaiDienUrl { get; set; }
+    public string? DanhMuc { get; set; }
+    public int? MaTacGia { get; set; }
+    public string? TrangThai { get; set; }
+    public DateTime? XuatBanLuc { get; set; }
+}
+
+public class UpdatePostRequest
+{
+    public string TieuDe { get; set; } = string.Empty;
+    public string Slug { get; set; } = string.Empty;
+    public string? TomTat { get; set; }
+    public string NoiDung { get; set; } = string.Empty;
+    public string? AnhDaiDienUrl { get; set; }
+    public string? DanhMuc { get; set; }
+    public string? TrangThai { get; set; }
+    public DateTime? XuatBanLuc { get; set; }
+}
+
+public class CreateFaqRequest
+{
+    public string CauHoi { get; set; } = string.Empty;
+    public string CauTraLoi { get; set; } = string.Empty;
+    public string? DanhMuc { get; set; }
+    public int ThuTuHienThi { get; set; }
+    public bool DangHoatDong { get; set; } = true;
+}
+
+public class UpdateFaqRequest
+{
+    public string CauHoi { get; set; } = string.Empty;
+    public string CauTraLoi { get; set; } = string.Empty;
+    public string? DanhMuc { get; set; }
+    public int ThuTuHienThi { get; set; }
+    public bool DangHoatDong { get; set; }
 }

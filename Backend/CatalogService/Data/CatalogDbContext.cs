@@ -23,7 +23,6 @@ public class CatalogDbContext : DbContext
     public DbSet<ReviewOrder> ReviewOrders { get; set; }
     public DbSet<ReviewOrderItem> ReviewOrderItems { get; set; }
     public DbSet<ReviewUser> ReviewUsers { get; set; }
-    public DbSet<Showroom> Showrooms { get; set; }
     public DbSet<VehicleModel> VehicleModels { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -44,7 +43,6 @@ public class CatalogDbContext : DbContext
         ConfigureReviewOrder(modelBuilder);
         ConfigureReviewOrderItem(modelBuilder);
         ConfigureReviewUser(modelBuilder);
-        ConfigureShowroom(modelBuilder);
         ConfigureVehicleModel(modelBuilder);
     }
 
@@ -172,7 +170,10 @@ public class CatalogDbContext : DbContext
     {
         modelBuilder.Entity<Product>(e =>
         {
-            e.ToTable("SANPHAM");
+            e.ToTable("SANPHAM", table =>
+            {
+                table.HasTrigger("trg_SANPHAM_Validate_HangXe_DongXe");
+            });
             e.HasKey(e => e.MaSanPham);
             e.Property(e => e.MaSanPham).ValueGeneratedOnAdd();
             e.Property(e => e.MaSanPhamKinhDoanh).HasMaxLength(50).IsRequired();
@@ -196,7 +197,10 @@ public class CatalogDbContext : DbContext
     {
         modelBuilder.Entity<ProductImage>(e =>
         {
-            e.ToTable("ANHSANPHAM");
+            e.ToTable("ANHSANPHAM", table =>
+            {
+                table.HasTrigger("trg_ANHSANPHAM_Validate_MaBienSanPham");
+            });
             e.HasKey(e => e.MaAnhSanPham);
             e.Property(e => e.MaAnhSanPham).ValueGeneratedOnAdd();
             e.Property(e => e.UrlAnh).HasMaxLength(500).IsRequired();
@@ -243,7 +247,10 @@ public class CatalogDbContext : DbContext
     {
         modelBuilder.Entity<ProductVariant>(e =>
         {
-            e.ToTable("BIENSANPHAM");
+            e.ToTable("BIENSANPHAM", table =>
+            {
+                table.HasTrigger("trg_BIENSANPHAM_Sync_SoLuongTon_SANPHAM");
+            });
             e.HasKey(e => e.MaBienSanPham);
             e.Property(e => e.MaBienSanPham).ValueGeneratedOnAdd();
             e.Property(e => e.TenBienThe).HasMaxLength(180).IsRequired();
@@ -292,27 +299,6 @@ public class CatalogDbContext : DbContext
             e.ToTable("NGUOIDUNG");
             e.HasKey(e => e.MaNguoiDung);
             e.Property(e => e.HoTen).HasMaxLength(150).IsRequired();
-        });
-    }
-
-    private void ConfigureShowroom(ModelBuilder modelBuilder)
-    {
-        modelBuilder.Entity<Showroom>(e =>
-        {
-            e.ToTable("SHOWROOM");
-            e.HasKey(e => e.MaShowroom);
-            e.Property(e => e.MaShowroom).ValueGeneratedOnAdd();
-            e.Property(e => e.TenShowroom).HasMaxLength(180).IsRequired();
-            e.Property(e => e.Slug).HasMaxLength(220).IsRequired();
-            e.Property(e => e.DiaChi).HasMaxLength(255).IsRequired();
-            e.Property(e => e.SoDienThoai).HasMaxLength(20);
-            e.Property(e => e.Email).HasMaxLength(255);
-            e.Property(e => e.GioMoCua).HasMaxLength(255);
-            e.Property(e => e.DangHoatDong).IsRequired();
-            e.Property(e => e.NgayTao).HasColumnType("datetime2(0)");
-            e.Property(e => e.NgayCapNhat).HasColumnType("datetime2(0)");
-
-            e.HasIndex(e => e.Slug).IsUnique();
         });
     }
 

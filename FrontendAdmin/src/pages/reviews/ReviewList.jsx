@@ -1,0 +1,240 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import reviewService from '../../services/reviewService';
+import { formatDate } from '../../utils/formatDate';
+
+const REVIEW_STATUS = {
+  Pending: { label: 'Chờ duyệt', color: 'warning' },
+  Approved: { label: 'Đã duyệt', color: 'success' },
+  Hidden: { label: 'Đã ẩn', color: 'secondary' },
+};
+
+const ReviewList = () => {
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // Filters
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterRating, setFilterRating] = useState('');
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const pageSize = 10;
+
+  const fetchReviews = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const params = { page, pageSize };
+      if (filterStatus) params.status = filterStatus;
+      if (filterRating) params.rating = filterRating;
+      const res = await reviewService.getAll(params);
+      const data = res.data;
+      if (Array.isArray(data)) {
+        setReviews(data);
+        setTotalPages(1);
+      } else {
+        setReviews(data.items || data.data || []);
+        setTotalPages(data.totalPages || Math.ceil((data.total || 0) / pageSize) || 1);
+      }
+    } catch (err) {
+      setError('Không thể tải danh sách đánh giá.');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, filterStatus, filterRating]);
+
+  useEffect(() => {
+    fetchReviews();
+  }, [fetchReviews]);
+
+  const handleApprove = async (id) => {
+    try {
+      await reviewService.updateStatus(id, { status: 'Approved' });
+      fetchReviews();
+    } catch (err) {
+      alert('Duyệt đánh giá thất bại!');
+      console.error(err);
+    }
+  };
+
+  const handleHide = async (id) => {
+    try {
+      await reviewService.updateStatus(id, { status: 'Hidden' });
+      fetchReviews();
+    } catch (err) {
+      alert('Ẩn đánh giá thất bại!');
+      console.error(err);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Bạn có chắc muốn xóa đánh giá này?')) return;
+    try {
+      await reviewService.delete(id);
+      fetchReviews();
+    } catch (err) {
+      alert('Xóa đánh giá thất bại!');
+      console.error(err);
+    }
+  };
+
+  const renderStars = (rating) => {
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+      stars.push(
+        <span key={i} style={{ color: i <= rating ? '#f39c12' : '#ddd', fontSize: '14px' }}>★</span>
+      );
+    }
+    return stars;
+  };
+
+  const getStatusBadge = (status) => {
+    const info = REVIEW_STATUS[status];
+    if (info) return <span className={`badge badge-${info.color}`}>{info.label}</span>;
+    return <span className="badge badge-secondary">{status}</span>;
+  };
+
+  const getReviewId = (review) => review.maDanhGia || review.id;
+
+  return (
+    <div className="content-wrapper">
+      <div className="content-header">
+        <div className="container-fluid">
+          <div className="row mb-2">
+            <div className="col-sm-6">
+              <h1 className="m-0">Quản lý Đánh giá</h1>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <section className="content">
+        <div className="container-fluid">
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">Danh sách đánh giá</h3>
+            </div>
+            <div className="card-body">
+              {/* Filters */}
+              <div className="row mb-3">
+                <div className="col-md-3">
+                  <select
+                    className="form-control form-control-sm"
+                    value={filterStatus}
+                    onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
+                  >
+                    <option value="">-- Tất cả trạng thái --</option>
+                    {Object.entries(REVIEW_STATUS).map(([key, val]) => (
+                      <option key={key} value={key}>{val.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-md-3">
+                  <select
+                    className="form-control form-control-sm"
+                    value={filterRating}
+                    onChange={(e) => { setFilterRating(e.target.value); setPage(1); }}
+                  >
+                    <option value="">-- Tất cả điểm --</option>
+                    <option value="5">5 sao</option>
+                    <option value="4">4 sao</option>
+                    <option value="3">3 sao</option>
+                    <option value="2">2 sao</option>
+                    <option value="1">1 sao</option>
+                  </select>
+                </div>
+              </div>
+
+              {error && <div className="alert alert-danger">{error}</div>}
+
+              {loading ? (
+                <div className="text-center py-4">
+                  <div className="spinner-border text-primary" role="status">
+                    <span className="sr-only">Đang tải...</span>
+                  </div>
+                </div>
+              ) : reviews.length === 0 ? (
+                <div className="text-center py-4 text-muted">
+                  <i className="fas fa-star fa-2x mb-2"></i>
+                  <p>Chưa có đánh giá nào.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="table-responsive">
+                    <table className="table table-bordered table-striped table-sm">
+                      <thead>
+                        <tr>
+                          <th>Sản phẩm</th>
+                          <th>Người đánh giá</th>
+                          <th>Điểm</th>
+                          <th>Tiêu đề</th>
+                          <th>Trạng thái</th>
+                          <th>Ngày tạo</th>
+                          <th>Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reviews.map((r, idx) => {
+                          const reviewId = getReviewId(r);
+                          return (
+                          <tr key={reviewId || idx}>
+                            <td>{r.tenSanPham || r.productName || '-'}</td>
+                            <td>{r.tenNguoiDung || r.userName || '-'}</td>
+                            <td>{renderStars(r.diem || r.diemDanhGia || r.rating || 0)}</td>
+                            <td>{r.tieuDe || r.title || '-'}</td>
+                            <td>{getStatusBadge(r.trangThai || r.status)}</td>
+                            <td>{formatDate(r.ngayTao || r.createdAt)}</td>
+                            <td>
+                              {(r.trangThai || r.status) !== 'Approved' && (
+                                <button className="btn btn-xs btn-success mr-1" onClick={() => handleApprove(reviewId)} title="Duyệt">
+                                  <i className="fas fa-check"></i>
+                                </button>
+                              )}
+                              {(r.trangThai || r.status) !== 'Hidden' && (
+                                <button className="btn btn-xs btn-warning mr-1" onClick={() => handleHide(reviewId)} title="Ẩn">
+                                  <i className="fas fa-eye-slash"></i>
+                                </button>
+                              )}
+                              <button className="btn btn-xs btn-danger" onClick={() => handleDelete(reviewId)} title="Xóa">
+                                <i className="fas fa-trash"></i>
+                              </button>
+                            </td>
+                          </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <nav className="mt-3">
+                      <ul className="pagination pagination-sm justify-content-center">
+                        <li className={`page-item ${page <= 1 ? 'disabled' : ''}`}>
+                          <button className="page-link" onClick={() => setPage(p => p - 1)}>«</button>
+                        </li>
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                          <li key={p} className={`page-item ${p === page ? 'active' : ''}`}>
+                            <button className="page-link" onClick={() => setPage(p)}>{p}</button>
+                          </li>
+                        ))}
+                        <li className={`page-item ${page >= totalPages ? 'disabled' : ''}`}>
+                          <button className="page-link" onClick={() => setPage(p => p + 1)}>»</button>
+                        </li>
+                      </ul>
+                    </nav>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+};
+
+export default ReviewList;

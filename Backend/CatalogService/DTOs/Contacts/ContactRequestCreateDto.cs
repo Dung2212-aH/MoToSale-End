@@ -27,5 +27,4 @@ public class ContactRequestCreateDto
     public string LoaiYeuCau { get; set; } = string.Empty;
 
     public int? MaSanPham { get; set; }
-    public int? MaShowroom { get; set; }
 }

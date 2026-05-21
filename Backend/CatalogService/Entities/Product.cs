@@ -9,7 +9,6 @@ public class Product
     public int MaDanhMuc { get; set; }
     public int? MaHangXe { get; set; }
     public int? MaDongXe { get; set; }
-    public int? MaShowroom { get; set; }
     public string LoaiSanPham { get; set; } = string.Empty;
     public string? MoTaNgan { get; set; }
     public string? MoTa { get; set; }

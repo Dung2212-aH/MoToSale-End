@@ -104,7 +104,6 @@ public class CatalogService : ICatalogService
             MaDanhMuc = product.MaDanhMuc,
             MaHangXe = product.MaHangXe,
             MaDongXe = product.MaDongXe,
-            MaShowroom = product.MaShowroom,
             MoTaNgan = product.MoTaNgan,
             MoTa = product.MoTa,
             GiaGoc = product.GiaGoc,
