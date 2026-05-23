@@ -134,7 +134,10 @@ public class CatalogDbContext : DbContext
     {
         modelBuilder.Entity<PartCompatibility>(e =>
         {
-            e.ToTable("PHUTUNG_TUONGTHICH");
+            e.ToTable("PHUTUNG_TUONGTHICH", table =>
+            {
+                table.HasTrigger("trg_PHUTUNG_TUONGTHICH_Validate");
+            });
             e.HasKey(e => e.MaTuongThich);
             e.Property(e => e.MaTuongThich).ValueGeneratedOnAdd();
             e.Property(e => e.GhiChu).HasMaxLength(500);

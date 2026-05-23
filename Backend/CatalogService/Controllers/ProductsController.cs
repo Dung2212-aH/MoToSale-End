@@ -1,4 +1,5 @@
 using CatalogService.Data;
+using CatalogService.DTOs.PartCompatibilities;
 using CatalogService.DTOs.Products;
 using CatalogService.Entities;
 using CatalogService.Services;
@@ -93,6 +94,16 @@ public class ProductsController : ControllerBase
             return BadRequest(new { message = "Dong xe khong hop le." });
         }
 
+        var businessRuleError = await ValidateProductBusinessRulesAsync(
+            request.LoaiSanPham,
+            request.MaDanhMuc,
+            request.MaHangXe,
+            request.MaDongXe);
+        if (businessRuleError is not null)
+        {
+            return BadRequest(new { message = businessRuleError });
+        }
+
         var businessCode = string.IsNullOrWhiteSpace(request.MaSanPhamKinhDoanh)
             ? $"SP_{DateTime.UtcNow:yyyyMMddHHmmssfff}"
             : request.MaSanPhamKinhDoanh.Trim();
@@ -115,10 +126,10 @@ public class ProductsController : ControllerBase
             MaSanPhamKinhDoanh = businessCode,
             TenSanPham = request.TenSanPham.Trim(),
             Slug = slug,
-            LoaiSanPham = string.IsNullOrWhiteSpace(request.LoaiSanPham) ? "XeMay" : request.LoaiSanPham,
+            LoaiSanPham = NormalizeProductType(request.LoaiSanPham),
             MaDanhMuc = request.MaDanhMuc.Value,
-            MaHangXe = request.MaHangXe,
-            MaDongXe = request.MaDongXe,
+            MaHangXe = NormalizeProductType(request.LoaiSanPham) == "PhuTung" ? null : request.MaHangXe,
+            MaDongXe = NormalizeProductType(request.LoaiSanPham) == "PhuTung" ? null : request.MaDongXe,
             MoTaNgan = request.MoTaNgan,
             GiaGoc = request.GiaGoc.Value,
             GiaKhuyenMai = request.GiaKhuyenMai,
@@ -149,13 +160,32 @@ public class ProductsController : ControllerBase
         var product = await _dbContext.Products.FirstOrDefaultAsync(p => p.MaSanPham == id);
         if (product == null) return NotFound();
 
+        var nextType = string.IsNullOrWhiteSpace(request.LoaiSanPham) ? product.LoaiSanPham : request.LoaiSanPham;
+        var nextCategoryId = request.MaDanhMuc ?? product.MaDanhMuc;
+        var nextBrandId = NormalizeProductType(nextType) == "PhuTung" ? null : request.MaHangXe ?? product.MaHangXe;
+        var nextModelId = NormalizeProductType(nextType) == "PhuTung" ? null : request.MaDongXe ?? product.MaDongXe;
+
+        var businessRuleError = await ValidateProductBusinessRulesAsync(nextType, nextCategoryId, nextBrandId, nextModelId);
+        if (businessRuleError is not null)
+        {
+            return BadRequest(new { message = businessRuleError });
+        }
+
         if (request.TenSanPham != null) product.TenSanPham = request.TenSanPham.Trim();
         if (request.Slug != null) product.Slug = request.Slug.Trim();
         if (request.MaSanPhamKinhDoanh != null) product.MaSanPhamKinhDoanh = request.MaSanPhamKinhDoanh.Trim();
-        if (request.LoaiSanPham != null) product.LoaiSanPham = request.LoaiSanPham;
+        if (request.LoaiSanPham != null) product.LoaiSanPham = NormalizeProductType(request.LoaiSanPham);
         if (request.MaDanhMuc.HasValue) product.MaDanhMuc = request.MaDanhMuc.Value;
-        if (request.MaHangXe.HasValue) product.MaHangXe = request.MaHangXe;
-        if (request.MaDongXe.HasValue) product.MaDongXe = request.MaDongXe;
+        if (NormalizeProductType(product.LoaiSanPham) == "PhuTung")
+        {
+            product.MaHangXe = null;
+            product.MaDongXe = null;
+        }
+        else
+        {
+            if (request.MaHangXe.HasValue) product.MaHangXe = request.MaHangXe;
+            if (request.MaDongXe.HasValue) product.MaDongXe = request.MaDongXe;
+        }
         if (request.MoTaNgan != null) product.MoTaNgan = request.MoTaNgan;
         if (request.GiaGoc.HasValue) product.GiaGoc = request.GiaGoc.Value;
         if (request.GiaKhuyenMai.HasValue) product.GiaKhuyenMai = request.GiaKhuyenMai;
@@ -249,6 +279,123 @@ public class ProductsController : ControllerBase
             .ToListAsync();
 
         return Ok(new { categories, brands, carModels, partCompatibleTypes = carModels });
+    }
+
+    [HttpGet("{partId:int}/compatibilities")]
+    public async Task<IActionResult> GetPartCompatibilities(int partId)
+    {
+        var part = await _dbContext.Products.AsNoTracking().FirstOrDefaultAsync(p => p.MaSanPham == partId);
+        if (part is null)
+        {
+            return NotFound(new { message = "Khong tim thay phu tung." });
+        }
+
+        var rows = await (
+            from compatibility in _dbContext.PartCompatibilities.AsNoTracking()
+            join brandJoin in _dbContext.Brands.AsNoTracking()
+                on compatibility.MaHangXe equals brandJoin.MaHangXe into brands
+            from brand in brands.DefaultIfEmpty()
+            join modelJoin in _dbContext.VehicleModels.AsNoTracking()
+                on compatibility.MaDongXe equals modelJoin.MaDongXe into models
+            from model in models.DefaultIfEmpty()
+            where compatibility.MaPhuTung == partId
+            orderby compatibility.ApDungTatCaXe descending, brand.TenHang, model.TenDongXe, compatibility.NamTu
+            select new
+            {
+                compatibility.MaTuongThich,
+                compatibility.MaPhuTung,
+                compatibility.MaHangXe,
+                tenHang = brand == null ? null : brand.TenHang,
+                compatibility.MaDongXe,
+                tenDongXe = model == null ? null : model.TenDongXe,
+                compatibility.NamTu,
+                compatibility.NamDen,
+                compatibility.ApDungTatCaXe,
+                compatibility.GhiChu,
+                compatibility.DangHoatDong
+            }).ToListAsync();
+
+        return Ok(rows);
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPost("{partId:int}/compatibilities")]
+    public async Task<IActionResult> CreatePartCompatibility(int partId, [FromBody] PartCompatibilityCreateDto request)
+    {
+        request.MaPhuTung = partId;
+        var error = await ValidatePartCompatibilityRequestAsync(request.MaPhuTung, request.MaHangXe, request.MaDongXe, request.NamTu, request.NamDen, request.ApDungTatCaXe);
+        if (error is not null)
+        {
+            return BadRequest(new { message = error });
+        }
+
+        await NormalizePartProductTypeAsync(partId);
+        var normalized = await NormalizePartCompatibilityTargetAsync(request.MaHangXe, request.MaDongXe, request.ApDungTatCaXe);
+        var now = DateTime.UtcNow;
+        var compatibility = new PartCompatibility
+        {
+            MaPhuTung = partId,
+            MaHangXe = normalized.BrandId,
+            MaDongXe = normalized.ModelId,
+            NamTu = request.NamTu,
+            NamDen = request.NamDen,
+            ApDungTatCaXe = request.ApDungTatCaXe,
+            GhiChu = TrimToNull(request.GhiChu),
+            DangHoatDong = request.DangHoatDong,
+            NgayTao = now,
+            NgayCapNhat = now
+        };
+
+        _dbContext.PartCompatibilities.Add(compatibility);
+        await _dbContext.SaveChangesAsync();
+        return CreatedAtAction(nameof(GetPartCompatibilities), new { partId }, new { id = compatibility.MaTuongThich });
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPut("{partId:int}/compatibilities/{id:int}")]
+    public async Task<IActionResult> UpdatePartCompatibility(int partId, int id, [FromBody] PartCompatibilityUpdateDto request)
+    {
+        var compatibility = await _dbContext.PartCompatibilities.FirstOrDefaultAsync(c => c.MaTuongThich == id && c.MaPhuTung == partId);
+        if (compatibility is null)
+        {
+            return NotFound(new { message = "Khong tim thay cau hinh tuong thich." });
+        }
+
+        request.MaPhuTung = partId;
+        var error = await ValidatePartCompatibilityRequestAsync(request.MaPhuTung, request.MaHangXe, request.MaDongXe, request.NamTu, request.NamDen, request.ApDungTatCaXe);
+        if (error is not null)
+        {
+            return BadRequest(new { message = error });
+        }
+
+        await NormalizePartProductTypeAsync(partId);
+        var normalized = await NormalizePartCompatibilityTargetAsync(request.MaHangXe, request.MaDongXe, request.ApDungTatCaXe);
+        compatibility.MaHangXe = normalized.BrandId;
+        compatibility.MaDongXe = normalized.ModelId;
+        compatibility.NamTu = request.NamTu;
+        compatibility.NamDen = request.NamDen;
+        compatibility.ApDungTatCaXe = request.ApDungTatCaXe;
+        compatibility.GhiChu = TrimToNull(request.GhiChu);
+        compatibility.DangHoatDong = request.DangHoatDong;
+        compatibility.NgayCapNhat = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync();
+        return Ok(new { id = compatibility.MaTuongThich });
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpDelete("{partId:int}/compatibilities/{id:int}")]
+    public async Task<IActionResult> DeletePartCompatibility(int partId, int id)
+    {
+        var compatibility = await _dbContext.PartCompatibilities.FirstOrDefaultAsync(c => c.MaTuongThich == id && c.MaPhuTung == partId);
+        if (compatibility is null)
+        {
+            return NotFound();
+        }
+
+        _dbContext.PartCompatibilities.Remove(compatibility);
+        await _dbContext.SaveChangesAsync();
+        return NoContent();
     }
 
     // ===== Product Variants =====
@@ -529,6 +676,223 @@ public class ProductsController : ControllerBase
                     ON dbo.TONKHO_DIEUCHINH_LOG (MaSanPham, MaBienSanPham, NgayTao DESC);
             END;
             """);
+    }
+
+    private async Task<string?> ValidateProductBusinessRulesAsync(string? productType, int? categoryId, int? brandId, int? modelId)
+    {
+        if (!string.IsNullOrWhiteSpace(productType)
+            && !string.Equals(productType, "XeMay", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(productType, "PhuTung", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Loai san pham khong hop le.";
+        }
+
+        var normalizedType = NormalizeProductType(productType);
+
+        if (!categoryId.HasValue)
+        {
+            return "Danh muc la bat buoc.";
+        }
+
+        if (!await CategoryBelongsToProductTypeAsync(categoryId.Value, normalizedType))
+        {
+            return normalizedType == "XeMay"
+                ? "Danh muc phai thuoc nhom Xe may."
+                : "Danh muc phai thuoc nhom Phu tung.";
+        }
+
+        if (normalizedType == "PhuTung" && (brandId.HasValue || modelId.HasValue))
+        {
+            return "Phu tung khong gan truc tiep voi hang xe/dong xe trong form san pham.";
+        }
+
+        if (normalizedType == "XeMay" && modelId.HasValue)
+        {
+            var model = await _dbContext.VehicleModels
+                .AsNoTracking()
+                .Where(m => m.MaDongXe == modelId.Value)
+                .Select(m => new { m.MaHangXe })
+                .FirstOrDefaultAsync();
+            if (model is null)
+            {
+                return "Dong xe khong hop le.";
+            }
+            if (brandId.HasValue && model.MaHangXe != brandId.Value)
+            {
+                return "Dong xe khong thuoc hang xe da chon.";
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<string?> ValidatePartCompatibilityRequestAsync(
+        int partId,
+        int? brandId,
+        int? modelId,
+        short? yearFrom,
+        short? yearTo,
+        bool appliesToAllVehicles)
+    {
+        var part = await _dbContext.Products.AsNoTracking().FirstOrDefaultAsync(p => p.MaSanPham == partId);
+        if (part is null)
+        {
+            return "Khong tim thay phu tung.";
+        }
+
+        var isPart = IsPartProductType(part.LoaiSanPham) || await CategoryBelongsToProductTypeAsync(part.MaDanhMuc, "PhuTung");
+        if (!isPart)
+        {
+            return "San pham nay khong thuoc nhom phu tung.";
+        }
+
+        if (yearFrom.HasValue && (yearFrom.Value < 1950 || yearFrom.Value > 2100))
+        {
+            return "Nam bat dau khong hop le.";
+        }
+
+        if (yearTo.HasValue && (yearTo.Value < 1950 || yearTo.Value > 2100))
+        {
+            return "Nam ket thuc khong hop le.";
+        }
+
+        if (yearFrom.HasValue && yearTo.HasValue && yearFrom.Value > yearTo.Value)
+        {
+            return "Nam bat dau khong duoc lon hon nam ket thuc.";
+        }
+
+        if (appliesToAllVehicles)
+        {
+            return null;
+        }
+
+        if (!brandId.HasValue && !modelId.HasValue)
+        {
+            return "Vui long chon hang xe hoac dong xe tuong thich.";
+        }
+
+        if (brandId.HasValue && !await _dbContext.Brands.AnyAsync(b => b.MaHangXe == brandId.Value))
+        {
+            return "Hang xe khong hop le.";
+        }
+
+        if (modelId.HasValue)
+        {
+            var model = await _dbContext.VehicleModels.AsNoTracking().FirstOrDefaultAsync(m => m.MaDongXe == modelId.Value);
+            if (model is null)
+            {
+                return "Dong xe khong hop le.";
+            }
+            if (brandId.HasValue && model.MaHangXe != brandId.Value)
+            {
+                return "Dong xe khong thuoc hang xe da chon.";
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<(int? BrandId, int? ModelId)> NormalizePartCompatibilityTargetAsync(int? brandId, int? modelId, bool appliesToAllVehicles)
+    {
+        if (appliesToAllVehicles)
+        {
+            return (null, null);
+        }
+
+        if (modelId.HasValue && !brandId.HasValue)
+        {
+            brandId = await _dbContext.VehicleModels
+                .AsNoTracking()
+                .Where(m => m.MaDongXe == modelId.Value)
+                .Select(m => (int?)m.MaHangXe)
+                .FirstOrDefaultAsync();
+        }
+
+        return (brandId, modelId);
+    }
+
+    private async Task NormalizePartProductTypeAsync(int partId)
+    {
+        var part = await _dbContext.Products.FirstOrDefaultAsync(p => p.MaSanPham == partId);
+        if (part is null || IsPartProductType(part.LoaiSanPham))
+        {
+            return;
+        }
+
+        if (await CategoryBelongsToProductTypeAsync(part.MaDanhMuc, "PhuTung"))
+        {
+            part.LoaiSanPham = "PhuTung";
+            part.MaHangXe = null;
+            part.MaDongXe = null;
+            part.NgayCapNhat = DateTime.UtcNow;
+            await _dbContext.SaveChangesAsync();
+        }
+    }
+
+    private async Task<bool> CategoryBelongsToProductTypeAsync(int categoryId, string productType)
+    {
+        var categories = await _dbContext.Categories
+            .AsNoTracking()
+            .Select(c => new { c.MaDanhMuc, c.MaDanhMucCha, c.TenDanhMuc })
+            .ToListAsync();
+
+        var rootNames = productType == "XeMay"
+            ? new[] { "xe may" }
+            : new[] { "phu tung", "phu kien" };
+
+        var rootIds = categories
+            .Where(c => c.MaDanhMucCha == null && rootNames.Contains(NormalizeText(c.TenDanhMuc)))
+            .Select(c => c.MaDanhMuc)
+            .ToHashSet();
+
+        if (rootIds.Count == 0)
+        {
+            return true;
+        }
+
+        var current = categories.FirstOrDefault(c => c.MaDanhMuc == categoryId);
+        while (current is not null)
+        {
+            if (rootIds.Contains(current.MaDanhMuc))
+            {
+                return true;
+            }
+            if (!current.MaDanhMucCha.HasValue)
+            {
+                return false;
+            }
+            current = categories.FirstOrDefault(c => c.MaDanhMuc == current.MaDanhMucCha.Value);
+        }
+
+        return false;
+    }
+
+    private static string NormalizeProductType(string? productType)
+    {
+        return string.Equals(productType, "PhuTung", StringComparison.OrdinalIgnoreCase)
+            ? "PhuTung"
+            : "XeMay";
+    }
+
+    private static bool IsPartProductType(string? productType)
+    {
+        return string.Equals(productType, "PhuTung", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(productType, "PhuKien", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(productType, "PhuTungXeMay", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? TrimToNull(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string NormalizeText(string value)
+    {
+        var normalized = value.Trim().ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
+        var chars = normalized
+            .Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark)
+            .ToArray();
+        return new string(chars).Normalize(System.Text.NormalizationForm.FormC).Replace('đ', 'd');
     }
 
     private async Task InsertInventoryAuditLogAsync(Product product, ProductVariant? variant, string type, int delta, int before, int after, string reason)

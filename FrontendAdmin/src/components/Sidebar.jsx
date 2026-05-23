@@ -36,11 +36,17 @@ const Sidebar = ({ collapsed = false }) => {
               </Link>
             </li>
 
-            <li className="nav-header">DANH MỤC & SẢN PHẨM</li>
+            <li className="nav-header">DANH MỤC & KINH DOANH</li>
             <li className="nav-item">
-              <Link to="/products" className={`nav-link ${isActiveGroup('/products')}`}>
+              <Link to="/motorcycles" className={`nav-link ${isActiveGroup('/motorcycles')}`}>
                 <i className="nav-icon fas fa-motorcycle"></i>
-                <p>Sản phẩm</p>
+                <p>Xe máy</p>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link to="/parts" className={`nav-link ${isActiveGroup('/parts')}`}>
+                <i className="nav-icon fas fa-cogs"></i>
+                <p>Phụ tùng</p>
               </Link>
             </li>
             <li className="nav-item">
@@ -78,12 +84,12 @@ const Sidebar = ({ collapsed = false }) => {
 
             <li className="nav-header">NGƯỜI DÙNG & NỘI DUNG</li>
             {isAdmin() && (
-            <li className="nav-item">
-              <Link to="/users" className={`nav-link ${isActiveGroup('/users')}`}>
-                <i className="nav-icon fas fa-users"></i>
-                <p>Người dùng</p>
-              </Link>
-            </li>
+              <li className="nav-item">
+                <Link to="/users" className={`nav-link ${isActiveGroup('/users')}`}>
+                  <i className="nav-icon fas fa-users"></i>
+                  <p>Người dùng</p>
+                </Link>
+              </li>
             )}
             <li className="nav-item">
               <Link to="/reviews" className={`nav-link ${isActiveGroup('/reviews')}`}>

@@ -66,7 +66,31 @@ public class ProductRepository : IProductRepository
         if (!string.IsNullOrWhiteSpace(search.LoaiSanPham))
         {
             var loaiSanPham = search.LoaiSanPham.Trim();
-            query = query.Where(p => p.LoaiSanPham == loaiSanPham);
+            var partCategoryIds = _dbContext.Categories
+                .Where(c =>
+                    c.Slug == "phu-tung" ||
+                    c.Slug == "phu-kien" ||
+                    _dbContext.Categories.Any(parent =>
+                        parent.MaDanhMuc == c.MaDanhMucCha &&
+                        (parent.Slug == "phu-tung" || parent.Slug == "phu-kien")))
+                .Select(c => c.MaDanhMuc);
+
+            if (string.Equals(loaiSanPham, "PhuTung", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(p =>
+                    p.LoaiSanPham == "PhuTung" ||
+                    p.LoaiSanPham == "PhuKien" ||
+                    p.LoaiSanPham == "PhuTungXeMay" ||
+                    partCategoryIds.Contains(p.MaDanhMuc));
+            }
+            else if (string.Equals(loaiSanPham, "XeMay", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(p => p.LoaiSanPham == "XeMay" && !partCategoryIds.Contains(p.MaDanhMuc));
+            }
+            else
+            {
+                query = query.Where(p => p.LoaiSanPham == loaiSanPham);
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(search.TrangThaiSanPham))

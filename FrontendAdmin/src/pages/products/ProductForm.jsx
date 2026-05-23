@@ -1,30 +1,47 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import productService from '../../services/productService';
 import brandService from '../../services/brandService';
 
-/**
- * Tạo slug từ chuỗi tiếng Việt
- */
+const PRODUCT_TYPE = {
+  XeMay: {
+    label: 'Xe máy',
+    rootNames: ['xe máy', 'xe may'],
+    help: 'Chỉ hiện các danh mục thuộc nhóm Xe máy.',
+  },
+  PhuTung: {
+    label: 'Phụ tùng',
+    rootNames: ['phụ tùng', 'phu tung', 'phụ kiện', 'phu kien'],
+    help: 'Chỉ hiện các danh mục thuộc nhóm Phụ tùng/Phụ kiện.',
+  },
+};
+
 function generateSlug(str) {
   if (!str) return '';
-  let slug = str.toLowerCase().trim();
-  // Vietnamese diacritics removal
-  slug = slug.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, 'a');
-  slug = slug.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, 'e');
-  slug = slug.replace(/ì|í|ị|ỉ|ĩ/g, 'i');
-  slug = slug.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, 'o');
-  slug = slug.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, 'u');
-  slug = slug.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, 'y');
-  slug = slug.replace(/đ/g, 'd');
-  slug = slug.replace(/[^a-z0-9\s-]/g, '');
-  slug = slug.replace(/[\s_]+/g, '-');
-  slug = slug.replace(/-+/g, '-');
-  slug = slug.replace(/^-|-$/g, '');
-  return slug;
+  return str
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
-const ProductForm = ({ show, onClose, onSaved, product, categories, brands }) => {
+const getCategoryId = (category) => category.maDanhMuc || category.id;
+const getCategoryName = (category) => category.tenDanhMuc || category.name || '';
+const getParentCategoryId = (category) => category.maDanhMucCha ?? category.parentCategoryId ?? category.danhMucChaId ?? null;
+const normalizeText = (value) => String(value || '')
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/đ/g, 'd')
+  .trim();
+
+const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands = [], fixedProductType = null }) => {
   const isEdit = !!product;
+  const lockedType = fixedProductType || null;
   const [models, setModels] = useState([]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
@@ -43,8 +60,68 @@ const ProductForm = ({ show, onClose, onSaved, product, categories, brands }) =>
     soLuongTon: '',
     anhChinhUrl: '',
     anhChinhFile: null,
-    trangThai: 'Active',
+    trangThai: 'Available',
   });
+
+  const categoryTree = useMemo(() => {
+    const byId = new Map();
+    const childrenByParent = new Map();
+
+    categories.forEach((category) => {
+      const id = getCategoryId(category);
+      if (!id) return;
+      byId.set(Number(id), category);
+      const parentId = getParentCategoryId(category);
+      const key = parentId == null ? 'root' : Number(parentId);
+      if (!childrenByParent.has(key)) childrenByParent.set(key, []);
+      childrenByParent.get(key).push(category);
+    });
+
+    return { byId, childrenByParent };
+  }, [categories]);
+
+  const getRootForType = (type) => {
+    const config = PRODUCT_TYPE[type];
+    if (!config) return null;
+    return categories.find((category) => {
+      const isRoot = getParentCategoryId(category) == null;
+      const name = normalizeText(getCategoryName(category));
+      return isRoot && config.rootNames.some((rootName) => name === normalizeText(rootName));
+    }) || null;
+  };
+
+  const getDescendantIds = (rootId) => {
+    const result = new Set();
+    const visit = (parentId) => {
+      const children = categoryTree.childrenByParent.get(Number(parentId)) || [];
+      children.forEach((child) => {
+        const id = Number(getCategoryId(child));
+        result.add(id);
+        visit(id);
+      });
+    };
+    visit(rootId);
+    return result;
+  };
+
+  const filteredCategories = useMemo(() => {
+    const root = getRootForType(form.loaiSP);
+    if (!root) {
+      return categories.filter((category) => getParentCategoryId(category) != null);
+    }
+
+    const rootId = Number(getCategoryId(root));
+    const allowedIds = getDescendantIds(rootId);
+    const hasChildren = allowedIds.size > 0;
+    if (!hasChildren) allowedIds.add(rootId);
+
+    return categories.filter((category) => allowedIds.has(Number(getCategoryId(category))));
+  }, [categories, categoryTree, form.loaiSP]);
+
+  const isCategoryAllowed = (categoryId) => {
+    if (!categoryId) return true;
+    return filteredCategories.some((category) => String(getCategoryId(category)) === String(categoryId));
+  };
 
   useEffect(() => {
     if (product) {
@@ -52,7 +129,7 @@ const ProductForm = ({ show, onClose, onSaved, product, categories, brands }) =>
         maSP: product.maSanPhamKinhDoanh || product.maSP || product.sku || '',
         tenSanPham: product.tenSanPham || product.name || '',
         slug: product.slug || '',
-        loaiSP: product.loaiSanPham || product.loaiSP || product.type || 'XeMay',
+        loaiSP: lockedType || product.loaiSanPham || product.loaiSP || product.type || 'XeMay',
         danhMucId: String(product.maDanhMuc || product.danhMucId || product.categoryId || ''),
         hangXeId: String(product.maHangXe || product.hangXeId || product.brandId || ''),
         dongXeId: String(product.maDongXe || product.dongXeId || product.modelId || ''),
@@ -69,7 +146,7 @@ const ProductForm = ({ show, onClose, onSaved, product, categories, brands }) =>
         maSP: '',
         tenSanPham: '',
         slug: '',
-        loaiSP: 'XeMay',
+        loaiSP: lockedType || 'XeMay',
         danhMucId: '',
         hangXeId: '',
         dongXeId: '',
@@ -83,13 +160,24 @@ const ProductForm = ({ show, onClose, onSaved, product, categories, brands }) =>
       });
     }
     setErrors({});
-  }, [product, show]);
+  }, [product, show, lockedType]);
 
-  // Load models when brand changes
   useEffect(() => {
-    if (form.hangXeId) {
+    if (show && form.danhMucId && !isCategoryAllowed(form.danhMucId)) {
+      setForm((prev) => ({ ...prev, danhMucId: '' }));
+    }
+  }, [show, form.loaiSP, form.danhMucId, filteredCategories]);
+
+  useEffect(() => {
+    if (form.loaiSP === 'PhuTung' && (form.hangXeId || form.dongXeId)) {
+      setForm((prev) => ({ ...prev, hangXeId: '', dongXeId: '' }));
+    }
+  }, [form.loaiSP, form.hangXeId, form.dongXeId]);
+
+  useEffect(() => {
+    if (form.hangXeId && form.loaiSP === 'XeMay') {
       brandService.getModels(form.hangXeId)
-        .then(res => {
+        .then((res) => {
           const data = res.data;
           setModels(Array.isArray(data) ? data : data.items || data.data || []);
         })
@@ -97,14 +185,21 @@ const ProductForm = ({ show, onClose, onSaved, product, categories, brands }) =>
     } else {
       setModels([]);
     }
-  }, [form.hangXeId]);
+  }, [form.hangXeId, form.loaiSP]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm(prev => {
+    setForm((prev) => {
       const updated = { ...prev, [name]: value };
       if (name === 'tenSanPham') {
         updated.slug = generateSlug(value);
+      }
+      if (name === 'loaiSP') {
+        updated.danhMucId = '';
+        if (value === 'PhuTung') {
+          updated.hangXeId = '';
+          updated.dongXeId = '';
+        }
       }
       if (name === 'hangXeId') {
         updated.dongXeId = '';
@@ -118,6 +213,12 @@ const ProductForm = ({ show, onClose, onSaved, product, categories, brands }) =>
     if (!form.tenSanPham.trim()) errs.tenSanPham = 'Tên sản phẩm là bắt buộc';
     if (!form.giaGoc || Number(form.giaGoc) <= 0) errs.giaGoc = 'Giá gốc phải lớn hơn 0';
     if (!form.danhMucId) errs.danhMucId = 'Vui lòng chọn danh mục';
+    if (form.danhMucId && !isCategoryAllowed(form.danhMucId)) {
+      errs.danhMucId = 'Danh mục không thuộc loại sản phẩm đã chọn';
+    }
+    if (form.loaiSP === 'XeMay' && form.dongXeId && !form.hangXeId) {
+      errs.hangXeId = 'Vui lòng chọn hãng xe trước dòng xe';
+    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -135,8 +236,8 @@ const ProductForm = ({ show, onClose, onSaved, product, categories, brands }) =>
         slug: form.slug || undefined,
         loaiSanPham: form.loaiSP,
         maDanhMuc: form.danhMucId ? Number(form.danhMucId) : undefined,
-        maHangXe: form.hangXeId ? Number(form.hangXeId) : null,
-        maDongXe: form.dongXeId ? Number(form.dongXeId) : null,
+        maHangXe: form.loaiSP === 'XeMay' && form.hangXeId ? Number(form.hangXeId) : null,
+        maDongXe: form.loaiSP === 'XeMay' && form.dongXeId ? Number(form.dongXeId) : null,
         moTaNgan: form.moTaNgan || undefined,
         giaGoc: Number(form.giaGoc) || 0,
         giaKhuyenMai: Number(form.giaKhuyenMai) || null,
@@ -175,6 +276,9 @@ const ProductForm = ({ show, onClose, onSaved, product, categories, brands }) =>
     }
   };
 
+  const selectedType = PRODUCT_TYPE[form.loaiSP] || PRODUCT_TYPE.XeMay;
+  const showVehicleFields = form.loaiSP === 'XeMay';
+
   if (!show) return null;
 
   return (
@@ -206,58 +310,71 @@ const ProductForm = ({ show, onClose, onSaved, product, categories, brands }) =>
               </div>
 
               <div className="row">
-                <div className="col-md-6">
+                <div className={lockedType ? 'col-md-12' : 'col-md-6'}>
                   <div className="form-group">
                     <label>Slug</label>
                     <input type="text" className="form-control" name="slug" value={form.slug} onChange={handleChange} placeholder="Tự động tạo từ tên" />
                   </div>
                 </div>
-                <div className="col-md-6">
-                  <div className="form-group">
-                    <label>Loại sản phẩm</label>
-                    <select className="form-control" name="loaiSP" value={form.loaiSP} onChange={handleChange}>
-                      <option value="XeMay">Xe máy</option>
-                      <option value="PhuTung">Phụ tùng</option>
-                    </select>
+                {!lockedType && (
+                  <div className="col-md-6">
+                    <div className="form-group">
+                      <label>Nhóm kinh doanh</label>
+                      <select className="form-control" name="loaiSP" value={form.loaiSP} onChange={handleChange}>
+                        <option value="XeMay">Xe máy</option>
+                        <option value="PhuTung">Phụ tùng</option>
+                      </select>
+                      <small className="form-text text-muted">{selectedType.help}</small>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               <div className="row">
-                <div className="col-md-4">
+                <div className={showVehicleFields ? 'col-md-4' : 'col-md-12'}>
                   <div className="form-group">
-                    <label>Danh mục <span className="text-danger">*</span></label>
+                    <label>Danh mục {selectedType.label.toLowerCase()} <span className="text-danger">*</span></label>
                     <select className={`form-control ${errors.danhMucId ? 'is-invalid' : ''}`} name="danhMucId" value={form.danhMucId} onChange={handleChange}>
-                      <option value="">-- Chọn danh mục --</option>
-                      {categories.map(c => (
-                        <option key={c.maDanhMuc || c.id} value={String(c.maDanhMuc || c.id)}>{c.tenDanhMuc || c.name}</option>
+                      <option value="">-- Chọn danh mục {selectedType.label.toLowerCase()} --</option>
+                      {filteredCategories.map((category) => (
+                        <option key={getCategoryId(category)} value={String(getCategoryId(category))}>
+                          {getCategoryName(category)}
+                        </option>
                       ))}
                     </select>
+                    {filteredCategories.length === 0 && (
+                      <small className="form-text text-danger">Chưa có danh mục con phù hợp cho nhóm này.</small>
+                    )}
                     {errors.danhMucId && <div className="invalid-feedback">{errors.danhMucId}</div>}
                   </div>
                 </div>
-                <div className="col-md-4">
-                  <div className="form-group">
-                    <label>Hãng xe</label>
-                    <select className="form-control" name="hangXeId" value={form.hangXeId} onChange={handleChange}>
-                      <option value="">-- Chọn hãng --</option>
-                      {brands.map(b => (
-                        <option key={b.maHangXe || b.id} value={String(b.maHangXe || b.id)}>{b.tenHang || b.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="col-md-4">
-                  <div className="form-group">
-                    <label>Dòng xe</label>
-                    <select className="form-control" name="dongXeId" value={form.dongXeId} onChange={handleChange} disabled={!form.hangXeId}>
-                      <option value="">-- Chọn dòng xe --</option>
-                      {models.map(m => (
-                        <option key={m.maDongXe || m.id} value={String(m.maDongXe || m.id)}>{m.tenDongXe || m.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+                {showVehicleFields && (
+                  <>
+                    <div className="col-md-4">
+                      <div className="form-group">
+                        <label>Hãng xe</label>
+                        <select className={`form-control ${errors.hangXeId ? 'is-invalid' : ''}`} name="hangXeId" value={form.hangXeId} onChange={handleChange}>
+                          <option value="">-- Chọn hãng --</option>
+                          {brands.map((brand) => (
+                            <option key={brand.maHangXe || brand.id} value={String(brand.maHangXe || brand.id)}>{brand.tenHang || brand.name}</option>
+                          ))}
+                        </select>
+                        {errors.hangXeId && <div className="invalid-feedback">{errors.hangXeId}</div>}
+                      </div>
+                    </div>
+                    <div className="col-md-4">
+                      <div className="form-group">
+                        <label>Dòng xe</label>
+                        <select className="form-control" name="dongXeId" value={form.dongXeId} onChange={handleChange} disabled={!form.hangXeId}>
+                          <option value="">-- Chọn dòng xe --</option>
+                          {models.map((model) => (
+                            <option key={model.maDongXe || model.id} value={String(model.maDongXe || model.id)}>{model.tenDongXe || model.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="row">
@@ -312,7 +429,7 @@ const ProductForm = ({ show, onClose, onSaved, product, categories, brands }) =>
                     onChange={(e) => {
                       const file = e.target.files[0];
                       if (file) {
-                        setForm(prev => ({ ...prev, anhChinhFile: file, anhChinhUrl: URL.createObjectURL(file) }));
+                        setForm((prev) => ({ ...prev, anhChinhFile: file, anhChinhUrl: URL.createObjectURL(file) }));
                       }
                     }}
                   />

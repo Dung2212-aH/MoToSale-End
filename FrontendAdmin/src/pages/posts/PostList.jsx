@@ -26,6 +26,7 @@ const defaultForm = {
   tomTat: '',
   noiDung: '',
   anhDaiDienUrl: '',
+  anhDaiDienFile: null,
   danhMuc: '',
   trangThai: 'Draft',
 };
@@ -52,6 +53,24 @@ const PostList = () => {
   const pageSize = 10;
 
   const [form, setForm] = useState({ ...defaultForm });
+  const [imagePreviewUrl, setImagePreviewUrl] = useState('');
+
+  const resetImagePreview = useCallback((nextUrl = '') => {
+    setImagePreviewUrl((currentUrl) => {
+      if (currentUrl && currentUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(currentUrl);
+      }
+      return nextUrl;
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl && imagePreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreviewUrl);
+      }
+    };
+  }, [imagePreviewUrl]);
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -81,6 +100,7 @@ const PostList = () => {
   const openAdd = () => {
     setEditItem(null);
     setForm({ ...defaultForm });
+    resetImagePreview('');
     setShowModal(true);
   };
 
@@ -91,9 +111,11 @@ const PostList = () => {
       tomTat: getSummary(post),
       noiDung: getContent(post),
       anhDaiDienUrl: getImageUrl(post),
+      anhDaiDienFile: null,
       danhMuc: getCategory(post),
       trangThai: getStatus(post),
     });
+    resetImagePreview(getImageUrl(post));
   };
 
   const openEdit = async (item) => {
@@ -127,6 +149,12 @@ const PostList = () => {
     });
   };
 
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0] || null;
+    setForm((prev) => ({ ...prev, anhDaiDienFile: file }));
+    resetImagePreview(file ? URL.createObjectURL(file) : form.anhDaiDienUrl);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.tieuDe.trim()) {
@@ -147,10 +175,18 @@ const PostList = () => {
 
     setSaving(true);
     try {
+      let savedId = editItem ? getPostId(editItem) : null;
       if (editItem) {
-        await postService.update(getPostId(editItem), payload);
+        await postService.update(savedId, payload);
       } else {
-        await postService.create(payload);
+        const res = await postService.create(payload);
+        savedId = res.data?.id || res.data?.maBaiViet;
+      }
+
+      if (form.anhDaiDienFile && savedId) {
+        const imageData = new FormData();
+        imageData.append('file', form.anhDaiDienFile);
+        await postService.uploadImage(savedId, imageData);
       }
       setShowModal(false);
       fetchPosts();
@@ -306,11 +342,16 @@ const PostList = () => {
                     <textarea className="form-control" name="noiDung" value={form.noiDung} onChange={handleChange} rows="8" />
                   </div>
                   <div className="form-group">
-                    <label>Ảnh đại diện (URL)</label>
-                    <input type="text" className="form-control" name="anhDaiDienUrl" value={form.anhDaiDienUrl} onChange={handleChange} placeholder="https://..." />
-                    {form.anhDaiDienUrl && (
+                    <label>Ảnh đại diện</label>
+                    <input
+                      type="file"
+                      className="form-control"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                    />
+                    {imagePreviewUrl && (
                       <img
-                        src={form.anhDaiDienUrl}
+                        src={imagePreviewUrl}
                         alt="Ảnh đại diện"
                         className="mt-2 rounded border"
                         style={{ maxHeight: 120, maxWidth: '100%', width: 200, objectFit: 'cover' }}

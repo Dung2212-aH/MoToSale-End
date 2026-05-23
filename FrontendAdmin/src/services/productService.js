@@ -15,6 +15,10 @@ const productService = {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
   deleteImage: (productId, imageId) => api.delete(`/products/${productId}/images/${imageId}`),
+  getCompatibilities: (productId) => api.get(`/products/${productId}/compatibilities`),
+  createCompatibility: (productId, data) => api.post(`/products/${productId}/compatibilities`, data),
+  updateCompatibility: (productId, compatibilityId, data) => api.put(`/products/${productId}/compatibilities/${compatibilityId}`, data),
+  deleteCompatibility: (productId, compatibilityId) => api.delete(`/products/${productId}/compatibilities/${compatibilityId}`),
 };
 
 export default productService;

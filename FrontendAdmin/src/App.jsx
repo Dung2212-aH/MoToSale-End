@@ -58,7 +58,9 @@ function AppRoutes() {
       <Route path="/" element={<ProtectedRoute><MainLayout><Dashboard /></MainLayout></ProtectedRoute>} />
 
       {/* Catalog */}
-      <Route path="/products" element={<ProtectedRoute><MainLayout><ProductList /></MainLayout></ProtectedRoute>} />
+      <Route path="/products" element={<Navigate to="/motorcycles" replace />} />
+      <Route path="/motorcycles" element={<ProtectedRoute><MainLayout><ProductList productType="XeMay" /></MainLayout></ProtectedRoute>} />
+      <Route path="/parts" element={<ProtectedRoute><MainLayout><ProductList productType="PhuTung" /></MainLayout></ProtectedRoute>} />
       <Route path="/categories" element={<ProtectedRoute><MainLayout><CategoryList /></MainLayout></ProtectedRoute>} />
       <Route path="/brands" element={<ProtectedRoute><MainLayout><BrandList /></MainLayout></ProtectedRoute>} />
 

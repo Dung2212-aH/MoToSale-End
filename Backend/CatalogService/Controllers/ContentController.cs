@@ -3,6 +3,7 @@ using CatalogService.DTOs.Contacts;
 using CatalogService.DTOs.Faqs;
 using CatalogService.DTOs.Posts;
 using CatalogService.Entities;
+using CatalogService.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -22,10 +23,12 @@ public class ContentController : ControllerBase
     };
 
     private readonly CatalogDbContext _dbContext;
+    private readonly IImageStorageService _imageStorage;
 
-    public ContentController(CatalogDbContext dbContext)
+    public ContentController(CatalogDbContext dbContext, IImageStorageService imageStorage)
     {
         _dbContext = dbContext;
+        _imageStorage = imageStorage;
     }
 
     [HttpGet("blog-posts")]
@@ -306,6 +309,38 @@ public class ContentController : ControllerBase
         _dbContext.Posts.Remove(post);
         await _dbContext.SaveChangesAsync();
         return NoContent();
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPost("posts/{id:int}/image")]
+    public async Task<IActionResult> UploadPostImage(int id, [FromForm] IFormFile? file)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest(new { message = "Vui long chon file anh dai dien." });
+        }
+
+        var post = await _dbContext.Posts.FirstOrDefaultAsync(p => p.MaBaiViet == id);
+        if (post is null)
+        {
+            return NotFound(new { message = "Khong tim thay bai viet." });
+        }
+
+        string url;
+        try
+        {
+            url = await _imageStorage.SaveImageAsync(file, "posts", HttpContext.RequestAborted);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
+        post.AnhDaiDienUrl = url;
+        post.NgayCapNhat = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync();
+
+        return Ok(new { id = post.MaBaiViet, anhDaiDienUrl = post.AnhDaiDienUrl });
     }
 
     // ===== Admin: FAQ =====
