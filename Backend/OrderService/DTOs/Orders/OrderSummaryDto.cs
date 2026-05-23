@@ -5,6 +5,9 @@ public class OrderSummaryDto
     public int MaDonHang { get; set; }
     public string MaDonHangKinhDoanh { get; set; } = string.Empty;
     public int MaNguoiDung { get; set; }
+    public string HoTenNhanHang { get; set; } = string.Empty;
+    public string? EmailNhanHang { get; set; }
+    public string SoDienThoaiNhanHang { get; set; } = string.Empty;
     public decimal TongThanhToan { get; set; }
     public string TrangThaiDonHang { get; set; } = string.Empty;
     public string TrangThaiThanhToan { get; set; } = string.Empty;

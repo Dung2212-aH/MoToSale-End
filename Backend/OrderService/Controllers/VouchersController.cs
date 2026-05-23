@@ -65,7 +65,7 @@ public class VouchersController : ControllerBase
     public async Task<IActionResult> GetById(int id)
     {
         var voucher = await _dbContext.Vouchers.AsNoTracking().FirstOrDefaultAsync(v => v.MaVoucher == id);
-        return voucher is null ? NotFound(new { message = "Khong tim thay voucher." }) : Ok(MapVoucher(voucher));
+        return voucher is null ? NotFound(new { message = "Khong tim thay voucher." }) : Ok(await MapVoucherAsync(voucher));
     }
 
     [Authorize(Roles = "Admin,Staff")]
@@ -81,6 +81,18 @@ public class VouchersController : ControllerBase
         if (await _dbContext.Vouchers.AnyAsync(v => v.MaVoucherCode == code))
         {
             return BadRequest(new { message = "Ma voucher da ton tai." });
+        }
+
+        var scope = NormalizeScope(request.Scope);
+        var targetValidation = ValidateVoucherTargets(scope, request);
+        if (targetValidation is not null)
+        {
+            return BadRequest(new { message = targetValidation });
+        }
+        var targetExistenceError = await ValidateVoucherTargetExistenceAsync(scope, request);
+        if (targetExistenceError is not null)
+        {
+            return BadRequest(new { message = targetExistenceError });
         }
 
         var now = DateTime.UtcNow;
@@ -100,13 +112,15 @@ public class VouchersController : ControllerBase
             NgayCapNhat = now,
             MoTa = TrimToNull(request.Description),
             SoLanToiDaMoiNguoiDung = request.MaxUsagePerUser ?? 1,
-            PhamViApDung = NormalizeScope(request.Scope),
+            PhamViApDung = scope,
             ApDungLoaiDonHang = TrimToNull(request.OrderType)
         };
 
         _dbContext.Vouchers.Add(voucher);
         await _dbContext.SaveChangesAsync();
-        return CreatedAtAction(nameof(GetById), new { id = voucher.MaVoucher }, MapVoucher(voucher));
+        await SaveVoucherTargetsAsync(voucher.MaVoucher, voucher.PhamViApDung, request);
+
+        return CreatedAtAction(nameof(GetById), new { id = voucher.MaVoucher }, await MapVoucherAsync(voucher));
     }
 
     [Authorize(Roles = "Admin,Staff")]
@@ -141,12 +155,26 @@ public class VouchersController : ControllerBase
         voucher.DangHoatDong = NormalizeStatus(request.Status);
         voucher.MoTa = TrimToNull(request.Description);
         voucher.SoLanToiDaMoiNguoiDung = request.MaxUsagePerUser ?? voucher.SoLanToiDaMoiNguoiDung;
-        voucher.PhamViApDung = NormalizeScope(request.Scope);
+        var scope = NormalizeScope(request.Scope);
+        var targetValidation = ValidateVoucherTargets(scope, request);
+        if (targetValidation is not null)
+        {
+            return BadRequest(new { message = targetValidation });
+        }
+        var targetExistenceError = await ValidateVoucherTargetExistenceAsync(scope, request);
+        if (targetExistenceError is not null)
+        {
+            return BadRequest(new { message = targetExistenceError });
+        }
+
+        voucher.PhamViApDung = scope;
         voucher.ApDungLoaiDonHang = TrimToNull(request.OrderType);
         voucher.NgayCapNhat = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync();
-        return Ok(MapVoucher(voucher));
+        await SaveVoucherTargetsAsync(voucher.MaVoucher, voucher.PhamViApDung, request);
+
+        return Ok(await MapVoucherAsync(voucher));
     }
 
     [Authorize(Roles = "Admin,Staff")]
@@ -469,8 +497,12 @@ public class VouchersController : ControllerBase
             return this.ToErrorResult(ex);
         }
     }
-    private static object MapVoucher(Voucher v)
+    private async Task<object> MapVoucherAsync(Voucher v)
     {
+        var productIds = await LoadVoucherTargetIdsAsync("VOUCHER_SANPHAM", "MaSanPham", v.MaVoucher);
+        var categoryIds = await LoadVoucherTargetIdsAsync("VOUCHER_DANHMUC", "MaDanhMuc", v.MaVoucher);
+        var brandIds = await LoadVoucherTargetIdsAsync("VOUCHER_HANGXE", "MaHangXe", v.MaVoucher);
+
         return new
         {
             id = v.MaVoucher,
@@ -485,15 +517,173 @@ public class VouchersController : ControllerBase
             scope = v.PhamViApDung,
             usageLimit = v.GioiHanSuDung,
             usedCount = v.SoLanDaDung,
+            productIds,
+            categoryIds,
+            brandIds,
             status = v.DangHoatDong ? "Active" : "Inactive",
             dangHoatDong = v.DangHoatDong,
             ngayTao = v.NgayTao
         };
     }
 
+    private async Task<List<int>> LoadVoucherTargetIdsAsync(string tableName, string columnName, int voucherId)
+    {
+        var safeTable = tableName switch
+        {
+            "VOUCHER_SANPHAM" => "VOUCHER_SANPHAM",
+            "VOUCHER_DANHMUC" => "VOUCHER_DANHMUC",
+            "VOUCHER_HANGXE" => "VOUCHER_HANGXE",
+            _ => throw new ArgumentOutOfRangeException(nameof(tableName))
+        };
+
+        var safeColumn = columnName switch
+        {
+            "MaSanPham" => "MaSanPham",
+            "MaDanhMuc" => "MaDanhMuc",
+            "MaHangXe" => "MaHangXe",
+            _ => throw new ArgumentOutOfRangeException(nameof(columnName))
+        };
+
+        return await _dbContext.Database
+            .SqlQueryRaw<int>($"SELECT {safeColumn} AS Value FROM dbo.{safeTable} WHERE MaVoucher = {{0}}", voucherId)
+            .ToListAsync();
+    }
+
+    private static string? ValidateVoucherTargets(string scope, VoucherRequest request)
+    {
+        var productIds = CleanIds(request.ProductIds);
+        var categoryIds = CleanIds(request.CategoryIds);
+        var brandIds = CleanIds(request.BrandIds);
+
+        if (scope == "Product" && productIds.Count == 0)
+        {
+            return "Vui long chon it nhat mot san pham ap dung.";
+        }
+
+        if (scope == "Category" && categoryIds.Count == 0)
+        {
+            return "Vui long chon it nhat mot danh muc ap dung.";
+        }
+
+        if (scope == "Brand" && brandIds.Count == 0)
+        {
+            return "Vui long chon it nhat mot hang xe ap dung.";
+        }
+
+        return null;
+    }
+
+    private async Task SaveVoucherTargetsAsync(int voucherId, string scope, VoucherRequest request)
+    {
+        var productIds = CleanIds(request.ProductIds);
+        var categoryIds = CleanIds(request.CategoryIds);
+        var brandIds = CleanIds(request.BrandIds);
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+        await _dbContext.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM dbo.VOUCHER_SANPHAM WHERE MaVoucher = {voucherId}");
+        await _dbContext.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM dbo.VOUCHER_DANHMUC WHERE MaVoucher = {voucherId}");
+        await _dbContext.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM dbo.VOUCHER_HANGXE WHERE MaVoucher = {voucherId}");
+
+        if (scope == "Product")
+        {
+            foreach (var productId in productIds)
+            {
+                await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+                    $"INSERT INTO dbo.VOUCHER_SANPHAM (MaVoucher, MaSanPham) VALUES ({voucherId}, {productId})");
+            }
+        }
+        else if (scope == "Category")
+        {
+            foreach (var categoryId in categoryIds)
+            {
+                await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+                    $"INSERT INTO dbo.VOUCHER_DANHMUC (MaVoucher, MaDanhMuc) VALUES ({voucherId}, {categoryId})");
+            }
+        }
+        else if (scope == "Brand")
+        {
+            foreach (var brandId in brandIds)
+            {
+                await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+                    $"INSERT INTO dbo.VOUCHER_HANGXE (MaVoucher, MaHangXe) VALUES ({voucherId}, {brandId})");
+            }
+        }
+
+        await transaction.CommitAsync();
+    }
+
+    private async Task<string?> ValidateVoucherTargetExistenceAsync(string scope, VoucherRequest request)
+    {
+        if (scope == "Product")
+        {
+            var ids = CleanIds(request.ProductIds);
+            var count = await _dbContext.Products.CountAsync(p => ids.Contains(p.MaSanPham));
+            return count == ids.Count ? null : "Danh sach san pham ap dung khong hop le.";
+        }
+
+        if (scope == "Category")
+        {
+            var ids = CleanIds(request.CategoryIds);
+            var count = await CountExistingIdsAsync("DANHMUC", "MaDanhMuc", ids);
+            return count == ids.Count ? null : "Danh sach danh muc ap dung khong hop le.";
+        }
+
+        if (scope == "Brand")
+        {
+            var ids = CleanIds(request.BrandIds);
+            var count = await CountExistingIdsAsync("HANGXE", "MaHangXe", ids);
+            return count == ids.Count ? null : "Danh sach hang xe ap dung khong hop le.";
+        }
+
+        return null;
+    }
+
+    private async Task<int> CountExistingIdsAsync(string tableName, string columnName, List<int> ids)
+    {
+        if (ids.Count == 0) return 0;
+
+        var safeTable = tableName switch
+        {
+            "DANHMUC" => "DANHMUC",
+            "HANGXE" => "HANGXE",
+            _ => throw new ArgumentOutOfRangeException(nameof(tableName))
+        };
+
+        var safeColumn = columnName switch
+        {
+            "MaDanhMuc" => "MaDanhMuc",
+            "MaHangXe" => "MaHangXe",
+            _ => throw new ArgumentOutOfRangeException(nameof(columnName))
+        };
+
+        var csv = string.Join(",", ids);
+        return await _dbContext.Database
+            .SqlQueryRaw<int>($"SELECT COUNT(*) AS Value FROM dbo.{safeTable} WHERE {safeColumn} IN ({csv})")
+            .FirstAsync();
+    }
+
+    private static List<int> CleanIds(IEnumerable<int>? ids)
+    {
+        return ids?
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList() ?? new List<int>();
+    }
+
     private static string NormalizeDiscountType(string? value)
     {
-        return value?.Equals("Fixed", StringComparison.OrdinalIgnoreCase) == true ? "Amount" : "Percent";
+        if (value?.Equals("Amount", StringComparison.OrdinalIgnoreCase) == true ||
+            value?.Equals("Fixed", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return "Amount";
+        }
+
+        if (value?.Equals("FreeShipping", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return "FreeShipping";
+        }
+
+        return "Percent";
     }
 
     private static bool NormalizeStatus(string? value)
@@ -503,8 +693,22 @@ public class VouchersController : ControllerBase
 
     private static string NormalizeScope(string? value)
     {
-        var scope = string.IsNullOrWhiteSpace(value) ? "All" : value.Trim();
-        return scope.Length > 20 ? scope[..20] : scope;
+        if (value?.Equals("Product", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return "Product";
+        }
+
+        if (value?.Equals("Category", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return "Category";
+        }
+
+        if (value?.Equals("Brand", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return "Brand";
+        }
+
+        return "All";
     }
 
     private static string? TrimToNull(string? value)
@@ -528,4 +732,7 @@ public class VoucherRequest
     public string? Status { get; set; }
     public int? MaxUsagePerUser { get; set; }
     public string? OrderType { get; set; }
+    public List<int>? ProductIds { get; set; }
+    public List<int>? CategoryIds { get; set; }
+    public List<int>? BrandIds { get; set; }
 }

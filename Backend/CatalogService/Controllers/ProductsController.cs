@@ -2,6 +2,8 @@ using CatalogService.Data;
 using CatalogService.DTOs.Products;
 using CatalogService.Entities;
 using CatalogService.Services;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -57,6 +59,7 @@ public class ProductsController : ControllerBase
         return Ok(product);
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPost]
     public async Task<IActionResult> CreateProduct([FromBody] UpdateProductRequest request)
     {
@@ -130,9 +133,16 @@ public class ProductsController : ControllerBase
         _dbContext.Products.Add(product);
         await _dbContext.SaveChangesAsync();
 
+        if (product.SoLuongTon > 0)
+        {
+            await EnsureInventoryAuditTableAsync();
+            await InsertInventoryAuditLogAsync(product, null, "Initial", product.SoLuongTon, 0, product.SoLuongTon, "Ton kho ban dau khi tao san pham");
+        }
+
         return CreatedAtAction(nameof(GetProductById), new { id = product.MaSanPham }, new { id = product.MaSanPham });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPatch("{id:int}")]
     public async Task<IActionResult> UpdateProduct(int id, [FromBody] UpdateProductRequest request)
     {
@@ -149,7 +159,6 @@ public class ProductsController : ControllerBase
         if (request.MoTaNgan != null) product.MoTaNgan = request.MoTaNgan;
         if (request.GiaGoc.HasValue) product.GiaGoc = request.GiaGoc.Value;
         if (request.GiaKhuyenMai.HasValue) product.GiaKhuyenMai = request.GiaKhuyenMai;
-        if (request.SoLuongTon.HasValue) product.SoLuongTon = request.SoLuongTon.Value;
         if (request.AnhChinhUrl != null) product.AnhChinhUrl = request.AnhChinhUrl;
         if (request.TrangThaiSanPham != null) product.TrangThaiSanPham = request.TrangThaiSanPham;
         if (request.DangHoatDong.HasValue) product.DangHoatDong = request.DangHoatDong.Value;
@@ -159,6 +168,7 @@ public class ProductsController : ControllerBase
         return Ok(new { id = product.MaSanPham, message = "Cập nhật sản phẩm thành công." });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteProduct(int id)
     {
@@ -269,6 +279,7 @@ public class ProductsController : ControllerBase
         return Ok(variants);
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPost("{productId:int}/variants")]
     public async Task<IActionResult> CreateVariant(int productId, [FromBody] VariantRequest request)
     {
@@ -292,9 +303,17 @@ public class ProductsController : ControllerBase
 
         _dbContext.ProductVariants.Add(variant);
         await _dbContext.SaveChangesAsync();
+
+        if ((variant.SoLuongTon ?? 0) > 0)
+        {
+            var product = await _dbContext.Products.FirstAsync(p => p.MaSanPham == productId);
+            await EnsureInventoryAuditTableAsync();
+            await InsertInventoryAuditLogAsync(product, variant, "Initial", variant.SoLuongTon ?? 0, 0, variant.SoLuongTon ?? 0, "Ton kho ban dau khi tao bien the");
+        }
         return Ok(new { id = variant.MaBienSanPham, message = "Thêm biến thể thành công." });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPatch("{productId:int}/variants/{variantId:int}")]
     public async Task<IActionResult> UpdateVariant(int productId, int variantId, [FromBody] VariantRequest request)
     {
@@ -306,7 +325,6 @@ public class ProductsController : ControllerBase
         if (request.PhienBan != null) variant.PhienBan = request.PhienBan.Trim();
         if (request.MauSac != null) variant.MauSac = request.MauSac.Trim();
         if (request.GiaGhiDe.HasValue) variant.GiaGhiDe = request.GiaGhiDe;
-        if (request.SoLuongTon.HasValue) variant.SoLuongTon = request.SoLuongTon;
         if (request.TrangThai != null) variant.TrangThai = request.TrangThai;
         variant.NgayCapNhat = DateTime.UtcNow;
 
@@ -314,6 +332,7 @@ public class ProductsController : ControllerBase
         return Ok(new { id = variant.MaBienSanPham, message = "Cập nhật biến thể thành công." });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpDelete("{productId:int}/variants/{variantId:int}")]
     public async Task<IActionResult> DeleteVariant(int productId, int variantId)
     {
@@ -349,6 +368,7 @@ public class ProductsController : ControllerBase
         return Ok(images);
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPost("{productId:int}/images")]
     public async Task<IActionResult> UploadImage(int productId, [FromForm] IFormFile? file, [FromForm] bool isMain = false, [FromForm] int? maBienSanPham = null, [FromForm] int? imageId = null)
     {
@@ -365,6 +385,12 @@ public class ProductsController : ControllerBase
             foreach (var o in others) o.LaAnhChinh = false;
 
             existingImg.LaAnhChinh = true;
+            var product = await _dbContext.Products.FirstOrDefaultAsync(p => p.MaSanPham == productId);
+            if (product != null)
+            {
+                product.AnhChinhUrl = existingImg.UrlAnh;
+                product.NgayCapNhat = DateTime.UtcNow;
+            }
             await _dbContext.SaveChangesAsync();
             return Ok(new { id = existingImg.MaAnhSanPham, laAnhChinh = true });
         }
@@ -420,6 +446,17 @@ public class ProductsController : ControllerBase
         };
 
         _dbContext.ProductImages.Add(image);
+
+        if (isMain)
+        {
+            var product = await _dbContext.Products.FirstOrDefaultAsync(p => p.MaSanPham == productId);
+            if (product != null)
+            {
+                product.AnhChinhUrl = image.UrlAnh;
+                product.NgayCapNhat = DateTime.UtcNow;
+            }
+        }
+
         await _dbContext.SaveChangesAsync();
 
         return Ok(new
@@ -432,6 +469,7 @@ public class ProductsController : ControllerBase
         });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpDelete("{productId:int}/images/{imageId:int}")]
     public async Task<IActionResult> DeleteImage(int productId, int imageId)
     {
@@ -443,10 +481,75 @@ public class ProductsController : ControllerBase
             return NotFound();
         }
 
+        var product = await _dbContext.Products.FirstOrDefaultAsync(p => p.MaSanPham == productId);
+        var shouldReplaceProductMainImage = product?.AnhChinhUrl == image.UrlAnh;
+
         _dbContext.ProductImages.Remove(image);
+
+        if (shouldReplaceProductMainImage && product != null)
+        {
+            var replacementImage = await _dbContext.ProductImages
+                .Where(i => i.MaSanPham == productId && i.MaAnhSanPham != imageId)
+                .OrderByDescending(i => i.LaAnhChinh)
+                .ThenBy(i => i.MaBienSanPham.HasValue)
+                .ThenBy(i => i.ThuTuHienThi)
+                .FirstOrDefaultAsync();
+
+            product.AnhChinhUrl = replacementImage?.UrlAnh;
+            product.NgayCapNhat = DateTime.UtcNow;
+        }
+
         await _dbContext.SaveChangesAsync();
 
         return NoContent();
+    }
+
+    private async Task EnsureInventoryAuditTableAsync()
+    {
+        await _dbContext.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'dbo.TONKHO_DIEUCHINH_LOG', N'U') IS NULL
+            BEGIN
+                CREATE TABLE dbo.TONKHO_DIEUCHINH_LOG (
+                    Id INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                    MaSanPham INT NOT NULL,
+                    MaBienSanPham INT NULL,
+                    MaSanPhamKinhDoanh NVARCHAR(50) NOT NULL,
+                    SKU NVARCHAR(80) NULL,
+                    TenSanPham NVARCHAR(255) NOT NULL,
+                    TenBienThe NVARCHAR(180) NULL,
+                    LoaiGiaoDich VARCHAR(20) NOT NULL,
+                    SoLuongThayDoi INT NOT NULL,
+                    TonTruoc INT NOT NULL,
+                    TonSau INT NOT NULL,
+                    LyDo NVARCHAR(500) NOT NULL,
+                    MaNguoiDung INT NULL,
+                    NgayTao DATETIME2(0) NOT NULL
+                );
+                CREATE INDEX IX_TONKHO_DIEUCHINH_LOG_Target
+                    ON dbo.TONKHO_DIEUCHINH_LOG (MaSanPham, MaBienSanPham, NgayTao DESC);
+            END;
+            """);
+    }
+
+    private async Task InsertInventoryAuditLogAsync(Product product, ProductVariant? variant, string type, int delta, int before, int after, string reason)
+    {
+        int? variantId = variant?.MaBienSanPham;
+        string? sku = variant?.SKU;
+        string? variantName = variant?.TenBienThe;
+        var userId = GetCurrentUserId();
+
+        await _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO dbo.TONKHO_DIEUCHINH_LOG
+                (MaSanPham, MaBienSanPham, MaSanPhamKinhDoanh, SKU, TenSanPham, TenBienThe, LoaiGiaoDich, SoLuongThayDoi, TonTruoc, TonSau, LyDo, MaNguoiDung, NgayTao)
+            VALUES
+                ({product.MaSanPham}, {variantId}, {product.MaSanPhamKinhDoanh}, {sku}, {product.TenSanPham}, {variantName}, {type}, {delta}, {before}, {after}, {reason}, {userId}, SYSDATETIME())
+            """);
+    }
+
+    private int? GetCurrentUserId()
+    {
+        var value = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        return int.TryParse(value, out var id) ? id : null;
     }
 }
 

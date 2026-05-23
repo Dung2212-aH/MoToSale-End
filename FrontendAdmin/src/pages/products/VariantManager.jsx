@@ -38,6 +38,14 @@ const VariantManager = ({ productId, onClose }) => {
     if (productId) fetchVariants();
   }, [productId]);
 
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
   const openAdd = () => {
     setEditVariant(null);
     setForm({ tenBienThe: '', sku: '', phienBan: '', mauSac: '', giaGhiDe: '', soLuongTon: '', trangThai: 'Available' });
@@ -74,11 +82,11 @@ const VariantManager = ({ productId, onClose }) => {
       const payload = {
         ...form,
         giaGhiDe: Number(form.giaGhiDe) || 0,
-        soLuongTon: Number(form.soLuongTon) || 0,
       };
       if (editVariant) {
         await productService.updateVariant(productId, editVariant.id, payload);
       } else {
+        payload.soLuongTon = Number(form.soLuongTon) || 0;
         await productService.createVariant(productId, payload);
       }
       setShowForm(false);
@@ -104,7 +112,7 @@ const VariantManager = ({ productId, onClose }) => {
 
   return (
     <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="modal-dialog modal-lg" style={{ maxHeight: '90vh' }}>
+      <div className="modal-dialog modal-lg variant-manager-dialog" style={{ maxHeight: '90vh' }}>
         <div className="modal-content" style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
           <div className="modal-header">
             <h5 className="modal-title">Quản lý biến thể sản phẩm</h5>
@@ -112,7 +120,7 @@ const VariantManager = ({ productId, onClose }) => {
               <span>&times;</span>
             </button>
           </div>
-          <div className="modal-body" style={{ overflowY: 'auto', flex: 1 }}>
+          <div className="modal-body variant-manager-body" style={{ overflowY: 'auto', flex: 1 }}>
             <div className="mb-3">
               <button className="btn btn-primary btn-sm" onClick={openAdd}>
                 <i className="fas fa-plus"></i> Thêm biến thể
@@ -174,9 +182,9 @@ const VariantManager = ({ productId, onClose }) => {
 
             {/* Inline Form */}
             {showForm && (
-              <div className="card mt-3">
+              <div className="card mt-3 variant-form-card">
                 <div className="card-header">
-                  <h6 className="m-0">{editVariant ? 'Sửa biến thể' : 'Thêm biến thể mới'}</h6>
+                  <h6 className="card-title m-0">{editVariant ? 'Sửa biến thể' : 'Thêm biến thể mới'}</h6>
                 </div>
                 <div className="card-body">
                   <form onSubmit={handleSubmit}>
@@ -213,12 +221,14 @@ const VariantManager = ({ productId, onClose }) => {
                           <input type="number" className="form-control form-control-sm" name="giaGhiDe" value={form.giaGhiDe} onChange={handleChange} min="0" />
                         </div>
                       </div>
-                      <div className="col-md-3">
-                        <div className="form-group">
-                          <label>Tồn kho</label>
-                          <input type="number" className="form-control form-control-sm" name="soLuongTon" value={form.soLuongTon} onChange={handleChange} min="0" />
+                      {!editVariant && (
+                        <div className="col-md-3">
+                          <div className="form-group">
+                            <label>Tồn kho ban đầu</label>
+                            <input type="number" className="form-control form-control-sm" name="soLuongTon" value={form.soLuongTon} onChange={handleChange} min="0" />
+                          </div>
                         </div>
-                      </div>
+                      )}
                       <div className="col-md-3">
                         <div className="form-group">
                           <label>Trạng thái</label>

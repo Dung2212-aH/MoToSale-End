@@ -167,13 +167,13 @@ const ReviewList = () => {
                     <table className="table table-bordered table-striped table-sm">
                       <thead>
                         <tr>
-                          <th>Sản phẩm</th>
-                          <th>Người đánh giá</th>
-                          <th>Điểm</th>
-                          <th>Tiêu đề</th>
-                          <th>Trạng thái</th>
-                          <th>Ngày tạo</th>
-                          <th>Thao tác</th>
+                          <th className="table-col-text">Sản phẩm</th>
+                          <th className="table-col-text">Người đánh giá</th>
+                          <th className="table-col-status">Điểm</th>
+                          <th className="table-col-text">Tiêu đề</th>
+                          <th className="table-col-status">Trạng thái</th>
+                          <th className="table-col-date">Ngày tạo</th>
+                          <th className="table-col-actions">Thao tác</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -181,13 +181,13 @@ const ReviewList = () => {
                           const reviewId = getReviewId(r);
                           return (
                           <tr key={reviewId || idx}>
-                            <td>{r.tenSanPham || r.productName || '-'}</td>
-                            <td>{r.tenNguoiDung || r.userName || '-'}</td>
-                            <td>{renderStars(r.diem || r.diemDanhGia || r.rating || 0)}</td>
-                            <td>{r.tieuDe || r.title || '-'}</td>
-                            <td>{getStatusBadge(r.trangThai || r.status)}</td>
-                            <td>{formatDate(r.ngayTao || r.createdAt)}</td>
-                            <td>
+                            <td className="table-col-text">{r.tenSanPham || r.productName || '-'}</td>
+                            <td className="table-col-text">{r.tenNguoiDung || r.userName || '-'}</td>
+                            <td className="table-col-status">{renderStars(r.diem || r.diemDanhGia || r.rating || 0)}</td>
+                            <td className="table-col-text">{r.tieuDe || r.title || '-'}</td>
+                            <td className="table-col-status">{getStatusBadge(r.trangThai || r.status)}</td>
+                            <td className="table-col-date">{formatDate(r.ngayTao || r.createdAt)}</td>
+                            <td className="table-col-actions">
                               {(r.trangThai || r.status) !== 'Approved' && (
                                 <button className="btn btn-xs btn-success mr-1" onClick={() => handleApprove(reviewId)} title="Duyệt">
                                   <i className="fas fa-check"></i>

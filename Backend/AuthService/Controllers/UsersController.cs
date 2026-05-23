@@ -25,8 +25,14 @@ public class UsersController : ControllerBase
         _passwordHasher = passwordHasher;
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpGet("all")]
-    public async Task<IActionResult> GetAllUsers([FromQuery] string? search, [FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+    public async Task<IActionResult> GetAllUsers(
+        [FromQuery] string? search,
+        [FromQuery] string? status,
+        [FromQuery] string? role,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
     {
         var query = _dbContext.Users.AsNoTracking().AsQueryable();
 
@@ -39,6 +45,13 @@ public class UsersController : ControllerBase
         if (!string.IsNullOrWhiteSpace(status))
         {
             query = query.Where(u => u.TrangThai == status);
+        }
+
+        if (!string.IsNullOrWhiteSpace(role))
+        {
+            var roleName = role.Trim();
+            query = query.Where(u => _dbContext.UserRoles
+                .Any(ur => ur.UserId == u.Id && ur.Role.TenVaiTro == roleName));
         }
 
         var total = await query.CountAsync();
@@ -113,6 +126,11 @@ public class UsersController : ControllerBase
             return BadRequest(new { message = "Vai tro khong hop le." });
         }
 
+        if (roleNames.Contains("Admin", StringComparer.OrdinalIgnoreCase) && await CountAdminsAsync() > 0)
+        {
+            return BadRequest(new { message = "He thong chi cho phep mot tai khoan Admin. Hay tao tai khoan Staff cho nhan su van hanh." });
+        }
+
         var now = DateTime.UtcNow;
         var user = new User
         {
@@ -148,6 +166,9 @@ public class UsersController : ControllerBase
             return NotFound(new { message = "Khong tim thay nguoi dung." });
         }
 
+        var currentUserId = GetCurrentUserId();
+        var existingIsAdmin = await IsAdminAsync(id);
+
         var email = request.Email.Trim().ToLowerInvariant();
         var phone = request.SoDienThoai.Trim();
 
@@ -161,10 +182,28 @@ public class UsersController : ControllerBase
             return BadRequest(new { message = "So dien thoai da duoc su dung." });
         }
 
+        var nextStatus = string.IsNullOrWhiteSpace(request.TrangThai) ? user.TrangThai : request.TrangThai.Trim();
+        var hasRoleChange = (request.Roles?.Count ?? 0) > 0 || !string.IsNullOrWhiteSpace(request.Role);
+        var nextRoleNames = hasRoleChange
+            ? NormalizeRoleNames(request.Roles, request.Role)
+            : await GetUserRoleNamesAsync(id);
+        var nextIsAdmin = nextRoleNames.Contains("Admin", StringComparer.OrdinalIgnoreCase);
+
+        if (!existingIsAdmin && nextIsAdmin && await CountAdminsAsync() > 0)
+        {
+            return BadRequest(new { message = "He thong chi cho phep mot tai khoan Admin. Hay dung vai tro Staff cho nhan su van hanh." });
+        }
+
+        var validationError = await ValidateAdminProtectionAsync(id, currentUserId, existingIsAdmin, user.TrangThai, nextIsAdmin, nextStatus);
+        if (validationError is not null)
+        {
+            return BadRequest(new { message = validationError });
+        }
+
         user.HoTen = request.HoTen.Trim();
         user.Email = email;
         user.SoDienThoai = phone;
-        user.TrangThai = string.IsNullOrWhiteSpace(request.TrangThai) ? user.TrangThai : request.TrangThai.Trim();
+        user.TrangThai = nextStatus;
         user.NgayCapNhat = DateTime.UtcNow;
 
         if (!string.IsNullOrWhiteSpace(request.MatKhau))
@@ -172,11 +211,10 @@ public class UsersController : ControllerBase
             user.MatKhau = _passwordHasher.Hash(request.MatKhau);
         }
 
-        if ((request.Roles?.Count ?? 0) > 0 || !string.IsNullOrWhiteSpace(request.Role))
+        if (hasRoleChange)
         {
-            var roleNames = NormalizeRoleNames(request.Roles, request.Role);
-            var roles = await GetRolesAsync(roleNames);
-            if (roles.Count != roleNames.Count)
+            var roles = await GetRolesAsync(nextRoleNames);
+            if (roles.Count != nextRoleNames.Count)
             {
                 return BadRequest(new { message = "Vai tro khong hop le." });
             }
@@ -209,6 +247,19 @@ public class UsersController : ControllerBase
             return BadRequest(new { message = "Trang thai khong hop le." });
         }
 
+        var existingIsAdmin = await IsAdminAsync(id);
+        var validationError = await ValidateAdminProtectionAsync(
+            id,
+            GetCurrentUserId(),
+            existingIsAdmin,
+            user.TrangThai,
+            existingIsAdmin,
+            status.Trim());
+        if (validationError is not null)
+        {
+            return BadRequest(new { message = validationError });
+        }
+
         user.TrangThai = status.Trim();
         user.NgayCapNhat = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync();
@@ -225,9 +276,20 @@ public class UsersController : ControllerBase
             return NotFound(new { message = "Khong tim thay nguoi dung." });
         }
 
-        _dbContext.Users.Remove(user);
+        if (GetCurrentUserId() == id)
+        {
+            return BadRequest(new { message = "Khong the xoa tai khoan dang dang nhap." });
+        }
+
+        if (await IsAdminAsync(id) && user.TrangThai == ActiveStatus && await CountActiveAdminsAsync() <= 1)
+        {
+            return BadRequest(new { message = "Khong the xoa quan tri vien hoat dong cuoi cung." });
+        }
+
+        user.TrangThai = "Inactive";
+        user.NgayCapNhat = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync();
-        return NoContent();
+        return Ok(await BuildAdminUserResponseAsync(id));
     }
 
     [HttpGet("me")]
@@ -423,6 +485,67 @@ public class UsersController : ControllerBase
         return await _dbContext.Roles
             .Where(r => roleNames.Contains(r.TenVaiTro))
             .ToListAsync();
+    }
+
+    private async Task<List<string>> GetUserRoleNamesAsync(int userId)
+    {
+        return await _dbContext.UserRoles
+            .Where(ur => ur.UserId == userId)
+            .Join(_dbContext.Roles, ur => ur.RoleId, r => r.Id, (ur, r) => r.TenVaiTro)
+            .ToListAsync();
+    }
+
+    private async Task<bool> IsAdminAsync(int userId)
+    {
+        return await _dbContext.UserRoles
+            .AnyAsync(ur => ur.UserId == userId && ur.Role.TenVaiTro == "Admin");
+    }
+
+    private async Task<int> CountActiveAdminsAsync()
+    {
+        return await _dbContext.Users
+            .Where(u => u.TrangThai == ActiveStatus)
+            .CountAsync(u => _dbContext.UserRoles
+                .Any(ur => ur.UserId == u.Id && ur.Role.TenVaiTro == "Admin"));
+    }
+
+    private async Task<int> CountAdminsAsync()
+    {
+        return await _dbContext.UserRoles
+            .CountAsync(ur => ur.Role.TenVaiTro == "Admin");
+    }
+
+    private async Task<string?> ValidateAdminProtectionAsync(
+        int targetUserId,
+        int? currentUserId,
+        bool currentIsAdmin,
+        string currentStatus,
+        bool nextIsAdmin,
+        string nextStatus)
+    {
+        var isSelf = currentUserId == targetUserId;
+        var nextIsActive = string.Equals(nextStatus, ActiveStatus, StringComparison.OrdinalIgnoreCase);
+
+        if (isSelf && !nextIsActive)
+        {
+            return "Khong the khoa tai khoan dang dang nhap.";
+        }
+
+        if (isSelf && currentIsAdmin && !nextIsAdmin)
+        {
+            return "Khong the go vai tro Admin cua chinh minh.";
+        }
+
+        var removesActiveAdmin = currentIsAdmin
+            && string.Equals(currentStatus, ActiveStatus, StringComparison.OrdinalIgnoreCase)
+            && (!nextIsAdmin || !nextIsActive);
+
+        if (removesActiveAdmin && await CountActiveAdminsAsync() <= 1)
+        {
+            return "Khong the vo hieu hoa quan tri vien hoat dong cuoi cung.";
+        }
+
+        return null;
     }
 
     private static List<string> NormalizeRoleNames(ICollection<string>? roles, string? role)

@@ -158,25 +158,25 @@ const PaymentList = () => {
                     <table className="table table-bordered table-striped">
                       <thead>
                         <tr>
-                          <th>Mã TT</th>
-                          <th>Mã đơn hàng</th>
-                          <th>Số tiền</th>
+                          <th className="table-col-code">Mã TT</th>
+                          <th className="table-col-code">Mã đơn hàng</th>
+                          <th className="table-col-money">Số tiền</th>
                           <th>Phương thức</th>
-                          <th>Trạng thái</th>
-                          <th>Ngày tạo</th>
-                          <th>Thao tác</th>
+                          <th className="table-col-status">Trạng thái</th>
+                          <th className="table-col-date">Ngày tạo</th>
+                          <th className="table-col-actions">Thao tác</th>
                         </tr>
                       </thead>
                       <tbody>
                         {payments.map((payment) => (
                           <tr key={payment.id || payment.maThanhToan}>
-                            <td><strong>{payment.maThanhToan || payment.paymentCode || payment.id}</strong></td>
-                            <td>{payment.maDonHang || payment.orderCode || '—'}</td>
-                            <td>{formatCurrency(payment.soTien || payment.amount || 0)}</td>
+                            <td className="table-col-code"><strong>{payment.maThanhToan || payment.paymentCode || payment.id}</strong></td>
+                            <td className="table-col-code">{payment.maDonHang || payment.orderCode || '—'}</td>
+                            <td className="table-col-money">{formatCurrency(payment.soTien || payment.amount || 0)}</td>
                             <td>{PAYMENT_METHODS[payment.phuongThuc || payment.method] || payment.phuongThuc || payment.method || '—'}</td>
-                            <td>{getStatusBadge(payment.trangThai || payment.status)}</td>
-                            <td>{formatDate(payment.ngayTao || payment.createdAt)}</td>
-                            <td><span className="text-muted">—</span></td>
+                            <td className="table-col-status">{getStatusBadge(payment.trangThai || payment.status)}</td>
+                            <td className="table-col-date">{formatDate(payment.ngayTao || payment.createdAt)}</td>
+                            <td className="table-col-actions"><span className="text-muted">—</span></td>
                           </tr>
                         ))}
                       </tbody>

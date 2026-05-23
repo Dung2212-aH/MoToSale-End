@@ -210,10 +210,10 @@ const ReportsPage = () => {
                   <table className="table table-bordered table-striped mb-0">
                     <thead>
                       <tr>
-                        <th>#</th>
-                        <th>Sản phẩm</th>
-                        <th className="text-right">Số lượng bán</th>
-                        <th className="text-right">Doanh thu ước tính</th>
+                        <th className="table-col-code">#</th>
+                        <th className="table-col-text">Sản phẩm</th>
+                        <th className="table-col-number">Số lượng bán</th>
+                        <th className="table-col-money">Doanh thu ước tính</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -226,10 +226,10 @@ const ReportsPage = () => {
                       ) : (
                         data.topProducts.map((product, idx) => (
                           <tr key={product.id || idx}>
-                            <td>{idx + 1}</td>
-                            <td>{product.name}</td>
-                            <td className="text-right">{product.sold}</td>
-                            <td className="text-right">{formatCurrency(product.revenue)}</td>
+                            <td className="table-col-code">{idx + 1}</td>
+                            <td className="table-col-text">{product.name}</td>
+                            <td className="table-col-number">{product.sold}</td>
+                            <td className="table-col-money">{formatCurrency(product.revenue)}</td>
                           </tr>
                         ))
                       )}

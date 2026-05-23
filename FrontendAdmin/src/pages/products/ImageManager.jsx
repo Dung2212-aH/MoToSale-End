@@ -36,6 +36,14 @@ const ImageManager = ({ productId, onClose }) => {
     if (productId) fetchData();
   }, [productId]);
 
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -127,7 +135,7 @@ const ImageManager = ({ productId, onClose }) => {
 
   return (
     <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="modal-dialog modal-xl">
+      <div className="modal-dialog modal-xl image-manager-dialog">
         <div className="modal-content">
           <div className="modal-header">
             <h5 className="modal-title">
@@ -137,7 +145,7 @@ const ImageManager = ({ productId, onClose }) => {
               <span>&times;</span>
             </button>
           </div>
-          <div className="modal-body" style={{ maxHeight: '75vh', overflowY: 'auto' }}>
+          <div className="modal-body image-manager-body">
             {/* Upload Section */}
             <div className="card card-primary card-outline mb-3">
               <div className="card-header py-2">
@@ -218,7 +226,7 @@ const ImageManager = ({ productId, onClose }) => {
             ) : (
               <>
                 {/* Filter tabs */}
-                <div className="mb-3" style={{ overflowX: 'auto' }}>
+                <div className="mb-3 image-manager-filter">
                   <div className="btn-group btn-group-sm" role="group">
                     <button
                       className={`btn ${viewFilter === 'all' ? 'btn-primary' : 'btn-outline-secondary'}`}
@@ -252,7 +260,7 @@ const ImageManager = ({ productId, onClose }) => {
                     <p>Chưa có ảnh nào{viewFilter !== 'all' ? ' trong nhóm này' : ''}.</p>
                   </div>
                 ) : (
-                  <div className="row">
+                  <div className="row product-image-grid">
                     {filteredImages.map(img => (
                       <div key={img.id || img.maAnhSanPham} className="col-lg-3 col-md-4 col-sm-6 mb-3">
                         <div className={`card h-100 ${img.laAnhChinh ? 'border-primary' : ''}`} style={{ fontSize: '0.8rem' }}>

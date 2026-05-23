@@ -1,31 +1,43 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import postService from '../../services/postService';
 import { formatDate } from '../../utils/formatDate';
 
-/**
- * Tạo slug từ chuỗi tiếng Việt
- */
-function generateSlug(str) {
-  if (!str) return '';
-  let slug = str.toLowerCase().trim();
-  slug = slug.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, 'a');
-  slug = slug.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, 'e');
-  slug = slug.replace(/ì|í|ị|ỉ|ĩ/g, 'i');
-  slug = slug.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, 'o');
-  slug = slug.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, 'u');
-  slug = slug.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, 'y');
-  slug = slug.replace(/đ/g, 'd');
-  slug = slug.replace(/[^a-z0-9\s-]/g, '');
-  slug = slug.replace(/[\s_]+/g, '-');
-  slug = slug.replace(/-+/g, '-');
-  slug = slug.replace(/^-|-$/g, '');
-  return slug;
+function generateSlug(value) {
+  return value
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
 const POST_STATUS = {
   Published: { label: 'Đã xuất bản', color: 'success' },
   Draft: { label: 'Bản nháp', color: 'secondary' },
 };
+
+const defaultForm = {
+  tieuDe: '',
+  slug: '',
+  tomTat: '',
+  noiDung: '',
+  anhDaiDienUrl: '',
+  danhMuc: '',
+  trangThai: 'Draft',
+};
+
+const getPostId = (post) => post.id || post.maBaiViet;
+const getTitle = (post) => post.tieuDe || post.title || '';
+const getSummary = (post) => post.tomTat || post.summary || '';
+const getContent = (post) => post.noiDung || post.content || '';
+const getImageUrl = (post) => post.anhDaiDienUrl || post.anhDaiDien || post.thumbnail || '';
+const getCategory = (post) => post.danhMuc || post.category || '';
+const getStatus = (post) => post.trangThai || post.status || 'Draft';
+const getPublishedAt = (post) => post.xuatBanLuc || post.ngayXuatBan || post.publishedAt || post.createdAt || post.ngayTao;
 
 const PostList = () => {
   const [posts, setPosts] = useState([]);
@@ -34,39 +46,29 @@ const PostList = () => {
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [saving, setSaving] = useState(false);
-
-  // Pagination
+  const [loadingDetail, setLoadingDetail] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const pageSize = 10;
 
-  const [form, setForm] = useState({
-    tieuDe: '',
-    slug: '',
-    tomTat: '',
-    noiDung: '',
-    anhDaiDien: '',
-    danhMuc: '',
-    trangThai: 'Draft',
-  });
+  const [form, setForm] = useState({ ...defaultForm });
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const params = { page, pageSize };
-      const res = await postService.getAll(params);
+      const res = await postService.getAll({ page, pageSize });
       const data = res.data;
       if (Array.isArray(data)) {
         setPosts(data);
         setTotalPages(1);
       } else {
         setPosts(data.items || data.data || []);
-        setTotalPages(data.totalPages || Math.ceil((data.total || 0) / pageSize) || 1);
+        setTotalPages(data.totalPages || Math.ceil(((data.totalItems ?? data.total) || 0) / pageSize) || 1);
       }
     } catch (err) {
       setError('Không thể tải danh sách bài viết.');
-      console.error(err);
+      setPosts([]);
     } finally {
       setLoading(false);
     }
@@ -78,32 +80,50 @@ const PostList = () => {
 
   const openAdd = () => {
     setEditItem(null);
-    setForm({ tieuDe: '', slug: '', tomTat: '', noiDung: '', anhDaiDien: '', danhMuc: '', trangThai: 'Draft' });
+    setForm({ ...defaultForm });
     setShowModal(true);
   };
 
-  const openEdit = (item) => {
-    setEditItem(item);
+  const setFormFromPost = (post) => {
     setForm({
-      tieuDe: item.tieuDe || item.title || '',
-      slug: item.slug || '',
-      tomTat: item.tomTat || item.summary || '',
-      noiDung: item.noiDung || item.content || '',
-      anhDaiDien: item.anhDaiDien || item.thumbnail || '',
-      danhMuc: item.danhMuc || item.category || '',
-      trangThai: item.trangThai || item.status || 'Draft',
+      tieuDe: getTitle(post),
+      slug: post.slug || '',
+      tomTat: getSummary(post),
+      noiDung: getContent(post),
+      anhDaiDienUrl: getImageUrl(post),
+      danhMuc: getCategory(post),
+      trangThai: getStatus(post),
     });
+  };
+
+  const openEdit = async (item) => {
+    const postId = getPostId(item);
+    setEditItem(item);
+    setFormFromPost(item);
     setShowModal(true);
+
+    // List data does not include full content, so load the detail before editing.
+    setLoadingDetail(true);
+    try {
+      const res = await postService.getById(postId);
+      const detail = res.data;
+      setEditItem(detail);
+      setFormFromPost(detail);
+    } catch (err) {
+      alert('Không thể tải chi tiết bài viết. Form đang hiển thị dữ liệu tóm tắt.');
+    } finally {
+      setLoadingDetail(false);
+    }
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm(prev => {
-      const updated = { ...prev, [name]: value };
+    setForm((prev) => {
+      const next = { ...prev, [name]: value };
       if (name === 'tieuDe') {
-        updated.slug = generateSlug(value);
+        next.slug = generateSlug(value);
       }
-      return updated;
+      return next;
     });
   };
 
@@ -113,18 +133,29 @@ const PostList = () => {
       alert('Tiêu đề là bắt buộc!');
       return;
     }
+
+    const payload = {
+      tieuDe: form.tieuDe.trim(),
+      slug: form.slug.trim() || generateSlug(form.tieuDe),
+      tomTat: form.tomTat,
+      noiDung: form.noiDung,
+      anhDaiDienUrl: form.anhDaiDienUrl,
+      danhMuc: form.danhMuc,
+      trangThai: form.trangThai,
+      xuatBanLuc: form.trangThai === 'Published' ? new Date().toISOString() : null,
+    };
+
     setSaving(true);
     try {
       if (editItem) {
-        await postService.update(editItem.id, form);
+        await postService.update(getPostId(editItem), payload);
       } else {
-        await postService.create(form);
+        await postService.create(payload);
       }
       setShowModal(false);
       fetchPosts();
     } catch (err) {
       alert('Lưu bài viết thất bại!');
-      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -137,7 +168,6 @@ const PostList = () => {
       fetchPosts();
     } catch (err) {
       alert('Xóa bài viết thất bại!');
-      console.error(err);
     }
   };
 
@@ -190,25 +220,25 @@ const PostList = () => {
                     <table className="table table-bordered table-striped table-sm">
                       <thead>
                         <tr>
-                          <th>Tiêu đề</th>
-                          <th>Danh mục</th>
-                          <th>Trạng thái</th>
-                          <th>Ngày xuất bản</th>
-                          <th>Thao tác</th>
+                          <th className="table-col-text">Tiêu đề</th>
+                          <th className="table-col-text">Danh mục</th>
+                          <th className="table-col-status">Trạng thái</th>
+                          <th className="table-col-date">Ngày xuất bản</th>
+                          <th className="table-col-actions">Thao tác</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {posts.map(p => (
-                          <tr key={p.id}>
-                            <td>{p.tieuDe || p.title}</td>
-                            <td>{p.danhMuc || p.category || '-'}</td>
-                            <td>{getStatusBadge(p.trangThai || p.status)}</td>
-                            <td>{formatDate(p.ngayXuatBan || p.publishedAt || p.createdAt)}</td>
-                            <td>
-                              <button className="btn btn-xs btn-info mr-1" onClick={() => openEdit(p)} title="Sửa">
+                        {posts.map((post) => (
+                          <tr key={getPostId(post)}>
+                            <td className="table-col-text">{getTitle(post)}</td>
+                            <td className="table-col-text">{getCategory(post) || '-'}</td>
+                            <td className="table-col-status">{getStatusBadge(getStatus(post))}</td>
+                            <td className="table-col-date">{formatDate(getPublishedAt(post))}</td>
+                            <td className="table-col-actions">
+                              <button className="btn btn-xs btn-info mr-1" onClick={() => openEdit(post)} title="Sửa">
                                 <i className="fas fa-edit"></i>
                               </button>
-                              <button className="btn btn-xs btn-danger" onClick={() => handleDelete(p.id, p.tieuDe || p.title)} title="Xóa">
+                              <button className="btn btn-xs btn-danger" onClick={() => handleDelete(getPostId(post), getTitle(post))} title="Xóa">
                                 <i className="fas fa-trash"></i>
                               </button>
                             </td>
@@ -218,20 +248,19 @@ const PostList = () => {
                     </table>
                   </div>
 
-                  {/* Pagination */}
                   {totalPages > 1 && (
                     <nav className="mt-3">
                       <ul className="pagination pagination-sm justify-content-center">
                         <li className={`page-item ${page <= 1 ? 'disabled' : ''}`}>
-                          <button className="page-link" onClick={() => setPage(p => p - 1)}>«</button>
+                          <button className="page-link" onClick={() => setPage((value) => value - 1)}>«</button>
                         </li>
-                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                          <li key={p} className={`page-item ${p === page ? 'active' : ''}`}>
-                            <button className="page-link" onClick={() => setPage(p)}>{p}</button>
+                        {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+                          <li key={pageNumber} className={`page-item ${pageNumber === page ? 'active' : ''}`}>
+                            <button className="page-link" onClick={() => setPage(pageNumber)}>{pageNumber}</button>
                           </li>
                         ))}
                         <li className={`page-item ${page >= totalPages ? 'disabled' : ''}`}>
-                          <button className="page-link" onClick={() => setPage(p => p + 1)}>»</button>
+                          <button className="page-link" onClick={() => setPage((value) => value + 1)}>»</button>
                         </li>
                       </ul>
                     </nav>
@@ -243,19 +272,22 @@ const PostList = () => {
         </div>
       </section>
 
-      {/* Modal Form */}
       {showModal && (
         <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-lg" style={{ maxHeight: '90vh' }}>
-            <div className="modal-content" style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+          <div className="modal-dialog modal-lg" style={{ maxHeight: 'calc(100vh - 3.5rem)' }}>
+            <div className="modal-content" style={{ maxHeight: 'calc(100vh - 3.5rem)', display: 'flex', flexDirection: 'column' }}>
               <div className="modal-header">
                 <h5 className="modal-title">{editItem ? 'Sửa bài viết' : 'Thêm bài viết mới'}</h5>
                 <button type="button" className="close" onClick={() => setShowModal(false)}>
                   <span>&times;</span>
                 </button>
               </div>
-              <form onSubmit={handleSubmit}>
-                <div className="modal-body" style={{ overflowY: 'auto', flex: 1 }}>
+              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
+                <div className="modal-body" style={{ overflowY: 'auto', flex: '1 1 auto', minHeight: 0 }}>
+                  {loadingDetail && (
+                    <div className="alert alert-info py-2">Đang tải nội dung chi tiết...</div>
+                  )}
+
                   <div className="form-group">
                     <label>Tiêu đề <span className="text-danger">*</span></label>
                     <input type="text" className="form-control" name="tieuDe" value={form.tieuDe} onChange={handleChange} />
@@ -275,7 +307,16 @@ const PostList = () => {
                   </div>
                   <div className="form-group">
                     <label>Ảnh đại diện (URL)</label>
-                    <input type="text" className="form-control" name="anhDaiDien" value={form.anhDaiDien} onChange={handleChange} placeholder="https://..." />
+                    <input type="text" className="form-control" name="anhDaiDienUrl" value={form.anhDaiDienUrl} onChange={handleChange} placeholder="https://..." />
+                    {form.anhDaiDienUrl && (
+                      <img
+                        src={form.anhDaiDienUrl}
+                        alt="Ảnh đại diện"
+                        className="mt-2 rounded border"
+                        style={{ maxHeight: 120, maxWidth: '100%', width: 200, objectFit: 'cover' }}
+                        onError={(event) => { event.currentTarget.style.display = 'none'; }}
+                      />
+                    )}
                   </div>
                   <div className="row">
                     <div className="col-md-6">
@@ -297,7 +338,7 @@ const PostList = () => {
                 </div>
                 <div className="modal-footer">
                   <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Hủy</button>
-                  <button type="submit" className="btn btn-primary" disabled={saving}>
+                  <button type="submit" className="btn btn-primary" disabled={saving || loadingDetail}>
                     {saving ? 'Đang lưu...' : (editItem ? 'Cập nhật' : 'Thêm mới')}
                   </button>
                 </div>

@@ -9,7 +9,6 @@ const FaqList = () => {
   const [editItem, setEditItem] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  // Pagination
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const pageSize = 10;
@@ -19,15 +18,14 @@ const FaqList = () => {
     cauTraLoi: '',
     danhMuc: '',
     thuTu: 0,
-    trangThai: 'active',
+    dangHoatDong: true,
   });
 
   const fetchFaqs = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const params = { page, pageSize };
-      const res = await faqService.getAll(params);
+      const res = await faqService.getAll({ page, pageSize });
       const data = res.data;
       if (Array.isArray(data)) {
         setFaqs(data);
@@ -50,25 +48,26 @@ const FaqList = () => {
 
   const openAdd = () => {
     setEditItem(null);
-    setForm({ cauHoi: '', cauTraLoi: '', danhMuc: '', thuTu: 0, trangThai: 'active' });
+    setForm({ cauHoi: '', cauTraLoi: '', danhMuc: '', thuTu: 0, dangHoatDong: true });
     setShowModal(true);
   };
 
   const openEdit = (item) => {
     setEditItem(item);
+    const isActive = item.dangHoatDong ?? ((item.trangThai || item.status || 'active') === 'active');
     setForm({
       cauHoi: item.cauHoi || item.question || '',
       cauTraLoi: item.cauTraLoi || item.answer || '',
       danhMuc: item.danhMuc || item.category || '',
       thuTu: item.thuTu || item.sortOrder || 0,
-      trangThai: item.trangThai || item.status || 'active',
+      dangHoatDong: !!isActive,
     });
     setShowModal(true);
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
@@ -81,14 +80,23 @@ const FaqList = () => {
       alert('Câu trả lời là bắt buộc!');
       return;
     }
+
     setSaving(true);
     try {
-      const payload = { ...form, thuTu: Number(form.thuTu) || 0 };
+      const payload = {
+        cauHoi: form.cauHoi,
+        cauTraLoi: form.cauTraLoi,
+        danhMuc: form.danhMuc,
+        thuTu: Number(form.thuTu) || 0,
+        dangHoatDong: !!form.dangHoatDong,
+      };
+
       if (editItem) {
         await faqService.update(editItem.id, payload);
       } else {
         await faqService.create(payload);
       }
+
       setShowModal(false);
       fetchFaqs();
     } catch (err) {
@@ -153,25 +161,25 @@ const FaqList = () => {
                     <table className="table table-bordered table-striped table-sm">
                       <thead>
                         <tr>
-                          <th>Câu hỏi</th>
-                          <th>Danh mục</th>
-                          <th>Thứ tự</th>
-                          <th>Trạng thái</th>
-                          <th>Thao tác</th>
+                          <th className="table-col-text">Câu hỏi</th>
+                          <th className="table-col-text">Danh mục</th>
+                          <th className="table-col-number">Thứ tự</th>
+                          <th className="table-col-status">Trạng thái</th>
+                          <th className="table-col-actions">Thao tác</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {faqs.map(f => (
+                        {faqs.map((f) => (
                           <tr key={f.id}>
-                            <td>{f.cauHoi || f.question}</td>
-                            <td>{f.danhMuc || f.category || '-'}</td>
-                            <td>{f.thuTu || f.sortOrder || 0}</td>
-                            <td>
-                              <span className={`badge badge-${(f.trangThai || f.status) === 'active' ? 'success' : 'secondary'}`}>
-                                {(f.trangThai || f.status) === 'active' ? 'Hoạt động' : 'Ẩn'}
+                            <td className="table-col-text">{f.cauHoi || f.question}</td>
+                            <td className="table-col-text">{f.danhMuc || f.category || '-'}</td>
+                            <td className="table-col-number">{f.thuTu || f.sortOrder || 0}</td>
+                            <td className="table-col-status">
+                              <span className={`badge badge-${f.dangHoatDong ? 'success' : 'secondary'}`}>
+                                {f.dangHoatDong ? 'Hoạt động' : 'Ẩn'}
                               </span>
                             </td>
-                            <td>
+                            <td className="table-col-actions">
                               <button className="btn btn-xs btn-info mr-1" onClick={() => openEdit(f)} title="Sửa">
                                 <i className="fas fa-edit"></i>
                               </button>
@@ -185,20 +193,19 @@ const FaqList = () => {
                     </table>
                   </div>
 
-                  {/* Pagination */}
                   {totalPages > 1 && (
                     <nav className="mt-3">
                       <ul className="pagination pagination-sm justify-content-center">
                         <li className={`page-item ${page <= 1 ? 'disabled' : ''}`}>
-                          <button className="page-link" onClick={() => setPage(p => p - 1)}>«</button>
+                          <button className="page-link" onClick={() => setPage((p) => p - 1)}>«</button>
                         </li>
-                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                           <li key={p} className={`page-item ${p === page ? 'active' : ''}`}>
                             <button className="page-link" onClick={() => setPage(p)}>{p}</button>
                           </li>
                         ))}
                         <li className={`page-item ${page >= totalPages ? 'disabled' : ''}`}>
-                          <button className="page-link" onClick={() => setPage(p => p + 1)}>»</button>
+                          <button className="page-link" onClick={() => setPage((p) => p + 1)}>»</button>
                         </li>
                       </ul>
                     </nav>
@@ -210,7 +217,6 @@ const FaqList = () => {
         </div>
       </section>
 
-      {/* Modal Form */}
       {showModal && (
         <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
           <div className="modal-dialog" style={{ maxHeight: '90vh' }}>
@@ -246,11 +252,18 @@ const FaqList = () => {
                     </div>
                     <div className="col-md-4">
                       <div className="form-group">
-                        <label>Trạng thái</label>
-                        <select className="form-control" name="trangThai" value={form.trangThai} onChange={handleChange}>
-                          <option value="active">Hoạt động</option>
-                          <option value="inactive">Ẩn</option>
-                        </select>
+                        <div className="custom-control custom-switch mt-4">
+                          <input
+                            type="checkbox"
+                            className="custom-control-input"
+                            id="faqDangHoatDong"
+                            checked={form.dangHoatDong}
+                            onChange={(e) => setForm((prev) => ({ ...prev, dangHoatDong: e.target.checked }))}
+                          />
+                          <label className="custom-control-label" htmlFor="faqDangHoatDong">
+                            {form.dangHoatDong ? 'Hoạt động' : 'Ẩn'}
+                          </label>
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -4,10 +4,12 @@ import StatCard from '../components/StatCard';
 import RevenueChart from '../components/charts/RevenueChart';
 import OrderStatusChart from '../components/charts/OrderStatusChart';
 import reportService from '../services/reportService';
+import { useAuth } from '../contexts/AuthContext';
 import { formatCurrency } from '../utils/formatCurrency';
 import { formatDate } from '../utils/formatDate';
 
 const Dashboard = () => {
+  const { isAdmin } = useAuth();
   const [data, setData] = useState({
     stats: {
       productCount: 0,
@@ -42,7 +44,7 @@ const Dashboard = () => {
 
   const getOrderCode = (order) => order.maDonHang || order.orderCode || order.id || 'N/A';
   const getCustomerName = (order) => order.tenKhachHang || order.customerName || order.userName || 'Khách hàng';
-  const getOrderAmount = (order) => order.tongTien || order.totalAmount || order.amount || 0;
+  const getOrderAmount = (order) => order.tongThanhToan ?? order.tongTien ?? order.totalAmount ?? order.amount ?? 0;
   const getOrderStatus = (order) => order.trangThai || order.status || 'Mới';
 
   return (
@@ -89,6 +91,7 @@ const Dashboard = () => {
                   value={data.stats.orderCount}
                   to="/orders"
                 />
+                {isAdmin() && (
                 <StatCard
                   color="warning"
                   icon="fas fa-users"
@@ -96,6 +99,7 @@ const Dashboard = () => {
                   value={data.stats.userCount}
                   to="/users"
                 />
+                )}
                 <StatCard
                   color="danger"
                   icon="fas fa-chart-line"
@@ -151,11 +155,11 @@ const Dashboard = () => {
                       <table className="table table-bordered table-striped mb-0">
                         <thead>
                           <tr>
-                            <th>Mã đơn</th>
-                            <th>Khách hàng</th>
-                            <th>Tổng tiền</th>
-                            <th>Trạng thái</th>
-                            <th>Ngày tạo</th>
+                            <th className="table-col-code">Mã đơn</th>
+                            <th className="table-col-text">Khách hàng</th>
+                            <th className="table-col-money">Tổng tiền</th>
+                            <th className="table-col-status">Trạng thái</th>
+                            <th className="table-col-date">Ngày tạo</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -168,15 +172,15 @@ const Dashboard = () => {
                           ) : (
                             data.recentOrders.map((order) => (
                               <tr key={getOrderCode(order)}>
-                                <td>
+                                <td className="table-col-code">
                                   <Link to={`/orders/${order.id || order.maDonHang}`}>
                                     <strong>{getOrderCode(order)}</strong>
                                   </Link>
                                 </td>
-                                <td>{getCustomerName(order)}</td>
-                                <td>{formatCurrency(getOrderAmount(order))}</td>
-                                <td><span className="badge badge-info">{getOrderStatus(order)}</span></td>
-                                <td>{formatDate(order.ngayTao || order.createdAt)}</td>
+                                <td className="table-col-text">{getCustomerName(order)}</td>
+                                <td className="table-col-money">{formatCurrency(getOrderAmount(order))}</td>
+                                <td className="table-col-status"><span className="badge badge-info">{getOrderStatus(order)}</span></td>
+                                <td className="table-col-date">{formatDate(order.ngayTao || order.createdAt)}</td>
                               </tr>
                             ))
                           )}
@@ -195,9 +199,9 @@ const Dashboard = () => {
                       <table className="table table-bordered table-striped mb-0">
                         <thead>
                           <tr>
-                            <th>Sản phẩm</th>
-                            <th className="text-right">Đã bán</th>
-                            <th className="text-right">Doanh thu</th>
+                            <th className="table-col-text">Sản phẩm</th>
+                            <th className="table-col-number">Đã bán</th>
+                            <th className="table-col-money">Doanh thu</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -210,9 +214,9 @@ const Dashboard = () => {
                           ) : (
                             data.topProducts.map((product) => (
                               <tr key={product.id || product.name}>
-                                <td>{product.name}</td>
-                                <td className="text-right">{product.sold}</td>
-                                <td className="text-right">{formatCurrency(product.revenue)}</td>
+                                <td className="table-col-text">{product.name}</td>
+                                <td className="table-col-number">{product.sold}</td>
+                                <td className="table-col-money">{formatCurrency(product.revenue)}</td>
                               </tr>
                             ))
                           )}

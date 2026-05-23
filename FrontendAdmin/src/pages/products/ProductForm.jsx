@@ -59,7 +59,7 @@ const ProductForm = ({ show, onClose, onSaved, product, categories, brands }) =>
         moTaNgan: product.moTaNgan || product.shortDescription || '',
         giaGoc: product.giaGoc || product.basePrice || '',
         giaKhuyenMai: product.giaKhuyenMai || product.salePrice || '',
-        soLuongTon: product.soLuongTon ?? product.stock ?? '',
+        soLuongTon: product.soLuongTon ?? product.stock ?? 0,
         anhChinhUrl: product.anhChinhUrl || product.mainImage || '',
         anhChinhFile: null,
         trangThai: product.trangThaiSanPham || product.trangThai || product.status || 'Available',
@@ -140,10 +140,12 @@ const ProductForm = ({ show, onClose, onSaved, product, categories, brands }) =>
         moTaNgan: form.moTaNgan || undefined,
         giaGoc: Number(form.giaGoc) || 0,
         giaKhuyenMai: Number(form.giaKhuyenMai) || null,
-        soLuongTon: Number(form.soLuongTon) || 0,
         anhChinhUrl: mainImageFile ? undefined : form.anhChinhUrl || undefined,
         trangThaiSanPham: form.trangThai,
       };
+      if (!isEdit) {
+        payload.soLuongTon = Number(form.soLuongTon) || 0;
+      }
 
       let productId = product?.maSanPham || product?.id;
       if (isEdit) {
@@ -289,12 +291,14 @@ const ProductForm = ({ show, onClose, onSaved, product, categories, brands }) =>
                     <input type="number" className="form-control" name="giaKhuyenMai" value={form.giaKhuyenMai} onChange={handleChange} min="0" />
                   </div>
                 </div>
-                <div className="col-md-4">
-                  <div className="form-group">
-                    <label>Tồn kho</label>
-                    <input type="number" className="form-control" name="soLuongTon" value={form.soLuongTon} onChange={handleChange} min="0" />
+                {!isEdit && (
+                  <div className="col-md-4">
+                    <div className="form-group">
+                      <label>Tồn kho ban đầu</label>
+                      <input type="number" className="form-control" name="soLuongTon" value={form.soLuongTon} onChange={handleChange} min="0" />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               <div className="form-group">

@@ -3,6 +3,7 @@ using CatalogService.DTOs.Contacts;
 using CatalogService.DTOs.Faqs;
 using CatalogService.DTOs.Posts;
 using CatalogService.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -157,6 +158,7 @@ public class ContentController : ControllerBase
         return CreatedAtAction(nameof(GetContactRequest), new { id = contactRequest.MaLienHe }, MapContactRequest(contactRequest));
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpGet("contact-requests/{id:int}")]
     public async Task<IActionResult> GetContactRequest(int id)
     {
@@ -192,6 +194,7 @@ public class ContentController : ControllerBase
 
     // ===== Admin: Posts =====
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpGet("posts")]
     public async Task<IActionResult> GetPosts([FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
@@ -225,6 +228,7 @@ public class ContentController : ControllerBase
         return Ok(new { items, page, pageSize, totalItems, totalPages = (int)Math.Ceiling(totalItems / (double)pageSize) });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpGet("posts/{id:int}")]
     public async Task<IActionResult> GetPostById(int id)
     {
@@ -247,6 +251,7 @@ public class ContentController : ControllerBase
         });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPost("posts")]
     public async Task<IActionResult> CreatePost([FromBody] CreatePostRequest request)
     {
@@ -270,6 +275,7 @@ public class ContentController : ControllerBase
         return CreatedAtAction(nameof(GetPostById), new { id = post.MaBaiViet }, new { id = post.MaBaiViet });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPut("posts/{id:int}")]
     public async Task<IActionResult> UpdatePost(int id, [FromBody] UpdatePostRequest request)
     {
@@ -290,6 +296,7 @@ public class ContentController : ControllerBase
         return Ok(new { id = post.MaBaiViet });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpDelete("posts/{id:int}")]
     public async Task<IActionResult> DeletePost(int id)
     {
@@ -303,6 +310,7 @@ public class ContentController : ControllerBase
 
     // ===== Admin: FAQ =====
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpGet("faq")]
     public async Task<IActionResult> GetFaqAdmin([FromQuery] string? category, [FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
@@ -337,6 +345,7 @@ public class ContentController : ControllerBase
         return Ok(new { items, page, pageSize, totalItems = total, totalPages = (int)Math.Ceiling(total / (double)pageSize) });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPost("faq")]
     public async Task<IActionResult> CreateFaq([FromBody] CreateFaqRequest request)
     {
@@ -356,6 +365,7 @@ public class ContentController : ControllerBase
         return CreatedAtAction(nameof(GetFaqAdmin), null, new { id = faq.MaFAQ });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPut("faq/{id:int}")]
     public async Task<IActionResult> UpdateFaq(int id, [FromBody] UpdateFaqRequest request)
     {
@@ -373,6 +383,7 @@ public class ContentController : ControllerBase
         return Ok(new { id = faq.MaFAQ });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpDelete("faq/{id:int}")]
     public async Task<IActionResult> DeleteFaq(int id)
     {
@@ -386,6 +397,7 @@ public class ContentController : ControllerBase
 
     // ===== Admin: Contacts =====
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpGet("contacts")]
     public async Task<IActionResult> GetContacts([FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
@@ -420,6 +432,7 @@ public class ContentController : ControllerBase
         return Ok(new { items, page, pageSize, totalItems, totalPages = (int)Math.Ceiling(totalItems / (double)pageSize) });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPatch("contacts/{id:int}/process")]
     public async Task<IActionResult> MarkContactProcessed(int id)
     {

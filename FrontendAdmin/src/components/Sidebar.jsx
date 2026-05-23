@@ -2,15 +2,15 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
-const Sidebar = () => {
+const Sidebar = ({ collapsed = false }) => {
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
 
   const isActive = (path) => location.pathname === path ? 'active' : '';
   const isActiveGroup = (prefix) => location.pathname.startsWith(prefix) ? 'active' : '';
 
   return (
-    <aside className="main-sidebar sidebar-dark-primary elevation-4">
+    <aside className={`main-sidebar sidebar-dark-primary elevation-4 sidebar-no-expand ${collapsed ? 'is-collapsed' : ''}`}>
       <Link to="/" className="brand-link">
         <span className="brand-text font-weight-light ml-3">
           <b>MoToSale</b> Admin
@@ -28,7 +28,7 @@ const Sidebar = () => {
         </div>
 
         <nav className="mt-2">
-          <ul className="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu">
+          <ul className="nav nav-pills nav-sidebar flex-column" role="menu">
             <li className="nav-item">
               <Link to="/" className={`nav-link ${isActive('/')}`}>
                 <i className="nav-icon fas fa-tachometer-alt"></i>
@@ -56,17 +56,11 @@ const Sidebar = () => {
               </Link>
             </li>
 
-            <li className="nav-header">ĐƠN HÀNG & THANH TOÁN</li>
+            <li className="nav-header">ĐƠN HÀNG</li>
             <li className="nav-item">
               <Link to="/orders" className={`nav-link ${isActiveGroup('/orders')}`}>
                 <i className="nav-icon fas fa-shopping-cart"></i>
                 <p>Đơn hàng</p>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link to="/payments" className={`nav-link ${isActiveGroup('/payments')}`}>
-                <i className="nav-icon fas fa-credit-card"></i>
-                <p>Thanh toán</p>
               </Link>
             </li>
             <li className="nav-item">
@@ -83,12 +77,14 @@ const Sidebar = () => {
             </li>
 
             <li className="nav-header">NGƯỜI DÙNG & NỘI DUNG</li>
+            {isAdmin() && (
             <li className="nav-item">
               <Link to="/users" className={`nav-link ${isActiveGroup('/users')}`}>
                 <i className="nav-icon fas fa-users"></i>
                 <p>Người dùng</p>
               </Link>
             </li>
+            )}
             <li className="nav-item">
               <Link to="/reviews" className={`nav-link ${isActiveGroup('/reviews')}`}>
                 <i className="nav-icon fas fa-star"></i>

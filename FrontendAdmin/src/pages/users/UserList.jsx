@@ -1,9 +1,27 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import userService from '../../services/userService';
+import { useAuth } from '../../contexts/AuthContext';
 import { USER_STATUS, ROLES } from '../../utils/constants';
 import { formatDate } from '../../utils/formatDate';
 
+const emptyForm = {
+  hoTen: '',
+  email: '',
+  soDienThoai: '',
+  matKhau: '',
+  vaiTro: 'Staff',
+  trangThai: 'Active',
+};
+
+const getPrimaryRole = (user) => user?.vaiTro || user?.role || user?.roles?.[0] || 'Customer';
+const getUserId = (user) => user?.id ?? user?.userId ?? user?.maNguoiDung ?? user?.sub;
+
+const getApiMessage = (err, fallback) => err?.response?.data?.message || fallback;
+
 const UserList = () => {
+  const { user: currentUser } = useAuth();
+  const currentUserId = getUserId(currentUser);
+
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -11,23 +29,20 @@ const UserList = () => {
   const [editItem, setEditItem] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  // Search & Filter
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterRole, setFilterRole] = useState('');
 
-  // Pagination
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const pageSize = 10;
 
-  const [form, setForm] = useState({
-    hoTen: '',
-    email: '',
-    soDienThoai: '',
-    matKhau: '',
-    vaiTro: 'Customer',
-    trangThai: 'Active',
-  });
+  const [form, setForm] = useState(emptyForm);
+
+  const isCurrentUser = useCallback((item) => String(getUserId(item)) === String(currentUserId), [currentUserId]);
+  const isAdminUser = (item) => getPrimaryRole(item) === 'Admin';
+  const editItemIsSelf = editItem ? isCurrentUser(editItem) : false;
+  const editItemWasAdmin = editItem ? isAdminUser(editItem) : false;
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -36,6 +51,8 @@ const UserList = () => {
       const params = { page, pageSize };
       if (search) params.search = search;
       if (filterStatus) params.status = filterStatus;
+      if (filterRole) params.role = filterRole;
+
       const res = await userService.getAll(params);
       const data = res.data;
       if (Array.isArray(data)) {
@@ -43,15 +60,15 @@ const UserList = () => {
         setTotalPages(1);
       } else {
         setUsers(data.items || data.data || []);
-        setTotalPages(data.totalPages || Math.ceil((data.total || 0) / pageSize) || 1);
+        setTotalPages(data.totalPages || Math.ceil((data.totalItems || data.total || 0) / pageSize) || 1);
       }
     } catch (err) {
-      setError('Không thể tải danh sách người dùng.');
+      setError(getApiMessage(err, 'Không thể tải danh sách người dùng.'));
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, [page, search, filterStatus]);
+  }, [page, search, filterStatus, filterRole]);
 
   useEffect(() => {
     fetchUsers();
@@ -65,7 +82,7 @@ const UserList = () => {
 
   const openAdd = () => {
     setEditItem(null);
-    setForm({ hoTen: '', email: '', soDienThoai: '', matKhau: '', vaiTro: 'Customer', trangThai: 'Active' });
+    setForm(emptyForm);
     setShowModal(true);
   };
 
@@ -76,7 +93,7 @@ const UserList = () => {
       email: item.email || '',
       soDienThoai: item.soDienThoai || item.phone || '',
       matKhau: '',
-      vaiTro: item.vaiTro || item.role || item.roles?.[0] || 'Customer',
+      vaiTro: getPrimaryRole(item),
       trangThai: item.trangThai || item.status || 'Active',
     });
     setShowModal(true);
@@ -84,19 +101,53 @@ const UserList = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const validateDangerousUserChange = () => {
+    if (!editItem && form.vaiTro === 'Admin') {
+      alert('Hệ thống chỉ nên có một tài khoản Admin. Hãy tạo Staff cho nhân sự vận hành.');
+      return false;
+    }
+
+    if (editItem && !editItemWasAdmin && form.vaiTro === 'Admin') {
+      alert('Không thể nâng user khác lên Admin. Hệ thống chỉ duy trì một tài khoản Admin.');
+      return false;
+    }
+
+    if (editItemIsSelf && form.vaiTro !== 'Admin') {
+      alert('Không thể gỡ quyền Admin của chính tài khoản đang đăng nhập.');
+      return false;
+    }
+
+    if (editItemIsSelf && form.trangThai !== 'Active') {
+      alert('Không thể khóa chính tài khoản đang đăng nhập.');
+      return false;
+    }
+
+    if (editItemWasAdmin && form.vaiTro !== 'Admin') {
+      return window.confirm('Bạn đang hạ quyền một tài khoản Admin. Hệ thống sẽ chặn nếu đây là Admin hoạt động cuối cùng.');
+    }
+
+    if (editItemWasAdmin && form.trangThai !== 'Active') {
+      return window.confirm('Bạn đang khóa một tài khoản Admin. Hệ thống sẽ chặn nếu đây là Admin hoạt động cuối cùng.');
+    }
+
+    return true;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.hoTen.trim() || !form.email.trim()) {
-      alert('Họ tên và Email là bắt buộc!');
+      alert('Họ tên và Email là bắt buộc.');
       return;
     }
     if (!editItem && !form.matKhau) {
-      alert('Mật khẩu là bắt buộc khi thêm mới!');
+      alert('Mật khẩu là bắt buộc khi thêm mới.');
       return;
     }
+    if (!validateDangerousUserChange()) return;
+
     setSaving(true);
     try {
       const payload = { ...form };
@@ -111,34 +162,50 @@ const UserList = () => {
       setShowModal(false);
       fetchUsers();
     } catch (err) {
-      alert('Lưu người dùng thất bại!');
+      alert(getApiMessage(err, 'Lưu người dùng thất bại.'));
       console.error(err);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (id, name) => {
-    if (!window.confirm(`Bạn có chắc muốn xóa người dùng "${name}"?`)) return;
+  const handleToggleStatus = async (item) => {
+    const active = (item.trangThai || item.status) === 'Active';
+    const nextStatus = active ? 'Inactive' : 'Active';
+    const action = active ? 'khóa' : 'kích hoạt';
+    const name = item.hoTen || item.fullName || item.email;
+
+    if (isCurrentUser(item)) {
+      alert('Không thể khóa chính tài khoản đang đăng nhập.');
+      return;
+    }
+
+    if (isAdminUser(item) && active) {
+      const ok = window.confirm(`Bạn đang khóa tài khoản Admin "${name}". Hệ thống sẽ chặn nếu đây là Admin hoạt động cuối cùng. Tiếp tục?`);
+      if (!ok) return;
+    } else if (!window.confirm(`Bạn có chắc muốn ${action} người dùng "${name}"?`)) {
+      return;
+    }
+
     try {
-      await userService.delete(id);
+      await userService.updateStatus(item.id, { status: nextStatus, trangThai: nextStatus });
       fetchUsers();
     } catch (err) {
-      alert('Xóa người dùng thất bại!');
+      alert(getApiMessage(err, `${action[0].toUpperCase()}${action.slice(1)} người dùng thất bại.`));
       console.error(err);
     }
   };
 
   const getRoleBadge = (role) => {
     const colors = { Admin: 'danger', Staff: 'warning', Customer: 'info' };
-    const label = ROLES[role] || role;
+    const label = ROLES[role] || role || 'Không rõ';
     return <span className={`badge badge-${colors[role] || 'secondary'}`}>{label}</span>;
   };
 
   const getStatusBadge = (status) => {
     const info = USER_STATUS[status];
     if (info) return <span className={`badge badge-${info.color}`}>{info.label}</span>;
-    return <span className="badge badge-secondary">{status}</span>;
+    return <span className="badge badge-secondary">{status || 'Không rõ'}</span>;
   };
 
   return (
@@ -165,9 +232,12 @@ const UserList = () => {
               </div>
             </div>
             <div className="card-body">
-              {/* Search & Filter */}
+              <div className="alert alert-info py-2">
+                Hệ thống chỉ duy trì một tài khoản Admin. Các tài khoản vận hành nên dùng vai trò Staff; Admin được hiển thị để kiểm toán.
+              </div>
+
               <form className="row mb-3" onSubmit={handleSearch}>
-                <div className="col-md-4">
+                <div className="col-md-4 mb-2 mb-md-0">
                   <input
                     type="text"
                     className="form-control form-control-sm"
@@ -176,7 +246,7 @@ const UserList = () => {
                     onChange={(e) => setSearch(e.target.value)}
                   />
                 </div>
-                <div className="col-md-3">
+                <div className="col-md-3 mb-2 mb-md-0">
                   <select
                     className="form-control form-control-sm"
                     value={filterStatus}
@@ -185,6 +255,18 @@ const UserList = () => {
                     <option value="">-- Tất cả trạng thái --</option>
                     {Object.entries(USER_STATUS).map(([key, val]) => (
                       <option key={key} value={key}>{val.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-md-3 mb-2 mb-md-0">
+                  <select
+                    className="form-control form-control-sm"
+                    value={filterRole}
+                    onChange={(e) => { setFilterRole(e.target.value); setPage(1); }}
+                  >
+                    <option value="">-- Tất cả vai trò --</option>
+                    {Object.entries(ROLES).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
                     ))}
                   </select>
                 </div>
@@ -214,52 +296,66 @@ const UserList = () => {
                     <table className="table table-bordered table-striped table-sm">
                       <thead>
                         <tr>
-                          <th>Họ tên</th>
-                          <th>Email</th>
-                          <th>SĐT</th>
-                          <th>Vai trò</th>
-                          <th>Trạng thái</th>
-                          <th>Ngày tạo</th>
-                          <th>Thao tác</th>
+                          <th className="table-col-text">Họ tên</th>
+                          <th className="table-col-text">Email</th>
+                          <th className="table-col-code">SĐT</th>
+                          <th className="table-col-status">Vai trò</th>
+                          <th className="table-col-status">Trạng thái</th>
+                          <th className="table-col-date">Ngày tạo</th>
+                          <th className="table-col-actions">Thao tác</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {users.map(u => (
-                          <tr key={u.id}>
-                            <td>{u.hoTen || u.fullName}</td>
-                            <td>{u.email}</td>
-                            <td>{u.soDienThoai || u.phone || '-'}</td>
-                            <td>{getRoleBadge(u.vaiTro || u.role || u.roles?.[0])}</td>
-                            <td>{getStatusBadge(u.trangThai || u.status)}</td>
-                            <td>{formatDate(u.ngayTao || u.createdAt)}</td>
-                            <td>
-                              <button className="btn btn-xs btn-info mr-1" onClick={() => openEdit(u)} title="Sửa">
-                                <i className="fas fa-edit"></i>
-                              </button>
-                              <button className="btn btn-xs btn-danger" onClick={() => handleDelete(u.id, u.hoTen || u.fullName)} title="Xóa">
-                                <i className="fas fa-trash"></i>
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                        {users.map((u) => {
+                          const role = getPrimaryRole(u);
+                          const status = u.trangThai || u.status;
+                          const isSelf = isCurrentUser(u);
+                          const active = status === 'Active';
+
+                          return (
+                            <tr key={u.id}>
+                              <td className="table-col-text">
+                                {u.hoTen || u.fullName}
+                                {isSelf && <span className="badge badge-primary ml-2">Bạn</span>}
+                              </td>
+                              <td className="table-col-text">{u.email}</td>
+                              <td className="table-col-code">{u.soDienThoai || u.phone || '-'}</td>
+                              <td className="table-col-status">{getRoleBadge(role)}</td>
+                              <td className="table-col-status">{getStatusBadge(status)}</td>
+                              <td className="table-col-date">{formatDate(u.ngayTao || u.createdAt)}</td>
+                              <td className="table-col-actions">
+                                <button className="btn btn-xs btn-info mr-1" onClick={() => openEdit(u)} title="Sửa">
+                                  <i className="fas fa-edit"></i>
+                                </button>
+                                <button
+                                  className={`btn btn-xs ${active ? 'btn-warning' : 'btn-success'}`}
+                                  onClick={() => handleToggleStatus(u)}
+                                  disabled={isSelf}
+                                  title={isSelf ? 'Không thể khóa chính mình' : (active ? 'Khóa tài khoản' : 'Kích hoạt tài khoản')}
+                                >
+                                  <i className={`fas ${active ? 'fa-lock' : 'fa-unlock'}`}></i>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
 
-                  {/* Pagination */}
                   {totalPages > 1 && (
                     <nav className="mt-3">
                       <ul className="pagination pagination-sm justify-content-center">
                         <li className={`page-item ${page <= 1 ? 'disabled' : ''}`}>
-                          <button className="page-link" onClick={() => setPage(p => p - 1)}>«</button>
+                          <button className="page-link" onClick={() => setPage((p) => Math.max(1, p - 1))}>«</button>
                         </li>
-                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                           <li key={p} className={`page-item ${p === page ? 'active' : ''}`}>
                             <button className="page-link" onClick={() => setPage(p)}>{p}</button>
                           </li>
                         ))}
                         <li className={`page-item ${page >= totalPages ? 'disabled' : ''}`}>
-                          <button className="page-link" onClick={() => setPage(p => p + 1)}>»</button>
+                          <button className="page-link" onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>»</button>
                         </li>
                       </ul>
                     </nav>
@@ -271,7 +367,6 @@ const UserList = () => {
         </div>
       </section>
 
-      {/* Modal Form */}
       {showModal && (
         <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
           <div className="modal-dialog" style={{ maxHeight: '90vh' }}>
@@ -284,6 +379,11 @@ const UserList = () => {
               </div>
               <form onSubmit={handleSubmit}>
                 <div className="modal-body" style={{ overflowY: 'auto', flex: 1 }}>
+                  {editItemIsSelf && (
+                    <div className="alert alert-warning py-2">
+                      Bạn có thể sửa thông tin cá nhân, nhưng không thể tự khóa hoặc tự hạ quyền Admin.
+                    </div>
+                  )}
                   <div className="form-group">
                     <label>Họ tên <span className="text-danger">*</span></label>
                     <input type="text" className="form-control" name="hoTen" value={form.hoTen} onChange={handleChange} />
@@ -311,8 +411,16 @@ const UserList = () => {
                     <div className="col-md-6">
                       <div className="form-group">
                         <label>Vai trò</label>
-                        <select className="form-control" name="vaiTro" value={form.vaiTro} onChange={handleChange}>
-                          {Object.entries(ROLES).map(([key, label]) => (
+                        <select
+                          className="form-control"
+                          name="vaiTro"
+                          value={form.vaiTro}
+                          onChange={handleChange}
+                          disabled={editItemIsSelf}
+                        >
+                          {Object.entries(ROLES)
+                            .filter(([key]) => key !== 'Admin' || editItemWasAdmin)
+                            .map(([key, label]) => (
                             <option key={key} value={key}>{label}</option>
                           ))}
                         </select>
@@ -322,7 +430,13 @@ const UserList = () => {
                       <div className="col-md-6">
                         <div className="form-group">
                           <label>Trạng thái</label>
-                          <select className="form-control" name="trangThai" value={form.trangThai} onChange={handleChange}>
+                          <select
+                            className="form-control"
+                            name="trangThai"
+                            value={form.trangThai}
+                            onChange={handleChange}
+                            disabled={editItemIsSelf}
+                          >
                             {Object.entries(USER_STATUS).map(([key, val]) => (
                               <option key={key} value={key}>{val.label}</option>
                             ))}

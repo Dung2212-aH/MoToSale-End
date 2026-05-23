@@ -232,15 +232,15 @@ const ProductList = () => {
                     <table className="table table-bordered table-striped table-sm">
                       <thead>
                         <tr>
-                          <th>Mã SP</th>
-                          <th>Tên sản phẩm</th>
-                          <th>Danh mục</th>
-                          <th>Hãng xe</th>
-                          <th>Giá gốc</th>
-                          <th>Giá KM</th>
-                          <th>Tồn kho</th>
-                          <th>Trạng thái</th>
-                          <th>Thao tác</th>
+                          <th className="table-col-code">Mã SP</th>
+                          <th className="table-col-text">Tên sản phẩm</th>
+                          <th className="table-col-text">Danh mục</th>
+                          <th className="table-col-text">Hãng xe</th>
+                          <th className="table-col-money">Giá gốc</th>
+                          <th className="table-col-money">Giá KM</th>
+                          <th className="table-col-number">Tồn kho</th>
+                          <th className="table-col-status">Trạng thái</th>
+                          <th className="table-col-actions">Thao tác</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -251,15 +251,15 @@ const ProductList = () => {
                           const brandName = brands.find(b => b.id === p.maHangXe || b.maHangXe === p.maHangXe);
                           return (
                             <tr key={getProductId(p)}>
-                              <td>{p.maSanPhamKinhDoanh || p.maSP || p.sku || p.id}</td>
-                              <td>{p.tenSanPham || p.name}</td>
-                              <td>{catName?.tenDanhMuc || catName?.name || ''}</td>
-                              <td>{brandName?.tenHang || brandName?.name || ''}</td>
-                              <td>{formatCurrency(p.giaGoc || p.basePrice || 0)}</td>
-                              <td>{formatCurrency(p.giaKhuyenMai || p.giaBan || p.salePrice || 0)}</td>
-                              <td>{p.soLuongTon ?? p.stock ?? 0}</td>
-                              <td><span className={`badge badge-${status.color}`}>{status.label}</span></td>
-                              <td>
+                              <td className="table-col-code">{p.maSanPhamKinhDoanh || p.maSP || p.sku || p.id}</td>
+                              <td className="table-col-text">{p.tenSanPham || p.name}</td>
+                              <td className="table-col-text">{catName?.tenDanhMuc || catName?.name || ''}</td>
+                              <td className="table-col-text">{brandName?.tenHang || brandName?.name || ''}</td>
+                              <td className="table-col-money">{formatCurrency(p.giaGoc || p.basePrice || 0)}</td>
+                              <td className="table-col-money">{formatCurrency(p.giaKhuyenMai || p.giaBan || p.salePrice || 0)}</td>
+                              <td className="table-col-number">{p.soLuongTon ?? p.stock ?? 0}</td>
+                              <td className="table-col-status"><span className={`badge badge-${status.color}`}>{status.label}</span></td>
+                              <td className="table-col-actions">
                                 <button type="button" className="btn btn-xs btn-info mr-1" title="Edit" onClick={() => openEdit(p)}>
                                   <i className="fas fa-edit"></i>
                                 </button>
@@ -319,7 +319,7 @@ const ProductList = () => {
       {showImages && (
         <ImageManager
           productId={showImages}
-          onClose={() => setShowImages(null)}
+          onClose={() => { setShowImages(null); fetchProducts(); }}
         />
       )}
     </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import orderService from '../../services/orderService';
-import { ORDER_STATUS, PAYMENT_STATUS, PAYMENT_METHODS } from '../../utils/constants';
+import { ORDER_STATUS_OPTIONS, PAYMENT_STATUS, PAYMENT_METHODS, getOrderStatusMeta, normalizeOrderStatus } from '../../utils/constants';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { formatDate } from '../../utils/formatDate';
 
@@ -85,8 +85,7 @@ const OrderDetail = () => {
   };
 
   const getStatusBadge = (status) => {
-    const s = ORDER_STATUS[status];
-    if (!s) return <span className="badge badge-secondary">{status}</span>;
+    const s = getOrderStatusMeta(status);
     return <span className={`badge badge-${s.color}`}>{s.label}</span>;
   };
 
@@ -133,7 +132,7 @@ const OrderDetail = () => {
   const payment = order.thanhToan || order.payment || null;
   const voucher = order.voucher || null;
   const inventoryHolds = order.tonKhoGiuCho || order.inventoryHolds || [];
-  const orderStatus = order.trangThaiDonHang || order.trangThai || order.status;
+  const orderStatus = normalizeOrderStatus(order.trangThaiDonHang || order.trangThai || order.status);
   const totalAmount = order.tongThanhToan ?? order.tongTien ?? order.totalAmount ?? 0;
   const customerName = order.hoTenNhanHang || order.tenKhachHang || order.customerName;
   const address = order.diaChiNhanHang || order.diaChi || order.address;
@@ -236,12 +235,12 @@ const OrderDetail = () => {
               <table className="table table-bordered table-striped mb-0">
                 <thead>
                   <tr>
-                    <th>#</th>
-                    <th>Sản phẩm</th>
-                    <th>SKU</th>
-                    <th>Đơn giá</th>
-                    <th>Số lượng</th>
-                    <th>Thành tiền</th>
+                    <th className="table-col-code">#</th>
+                    <th className="table-col-text">Sản phẩm</th>
+                    <th className="table-col-code">SKU</th>
+                    <th className="table-col-money">Đơn giá</th>
+                    <th className="table-col-number">Số lượng</th>
+                    <th className="table-col-money">Thành tiền</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -252,12 +251,12 @@ const OrderDetail = () => {
                   ) : (
                     items.map((item, idx) => (
                       <tr key={item.maChiTietDonHang || item.id || idx}>
-                        <td>{idx + 1}</td>
-                        <td>{item.tenSanPhamSnapshot || item.tenSanPham || item.productName || '—'}</td>
-                        <td>{item.skuSnapshot || item.sku || '—'}</td>
-                        <td>{formatCurrency(item.donGia || item.unitPrice || 0)}</td>
-                        <td>{item.soLuong || item.quantity || 0}</td>
-                        <td>{formatCurrency(item.thanhTien || item.subtotal || (item.donGia || item.unitPrice || 0) * (item.soLuong || item.quantity || 0))}</td>
+                        <td className="table-col-code">{idx + 1}</td>
+                        <td className="table-col-text">{item.tenSanPhamSnapshot || item.tenSanPham || item.productName || '—'}</td>
+                        <td className="table-col-code">{item.skuSnapshot || item.sku || '—'}</td>
+                        <td className="table-col-money">{formatCurrency(item.donGia || item.unitPrice || 0)}</td>
+                        <td className="table-col-number">{item.soLuong || item.quantity || 0}</td>
+                        <td className="table-col-money">{formatCurrency(item.thanhTien || item.subtotal || (item.donGia || item.unitPrice || 0) * (item.soLuong || item.quantity || 0))}</td>
                       </tr>
                     ))
                   )}
@@ -330,25 +329,25 @@ const OrderDetail = () => {
                 <table className="table table-bordered table-striped mb-0">
                   <thead>
                     <tr>
-                      <th>Sản phẩm</th>
-                      <th>Biến thể</th>
-                      <th>Số lượng giữ</th>
-                      <th>Trạng thái</th>
-                      <th>Hết hạn</th>
+                      <th className="table-col-text">Sản phẩm</th>
+                      <th className="table-col-text">Biến thể</th>
+                      <th className="table-col-number">Số lượng giữ</th>
+                      <th className="table-col-status">Trạng thái</th>
+                      <th className="table-col-date">Hết hạn</th>
                     </tr>
                   </thead>
                   <tbody>
                     {inventoryHolds.map((hold, idx) => (
                       <tr key={hold.id || idx}>
-                        <td>{hold.tenSanPham || hold.productName || '—'}</td>
-                        <td>{hold.tenBienThe || hold.variantName || '—'}</td>
-                        <td>{hold.soLuong || hold.quantity || 0}</td>
-                        <td>
+                        <td className="table-col-text">{hold.tenSanPham || hold.productName || '—'}</td>
+                        <td className="table-col-text">{hold.tenBienThe || hold.variantName || '—'}</td>
+                        <td className="table-col-number">{hold.soLuong || hold.quantity || 0}</td>
+                        <td className="table-col-status">
                           <span className={`badge badge-${hold.trangThai === 'Active' || hold.status === 'Active' ? 'warning' : 'secondary'}`}>
                             {hold.trangThai || hold.status || '—'}
                           </span>
                         </td>
-                        <td>{formatDate(hold.hetHan || hold.expiresAt)}</td>
+                        <td className="table-col-date">{formatDate(hold.hetHan || hold.expiresAt)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -404,8 +403,8 @@ const OrderDetail = () => {
                     onChange={(e) => setNewStatus(e.target.value)}
                   >
                     <option value="">-- Chọn trạng thái --</option>
-                    {Object.entries(ORDER_STATUS).map(([key, val]) => (
-                      <option key={key} value={key}>{val.label}</option>
+                    {ORDER_STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
                 </div>

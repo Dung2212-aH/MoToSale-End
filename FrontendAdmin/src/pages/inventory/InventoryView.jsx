@@ -1,51 +1,274 @@
-import React, { useState, useEffect } from 'react';
-import api from '../../services/api';
+import React, { useEffect, useMemo, useState } from 'react';
+import inventoryService from '../../services/inventoryService';
+import { formatDate } from '../../utils/formatDate';
+
+const PAGE_SIZE = 15;
+
+const STOCK_STATUS = {
+  InStock: { label: 'Còn hàng', color: 'success' },
+  LowStock: { label: 'Sắp hết', color: 'warning' },
+  OutOfStock: { label: 'Hết hàng', color: 'danger' },
+};
+
+const ADJUSTMENT_TYPES = {
+  Import: 'Nhập kho',
+  Export: 'Xuất kho',
+  Adjust: 'Điều chỉnh',
+};
+
+const getId = (item) => item.maSanPham ?? item.MaSanPham;
+const getVariantId = (item) => item.maBienSanPham ?? item.MaBienSanPham ?? null;
+const getProductCode = (item) => item.maSanPhamKinhDoanh ?? item.MaSanPhamKinhDoanh ?? item.maSP ?? '';
+const getSku = (item) => item.sku ?? item.SKU ?? '';
+const getProductName = (item) => item.tenSanPham ?? item.TenSanPham ?? item.productName ?? '—';
+const getVariantName = (item) => item.tenBienThe ?? item.TenBienThe ?? item.variantName ?? '—';
+const getActualStock = (item) => item.tonKhoThucTe ?? item.TonKhoThucTe ?? item.actualStock ?? 0;
+const getReservedStock = (item) => item.soLuongDangGiu ?? item.SoLuongDangGiu ?? item.dangGiuCho ?? item.reserved ?? 0;
+const getAvailableStock = (item) => item.tonKhoKhaDung ?? item.TonKhoKhaDung ?? item.availableStock ?? 0;
+const getLowStockThreshold = (item) => item.mucCanhBaoTonThap ?? item.MucCanhBaoTonThap ?? 5;
+const getStockStatus = (item) => item.trangThaiTon ?? item.TrangThaiTon ?? 'InStock';
+const getUpdatedAt = (item) => item.ngayCapNhat ?? item.NgayCapNhat ?? item.updatedAt;
+
+const getApiMessage = (err, fallback) => err?.response?.data?.message || fallback;
 
 const InventoryView = () => {
   const [inventory, setInventory] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [lastSyncAt, setLastSyncAt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const pageSize = 15;
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [stockStatus, setStockStatus] = useState('');
+  const [hasHold, setHasHold] = useState(false);
+  const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [sortBy, setSortBy] = useState('name');
+  const [sortDirection, setSortDirection] = useState('asc');
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [holds, setHolds] = useState([]);
+  const [holdsLoading, setHoldsLoading] = useState(false);
+  const [showHoldsModal, setShowHoldsModal] = useState(false);
+  const [showAdjustModal, setShowAdjustModal] = useState(false);
+  const [showThresholdModal, setShowThresholdModal] = useState(false);
+  const [adjustments, setAdjustments] = useState([]);
+  const [adjustmentsLoading, setAdjustmentsLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [adjustForm, setAdjustForm] = useState({ loaiGiaoDich: 'Import', soLuong: 1, lyDo: '' });
+  const [thresholdValue, setThresholdValue] = useState(5);
+
+  const params = useMemo(() => ({
+    page,
+    pageSize: PAGE_SIZE,
+    search: search || undefined,
+    stockStatus: stockStatus || undefined,
+    hasHold: hasHold || undefined,
+    lowStockOnly: lowStockOnly || undefined,
+    sortBy,
+    sortDirection,
+  }), [page, search, stockStatus, hasHold, lowStockOnly, sortBy, sortDirection]);
 
   const fetchInventory = async () => {
     setLoading(true);
     setError('');
     try {
-      const params = { page, pageSize };
-      // TODO: Backend cần bổ sung endpoint này (view v_TONKHO_KHADUNG)
-      const res = await api.get('/inventory', { params });
+      const res = await inventoryService.getAll(params);
       const data = res.data;
       setInventory(data.items || data.data || data || []);
-      setTotalPages(data.totalPages || Math.ceil((data.total || 0) / pageSize) || 1);
+      setSummary(data.summary || null);
+      setLastSyncAt(data.lastSyncAt || null);
+      setTotalPages(data.totalPages || Math.ceil((data.totalItems || data.total || 0) / PAGE_SIZE) || 1);
     } catch (err) {
-      setError('Không thể tải dữ liệu tồn kho. Vui lòng thử lại.');
+      setError(getApiMessage(err, 'Không thể tải dữ liệu tồn kho. Vui lòng thử lại.'));
       setInventory([]);
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchAdjustments = async () => {
+    setAdjustmentsLoading(true);
+    try {
+      const res = await inventoryService.getAdjustments({});
+      setAdjustments(res.data.items || []);
+    } catch (err) {
+      setAdjustments([]);
+    } finally {
+      setAdjustmentsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchInventory();
-  }, [page]);
+  }, [params]);
+
+  useEffect(() => {
+    fetchAdjustments();
+  }, []);
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    setPage(1);
+    setSearch(searchInput.trim());
+  };
+
+  const handleResetFilters = () => {
+    setSearchInput('');
+    setSearch('');
+    setStockStatus('');
+    setHasHold(false);
+    setLowStockOnly(false);
+    setSortBy('name');
+    setSortDirection('asc');
+    setPage(1);
+  };
 
   const handleSync = async () => {
     if (!window.confirm('Bạn có chắc muốn đồng bộ tồn kho? Quá trình này có thể mất vài giây.')) return;
     setSyncing(true);
     try {
-      // TODO: Backend cần bổ sung endpoint gọi SP sp_SANPHAM_DongBoTatCaSoLuongTon
-      await api.post('/inventory/sync');
+      await inventoryService.sync();
+      await fetchInventory();
       alert('Đồng bộ tồn kho thành công!');
-      fetchInventory();
     } catch (err) {
-      alert('Đồng bộ tồn kho thất bại. Vui lòng thử lại.');
+      alert(getApiMessage(err, 'Đồng bộ tồn kho thất bại. Vui lòng thử lại.'));
     } finally {
       setSyncing(false);
     }
   };
+
+  const openHoldsModal = async (item) => {
+    setSelectedItem(item);
+    setShowHoldsModal(true);
+    setHoldsLoading(true);
+    try {
+      const res = await inventoryService.getHolds({
+        productId: getId(item),
+        variantId: getVariantId(item) || undefined,
+      });
+      setHolds(res.data.items || []);
+    } catch (err) {
+      setHolds([]);
+    } finally {
+      setHoldsLoading(false);
+    }
+  };
+
+  const openAdjustModal = (item) => {
+    setSelectedItem(item);
+    setAdjustForm({ loaiGiaoDich: 'Import', soLuong: 1, lyDo: '' });
+    setShowAdjustModal(true);
+  };
+
+  const openThresholdModal = (item) => {
+    setSelectedItem(item);
+    setThresholdValue(getLowStockThreshold(item));
+    setShowThresholdModal(true);
+  };
+
+  const handleSaveThreshold = async () => {
+    const value = Number(thresholdValue);
+    if (!Number.isInteger(value) || value < 0) {
+      alert('Ngưỡng cảnh báo phải là số nguyên lớn hơn hoặc bằng 0.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await inventoryService.updateThreshold({
+        maSanPham: getId(selectedItem),
+        maBienSanPham: getVariantId(selectedItem),
+        mucCanhBaoTonThap: value,
+      });
+      setShowThresholdModal(false);
+      await fetchInventory();
+    } catch (err) {
+      alert(getApiMessage(err, 'Cập nhật ngưỡng tồn thấp thất bại.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const calculateStockAfter = () => {
+    const current = getActualStock(selectedItem || {});
+    const quantity = Number(adjustForm.soLuong) || 0;
+    if (adjustForm.loaiGiaoDich === 'Import') return current + quantity;
+    if (adjustForm.loaiGiaoDich === 'Export') return current - quantity;
+    return quantity;
+  };
+
+  const handleAdjustStock = async () => {
+    const quantity = Number(adjustForm.soLuong);
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      alert('Số lượng phải là số nguyên lớn hơn 0.');
+      return;
+    }
+
+    if (!adjustForm.lyDo.trim()) {
+      alert('Lý do điều chỉnh là bắt buộc.');
+      return;
+    }
+
+    const after = calculateStockAfter();
+    if (after < 0) {
+      alert('Tồn kho sau điều chỉnh không được âm.');
+      return;
+    }
+
+    if (!window.confirm(`Xác nhận ${ADJUSTMENT_TYPES[adjustForm.loaiGiaoDich].toLowerCase()}? Tồn sau thay đổi: ${after}`)) return;
+
+    setSaving(true);
+    try {
+      await inventoryService.adjustStock({
+        maSanPham: getId(selectedItem),
+        maBienSanPham: getVariantId(selectedItem),
+        loaiGiaoDich: adjustForm.loaiGiaoDich,
+        soLuong: quantity,
+        lyDo: adjustForm.lyDo,
+      });
+      setShowAdjustModal(false);
+      await fetchInventory();
+      await fetchAdjustments();
+    } catch (err) {
+      alert(getApiMessage(err, 'Điều chỉnh tồn kho thất bại.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await inventoryService.exportCsv({ ...params, page: 1, pageSize: 10000 });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'text/csv;charset=utf-8' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `inventory-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(getApiMessage(err, 'Xuất dữ liệu tồn kho thất bại.'));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const renderStockBadge = (item) => {
+    const meta = STOCK_STATUS[getStockStatus(item)] || STOCK_STATUS.InStock;
+    return <span className={`badge badge-${meta.color}`}>{meta.label}</span>;
+  };
+
+  const summaryCards = [
+    { label: 'Tổng SKU', value: summary?.totalSkus ?? 0, color: 'info', icon: 'fa-barcode' },
+    { label: 'Hết hàng', value: summary?.outOfStock ?? 0, color: 'danger', icon: 'fa-exclamation-circle' },
+    { label: 'Sắp hết', value: summary?.lowStock ?? 0, color: 'warning', icon: 'fa-exclamation-triangle' },
+    { label: 'Đang giữ chỗ', value: summary?.holding ?? 0, color: 'primary', icon: 'fa-clock' },
+  ];
 
   return (
     <div className="content-wrapper">
@@ -61,27 +284,98 @@ const InventoryView = () => {
 
       <section className="content">
         <div className="container-fluid">
+          <div className="row">
+            {summaryCards.map((card) => (
+              <div className="col-lg-3 col-6" key={card.label}>
+                <div className={`small-box bg-${card.color}`}>
+                  <div className="inner">
+                    <h3>{card.value}</h3>
+                    <p>{card.label}</p>
+                  </div>
+                  <div className="icon">
+                    <i className={`fas ${card.icon}`}></i>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
           <div className="card">
             <div className="card-header">
               <h3 className="card-title">Tồn kho sản phẩm</h3>
-              <div className="card-tools">
-                <button
-                  className="btn btn-success btn-sm"
-                  onClick={handleSync}
-                  disabled={syncing}
-                >
+              <div className="card-tools d-flex align-items-center" style={{ gap: 8 }}>
+                <small className="text-muted">
+                  Lần đồng bộ: {lastSyncAt ? formatDate(lastSyncAt) : 'Chưa có'}
+                </small>
+                <button className="btn btn-outline-primary btn-sm" onClick={handleExport} disabled={exporting}>
+                  <i className="fas fa-file-export"></i>{exporting ? ' Đang xuất...' : ' Xuất CSV'}
+                </button>
+                <button className="btn btn-success btn-sm" onClick={handleSync} disabled={syncing}>
                   <i className={`fas fa-sync-alt ${syncing ? 'fa-spin' : ''}`}></i>
                   {syncing ? ' Đang đồng bộ...' : ' Đồng bộ tồn kho'}
                 </button>
               </div>
             </div>
             <div className="card-body">
-              {/* Error */}
-              {error && (
-                <div className="alert alert-danger">{error}</div>
-              )}
+              <form onSubmit={handleSearch} className="row mb-3">
+                <div className="col-md-4 mb-2">
+                  <div className="input-group">
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Tìm sản phẩm, mã SP, SKU..."
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                    />
+                    <div className="input-group-append">
+                      <button className="btn btn-default" type="submit">
+                        <i className="fas fa-search"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="col-md-2 mb-2">
+                  <select className="form-control" value={stockStatus} onChange={(e) => { setStockStatus(e.target.value); setPage(1); }}>
+                    <option value="">-- Trạng thái tồn --</option>
+                    <option value="InStock">Còn hàng</option>
+                    <option value="LowStock">Sắp hết</option>
+                    <option value="OutOfStock">Hết hàng</option>
+                  </select>
+                </div>
+                <div className="col-md-2 mb-2">
+                  <select className="form-control" value={sortBy} onChange={(e) => { setSortBy(e.target.value); setPage(1); }}>
+                    <option value="name">Sắp xếp theo tên</option>
+                    <option value="available">Tồn khả dụng</option>
+                    <option value="actualStock">Tồn thực tế</option>
+                    <option value="reserved">Đang giữ</option>
+                    <option value="updated">Ngày cập nhật</option>
+                  </select>
+                </div>
+                <div className="col-md-2 mb-2">
+                  <select className="form-control" value={sortDirection} onChange={(e) => { setSortDirection(e.target.value); setPage(1); }}>
+                    <option value="asc">Tăng dần</option>
+                    <option value="desc">Giảm dần</option>
+                  </select>
+                </div>
+                <div className="col-md-2 mb-2">
+                  <button type="button" className="btn btn-outline-secondary btn-block" onClick={handleResetFilters}>
+                    <i className="fas fa-times"></i> Xóa lọc
+                  </button>
+                </div>
+                <div className="col-md-12 inventory-filter-checks">
+                  <div className="form-check inventory-filter-check">
+                    <input className="form-check-input" id="hasHold" type="checkbox" checked={hasHold} onChange={(e) => { setHasHold(e.target.checked); setPage(1); }} />
+                    <label className="form-check-label" htmlFor="hasHold">Chỉ sản phẩm đang giữ chỗ</label>
+                  </div>
+                  <div className="form-check inventory-filter-check">
+                    <input className="form-check-input" id="lowStockOnly" type="checkbox" checked={lowStockOnly} onChange={(e) => { setLowStockOnly(e.target.checked); setPage(1); }} />
+                    <label className="form-check-label" htmlFor="lowStockOnly">Chỉ tồn thấp/hết hàng</label>
+                  </div>
+                </div>
+              </form>
 
-              {/* Loading */}
+              {error && <div className="alert alert-danger">{error}</div>}
+
               {loading ? (
                 <div className="text-center py-4">
                   <div className="spinner-border text-primary" role="status">
@@ -91,7 +385,7 @@ const InventoryView = () => {
               ) : inventory.length === 0 ? (
                 <div className="text-center py-4">
                   <i className="fas fa-boxes fa-3x text-muted mb-3"></i>
-                  <p className="text-muted">Không có dữ liệu tồn kho.</p>
+                  <p className="text-muted">Không có dữ liệu tồn kho phù hợp với bộ lọc hiện tại.</p>
                 </div>
               ) : (
                 <>
@@ -99,47 +393,74 @@ const InventoryView = () => {
                     <table className="table table-bordered table-striped">
                       <thead>
                         <tr>
-                          <th>Sản phẩm</th>
-                          <th>Biến thể</th>
-                          <th className="text-center">Tồn kho thực tế</th>
-                          <th className="text-center">Đang giữ chỗ</th>
-                          <th className="text-center">Tồn kho khả dụng</th>
+                          <th className="table-col-code">Mã SP</th>
+                          <th className="table-col-code">SKU</th>
+                          <th className="table-col-text">Sản phẩm</th>
+                          <th className="table-col-text">Biến thể</th>
+                          <th className="table-col-number">Tồn thực tế</th>
+                          <th className="table-col-number">Đang giữ chỗ</th>
+                          <th className="table-col-number">Tồn khả dụng</th>
+                          <th className="table-col-number">Ngưỡng thấp</th>
+                          <th className="table-col-status">Trạng thái</th>
+                          <th className="table-col-date">Cập nhật</th>
+                          <th className="table-col-actions">Thao tác</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {inventory.map((item, idx) => (
-                          <tr key={item.id || idx}>
-                            <td>{item.tenSanPham || item.productName || '—'}</td>
-                            <td>{item.tenBienThe || item.variantName || '—'}</td>
-                            <td className="text-center">
-                              <span className="font-weight-bold">{item.tonKhoThucTe ?? item.actualStock ?? 0}</span>
-                            </td>
-                            <td className="text-center">
-                              <span className={`font-weight-bold ${(item.dangGiuCho ?? item.reserved ?? 0) > 0 ? 'text-warning' : ''}`}>
-                                {item.dangGiuCho ?? item.reserved ?? 0}
-                              </span>
-                            </td>
-                            <td className="text-center">
-                              <span className={`font-weight-bold ${(item.tonKhoKhaDung ?? item.availableStock ?? 0) <= 0 ? 'text-danger' : 'text-success'}`}>
-                                {item.tonKhoKhaDung ?? item.availableStock ?? 0}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
+                        {inventory.map((item, idx) => {
+                          const reserved = getReservedStock(item);
+                          return (
+                            <tr key={`${getId(item)}-${getVariantId(item) || 'base'}-${idx}`}>
+                              <td className="table-col-code"><strong>{getProductCode(item) || getId(item)}</strong></td>
+                              <td className="table-col-code">{getSku(item) || '—'}</td>
+                              <td className="table-col-text">{getProductName(item)}</td>
+                              <td className="table-col-text">{getVariantName(item)}</td>
+                              <td className="table-col-number"><span className="font-weight-bold">{getActualStock(item)}</span></td>
+                              <td className="table-col-number">
+                                <button
+                                  type="button"
+                                  className={`btn btn-link btn-sm p-0 font-weight-bold ${reserved > 0 ? 'text-warning' : 'text-muted'}`}
+                                  onClick={() => openHoldsModal(item)}
+                                  title="Xem chi tiết giữ chỗ"
+                                >
+                                  {reserved}
+                                </button>
+                              </td>
+                              <td className="table-col-number">
+                                <span className={`font-weight-bold ${getAvailableStock(item) <= 0 ? 'text-danger' : 'text-success'}`}>
+                                  {getAvailableStock(item)}
+                                </span>
+                              </td>
+                              <td className="table-col-number">{getLowStockThreshold(item)}</td>
+                              <td className="table-col-status">{renderStockBadge(item)}</td>
+                              <td className="table-col-date">{formatDate(getUpdatedAt(item))}</td>
+                              <td className="table-col-actions">
+                                <button className="btn btn-xs btn-info mr-1" onClick={() => openHoldsModal(item)} title="Giữ chỗ">
+                                  <i className="fas fa-clock"></i>
+                                </button>
+                                <button className="btn btn-xs btn-warning mr-1" onClick={() => openThresholdModal(item)} title="Ngưỡng">
+                                  <i className="fas fa-bell"></i>
+                                </button>
+                                <button className="btn btn-xs btn-primary" onClick={() => openAdjustModal(item)} title="Điều chỉnh">
+                                  <i className="fas fa-edit"></i>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
 
-                  {/* Pagination */}
                   {totalPages > 1 && (
                     <nav className="mt-3">
                       <ul className="pagination justify-content-center">
                         <li className={`page-item ${page <= 1 ? 'disabled' : ''}`}>
                           <button className="page-link" onClick={() => setPage(page - 1)}>«</button>
                         </li>
-                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                          <li key={p} className={`page-item ${p === page ? 'active' : ''}`}>
-                            <button className="page-link" onClick={() => setPage(p)}>{p}</button>
+                        {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+                          <li key={pageNumber} className={`page-item ${pageNumber === page ? 'active' : ''}`}>
+                            <button className="page-link" onClick={() => setPage(pageNumber)}>{pageNumber}</button>
                           </li>
                         ))}
                         <li className={`page-item ${page >= totalPages ? 'disabled' : ''}`}>
@@ -150,17 +471,180 @@ const InventoryView = () => {
                   )}
                 </>
               )}
+            </div>
+          </div>
 
-              <div className="mt-3">
-                <small className="text-muted">
-                  <i className="fas fa-info-circle"></i> Dữ liệu tồn kho được lấy từ view <code>v_TONKHO_KHADUNG</code>. 
-                  Nhấn "Đồng bộ tồn kho" để cập nhật lại số liệu từ stored procedure.
-                </small>
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">Lịch sử điều chỉnh tồn kho</h3>
+              <div className="card-tools">
+                <button className="btn btn-default btn-sm" onClick={fetchAdjustments}>
+                  <i className="fas fa-sync-alt"></i> Tải lại
+                </button>
               </div>
+            </div>
+            <div className="card-body p-0">
+              {adjustmentsLoading ? (
+                <div className="text-center py-4">Đang tải lịch sử...</div>
+              ) : adjustments.length === 0 ? (
+                <div className="text-center py-4 text-muted">Chưa có lịch sử điều chỉnh tồn kho.</div>
+              ) : (
+                <div className="table-responsive">
+                  <table className="table table-bordered table-striped mb-0">
+                    <thead>
+                      <tr>
+                        <th className="table-col-code">Mã SP</th>
+                        <th className="table-col-code">SKU</th>
+                        <th className="table-col-text">Sản phẩm</th>
+                        <th className="table-col-status">Loại</th>
+                        <th className="table-col-number">Thay đổi</th>
+                        <th className="table-col-number">Trước</th>
+                        <th className="table-col-number">Sau</th>
+                        <th className="table-col-text">Lý do</th>
+                        <th className="table-col-date">Ngày tạo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adjustments.map((item) => (
+                        <tr key={item.id ?? item.Id}>
+                          <td className="table-col-code">{item.maSanPhamKinhDoanh ?? item.MaSanPhamKinhDoanh}</td>
+                          <td className="table-col-code">{item.sku ?? item.SKU ?? '—'}</td>
+                          <td className="table-col-text">{item.tenSanPham ?? item.TenSanPham} {item.tenBienThe || item.TenBienThe ? `- ${item.tenBienThe ?? item.TenBienThe}` : ''}</td>
+                          <td className="table-col-status">{ADJUSTMENT_TYPES[item.loaiGiaoDich ?? item.LoaiGiaoDich] || item.loaiGiaoDich || item.LoaiGiaoDich}</td>
+                          <td className="table-col-number">{item.soLuongThayDoi ?? item.SoLuongThayDoi}</td>
+                          <td className="table-col-number">{item.tonTruoc ?? item.TonTruoc}</td>
+                          <td className="table-col-number">{item.tonSau ?? item.TonSau}</td>
+                          <td className="table-col-text">{item.lyDo ?? item.LyDo}</td>
+                          <td className="table-col-date">{formatDate(item.ngayTao ?? item.NgayTao)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </section>
+
+      {showHoldsModal && (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
+          <div className="modal-dialog modal-lg">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Chi tiết giữ chỗ</h5>
+                <button type="button" className="close" onClick={() => setShowHoldsModal(false)}><span>&times;</span></button>
+              </div>
+              <div className="modal-body">
+                <p className="mb-2"><strong>{getProductName(selectedItem || {})}</strong> {getVariantName(selectedItem || {}) !== '—' ? `- ${getVariantName(selectedItem || {})}` : ''}</p>
+                {holdsLoading ? (
+                  <div className="text-center py-3">Đang tải...</div>
+                ) : holds.length === 0 ? (
+                  <div className="text-muted">Không có bản ghi giữ chỗ.</div>
+                ) : (
+                  <div className="table-responsive">
+                    <table className="table table-bordered table-sm mb-0">
+                      <thead>
+                        <tr>
+                          <th className="table-col-code">Mã đơn</th>
+                          <th className="table-col-number">Số lượng</th>
+                          <th className="table-col-status">Trạng thái</th>
+                          <th className="table-col-date">Hết hạn</th>
+                          <th className="table-col-date">Ngày tạo</th>
+                          <th className="table-col-text">Ghi chú</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {holds.map((hold) => (
+                          <tr key={hold.maGiuCho ?? hold.MaGiuCho}>
+                            <td className="table-col-code">{hold.maDonHangKinhDoanh ?? hold.MaDonHangKinhDoanh ?? hold.maDonHang ?? hold.MaDonHang}</td>
+                            <td className="table-col-number">{hold.soLuong ?? hold.SoLuong}</td>
+                            <td className="table-col-status">{hold.trangThai ?? hold.TrangThai}</td>
+                            <td className="table-col-date">{formatDate(hold.hetHanLuc ?? hold.HetHanLuc)}</td>
+                            <td className="table-col-date">{formatDate(hold.ngayTao ?? hold.NgayTao)}</td>
+                            <td className="table-col-text">{hold.ghiChu ?? hold.GhiChu ?? '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowHoldsModal(false)}>Đóng</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showThresholdModal && (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Cập nhật ngưỡng tồn thấp</h5>
+                <button type="button" className="close" onClick={() => setShowThresholdModal(false)}><span>&times;</span></button>
+              </div>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Ngưỡng cảnh báo</label>
+                  <input type="number" className="form-control" min="0" value={thresholdValue} onChange={(e) => setThresholdValue(e.target.value)} />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowThresholdModal(false)} disabled={saving}>Hủy</button>
+                <button type="button" className="btn btn-primary" onClick={handleSaveThreshold} disabled={saving}>{saving ? 'Đang lưu...' : 'Lưu'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAdjustModal && (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Nhập/Xuất/Điều chỉnh tồn</h5>
+                <button type="button" className="close" onClick={() => setShowAdjustModal(false)}><span>&times;</span></button>
+              </div>
+              <div className="modal-body">
+                <p className="mb-2"><strong>{getProductName(selectedItem || {})}</strong> {getVariantName(selectedItem || {}) !== '—' ? `- ${getVariantName(selectedItem || {})}` : ''}</p>
+                <div className="row">
+                  <div className="col-md-6">
+                    <div className="form-group">
+                      <label>Loại giao dịch</label>
+                      <select className="form-control" value={adjustForm.loaiGiaoDich} onChange={(e) => setAdjustForm((prev) => ({ ...prev, loaiGiaoDich: e.target.value }))}>
+                        <option value="Import">Nhập kho</option>
+                        <option value="Export">Xuất kho</option>
+                        <option value="Adjust">Điều chỉnh về số lượng</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="form-group">
+                      <label>Số lượng</label>
+                      <input type="number" className="form-control" min="1" value={adjustForm.soLuong} onChange={(e) => setAdjustForm((prev) => ({ ...prev, soLuong: e.target.value }))} />
+                    </div>
+                  </div>
+                </div>
+                <div className="alert alert-info">
+                  Tồn hiện tại: <strong>{getActualStock(selectedItem || {})}</strong> | Tồn sau thay đổi: <strong>{calculateStockAfter()}</strong>
+                </div>
+                <div className="form-group">
+                  <label>Lý do <span className="text-danger">*</span></label>
+                  <textarea className="form-control" rows="3" value={adjustForm.lyDo} onChange={(e) => setAdjustForm((prev) => ({ ...prev, lyDo: e.target.value }))}></textarea>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowAdjustModal(false)} disabled={saving}>Hủy</button>
+                <button type="button" className="btn btn-primary" onClick={handleAdjustStock} disabled={saving}>{saving ? 'Đang lưu...' : 'Xác nhận'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

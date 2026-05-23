@@ -1,5 +1,6 @@
 using CatalogService.Data;
 using CatalogService.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -48,6 +49,7 @@ public class BrandsController : ControllerBase
         return Ok(new { id = brand.MaHangXe, tenHang = brand.TenHang, slug = brand.Slug, logoUrl = brand.LogoUrl, dangHoatDong = brand.DangHoatDong });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPost]
     public async Task<IActionResult> Create(BrandRequest request)
     {
@@ -67,6 +69,7 @@ public class BrandsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = brand.MaHangXe }, new { id = brand.MaHangXe, tenHang = brand.TenHang, slug = brand.Slug, logoUrl = brand.LogoUrl, dangHoatDong = brand.DangHoatDong });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, BrandRequest request)
     {
@@ -83,6 +86,7 @@ public class BrandsController : ControllerBase
         return Ok(new { id = brand.MaHangXe, tenHang = brand.TenHang, slug = brand.Slug, logoUrl = brand.LogoUrl, dangHoatDong = brand.DangHoatDong });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
@@ -101,6 +105,7 @@ public class BrandsController : ControllerBase
         return NoContent();
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPost("{id:int}/logo")]
     public async Task<IActionResult> UploadLogo(int id, IFormFile? file)
     {

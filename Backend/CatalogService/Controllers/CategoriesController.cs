@@ -1,6 +1,7 @@
 using CatalogService.Data;
 using CatalogService.Entities;
 using CatalogService.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -51,6 +52,7 @@ public class CategoriesController : ControllerBase
         return category is null ? NotFound(new { message = "Khong tim thay danh muc." }) : Ok(category);
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPost]
     public async Task<IActionResult> CreateCategory(CategoryRequest request)
     {
@@ -84,6 +86,7 @@ public class CategoriesController : ControllerBase
         return CreatedAtAction(nameof(GetCategoryById), new { id = category.MaDanhMuc }, new { id = category.MaDanhMuc });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> UpdateCategory(int id, CategoryRequest request)
     {
@@ -109,6 +112,11 @@ public class CategoriesController : ControllerBase
             return BadRequest(new { message = "Danh muc cha khong hop le." });
         }
 
+        if (request.DanhMucChaId.HasValue && await IsDescendantCategoryAsync(id, request.DanhMucChaId.Value))
+        {
+            return BadRequest(new { message = "Khong the chon danh muc con lam danh muc cha." });
+        }
+
         category.TenDanhMuc = request.TenDanhMuc.Trim();
         category.Slug = slug;
         category.MoTa = TrimToNull(request.MoTa);
@@ -121,6 +129,7 @@ public class CategoriesController : ControllerBase
         return Ok(new { id = category.MaDanhMuc });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteCategory(int id)
     {
@@ -154,6 +163,47 @@ public class CategoriesController : ControllerBase
     private static string? TrimToNull(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private async Task<bool> IsDescendantCategoryAsync(int categoryId, int candidateParentId)
+    {
+        var categories = await _dbContext.Categories
+            .AsNoTracking()
+            .Select(c => new { c.MaDanhMuc, c.MaDanhMucCha })
+            .ToListAsync();
+
+        var childrenByParent = categories
+            .Where(c => c.MaDanhMucCha.HasValue)
+            .GroupBy(c => c.MaDanhMucCha!.Value)
+            .ToDictionary(g => g.Key, g => g.Select(c => c.MaDanhMuc).ToList());
+
+        var stack = new Stack<int>();
+        if (childrenByParent.TryGetValue(categoryId, out var directChildren))
+        {
+            foreach (var childId in directChildren)
+            {
+                stack.Push(childId);
+            }
+        }
+
+        while (stack.Count > 0)
+        {
+            var currentId = stack.Pop();
+            if (currentId == candidateParentId)
+            {
+                return true;
+            }
+
+            if (childrenByParent.TryGetValue(currentId, out var childIds))
+            {
+                foreach (var childId in childIds)
+                {
+                    stack.Push(childId);
+                }
+            }
+        }
+
+        return false;
     }
 }
 

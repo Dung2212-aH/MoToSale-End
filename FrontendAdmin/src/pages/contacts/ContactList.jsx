@@ -140,25 +140,25 @@ const ContactList = () => {
                     <table className="table table-bordered table-striped table-sm">
                       <thead>
                         <tr>
-                          <th>Họ tên</th>
-                          <th>SĐT</th>
-                          <th>Email</th>
-                          <th>Loại yêu cầu</th>
-                          <th>Trạng thái</th>
-                          <th>Ngày tạo</th>
-                          <th>Thao tác</th>
+                          <th className="table-col-text">Họ tên</th>
+                          <th className="table-col-code">SĐT</th>
+                          <th className="table-col-text">Email</th>
+                          <th className="table-col-status">Loại yêu cầu</th>
+                          <th className="table-col-status">Trạng thái</th>
+                          <th className="table-col-date">Ngày tạo</th>
+                          <th className="table-col-actions">Thao tác</th>
                         </tr>
                       </thead>
                       <tbody>
                         {contacts.map(c => (
                           <tr key={c.id}>
-                            <td>{c.hoTen || c.fullName || '-'}</td>
-                            <td>{c.soDienThoai || c.phone || '-'}</td>
-                            <td>{c.email || '-'}</td>
-                            <td>{c.loaiYeuCau || c.type || '-'}</td>
-                            <td>{getStatusBadge(c.trangThai || c.status)}</td>
-                            <td>{formatDate(c.ngayTao || c.createdAt)}</td>
-                            <td>
+                            <td className="table-col-text">{c.hoTen || c.fullName || '-'}</td>
+                            <td className="table-col-code">{c.soDienThoai || c.phone || '-'}</td>
+                            <td className="table-col-text">{c.email || '-'}</td>
+                            <td className="table-col-status">{c.loaiYeuCau || c.type || '-'}</td>
+                            <td className="table-col-status">{getStatusBadge(c.trangThai || c.status)}</td>
+                            <td className="table-col-date">{formatDate(c.ngayTao || c.createdAt)}</td>
+                            <td className="table-col-actions">
                               <button className="btn btn-xs btn-info mr-1" onClick={() => handleViewDetail(c)} title="Xem chi tiết">
                                 <i className="fas fa-eye"></i>
                               </button>

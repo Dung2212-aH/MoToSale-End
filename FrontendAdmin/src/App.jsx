@@ -1,5 +1,5 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import React, { useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import MainLayout from './components/MainLayout';
@@ -10,7 +10,6 @@ import CategoryList from './pages/categories/CategoryList';
 import BrandList from './pages/brands/BrandList';
 import OrderList from './pages/orders/OrderList';
 import OrderDetail from './pages/orders/OrderDetail';
-import PaymentList from './pages/payments/PaymentList';
 import VoucherList from './pages/vouchers/VoucherList';
 import InventoryView from './pages/inventory/InventoryView';
 import UserList from './pages/users/UserList';
@@ -40,6 +39,16 @@ const PublicRoute = ({ children }) => {
   return children;
 };
 
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+};
+
 function AppRoutes() {
   return (
     <Routes>
@@ -56,12 +65,11 @@ function AppRoutes() {
       {/* Orders & Payments */}
       <Route path="/orders" element={<ProtectedRoute><MainLayout><OrderList /></MainLayout></ProtectedRoute>} />
       <Route path="/orders/:id" element={<ProtectedRoute><MainLayout><OrderDetail /></MainLayout></ProtectedRoute>} />
-      <Route path="/payments" element={<ProtectedRoute><MainLayout><PaymentList /></MainLayout></ProtectedRoute>} />
       <Route path="/vouchers" element={<ProtectedRoute><MainLayout><VoucherList /></MainLayout></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><MainLayout><InventoryView /></MainLayout></ProtectedRoute>} />
 
       {/* Users & Content */}
-      <Route path="/users" element={<ProtectedRoute><MainLayout><UserList /></MainLayout></ProtectedRoute>} />
+      <Route path="/users" element={<ProtectedRoute roles={['Admin']}><MainLayout><UserList /></MainLayout></ProtectedRoute>} />
       <Route path="/reviews" element={<ProtectedRoute><MainLayout><ReviewList /></MainLayout></ProtectedRoute>} />
       <Route path="/posts" element={<ProtectedRoute><MainLayout><PostList /></MainLayout></ProtectedRoute>} />
       <Route path="/faq" element={<ProtectedRoute><MainLayout><FaqList /></MainLayout></ProtectedRoute>} />
@@ -80,6 +88,7 @@ function App() {
   return (
     <Router>
       <AuthProvider>
+        <ScrollToTop />
         <AppRoutes />
       </AuthProvider>
     </Router>

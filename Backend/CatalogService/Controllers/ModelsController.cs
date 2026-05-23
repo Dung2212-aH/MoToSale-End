@@ -1,4 +1,5 @@
 using CatalogService.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -42,6 +43,7 @@ public class ModelsController : ControllerBase
         return Ok(new { id = model.MaDongXe, maHangXe = model.MaHangXe, tenDongXe = model.TenDongXe, slug = model.Slug, dangHoatDong = model.DangHoatDong });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPost]
     public async Task<IActionResult> Create(VehicleModelRequest request)
     {
@@ -66,6 +68,7 @@ public class ModelsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = model.MaDongXe }, new { id = model.MaDongXe, maHangXe = model.MaHangXe, tenDongXe = model.TenDongXe, slug = model.Slug, dangHoatDong = model.DangHoatDong });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, VehicleModelRequest request)
     {
@@ -87,6 +90,7 @@ public class ModelsController : ControllerBase
         return Ok(new { id = model.MaDongXe, maHangXe = model.MaHangXe, tenDongXe = model.TenDongXe, slug = model.Slug, dangHoatDong = model.DangHoatDong });
     }
 
+    [Authorize(Roles = "Admin,Staff")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {

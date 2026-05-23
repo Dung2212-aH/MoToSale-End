@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
-const Navbar = () => {
+const Navbar = ({ onToggleSidebar }) => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -15,9 +16,9 @@ const Navbar = () => {
     <nav className="main-header navbar navbar-expand navbar-white navbar-light">
       <ul className="navbar-nav">
         <li className="nav-item">
-          <a className="nav-link" data-widget="pushmenu" href="#" role="button">
+          <button className="nav-link nav-button" type="button" onClick={onToggleSidebar} aria-label="Mở/đóng menu">
             <i className="fas fa-bars"></i>
-          </a>
+          </button>
         </li>
         <li className="nav-item d-none d-sm-inline-block">
           <span className="nav-link">Hệ thống quản trị MoToSale</span>
@@ -25,11 +26,11 @@ const Navbar = () => {
       </ul>
 
       <ul className="navbar-nav ml-auto">
-        <li className="nav-item dropdown">
-          <a className="nav-link" data-toggle="dropdown" href="#">
+        <li className={`nav-item dropdown ${profileOpen ? 'show' : ''}`}>
+          <button className="nav-link nav-button" type="button" onClick={() => setProfileOpen((value) => !value)}>
             <i className="far fa-user"></i> {user?.hoTen || user?.name || 'Admin'}
-          </a>
-          <div className="dropdown-menu dropdown-menu-right">
+          </button>
+          <div className={`dropdown-menu dropdown-menu-right ${profileOpen ? 'show' : ''}`}>
             <span className="dropdown-item dropdown-header">
               {user?.email}
             </span>

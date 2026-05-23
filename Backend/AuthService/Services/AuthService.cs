@@ -72,12 +72,12 @@ public class AuthService : IAuthService
 
         if (user is null || !_passwordHasher.Verify(request.MatKhau, user.MatKhau))
         {
-            throw new UnauthorizedAccessException("Email/so dien thoai hoac mat khau khong dung.");
+            throw new UnauthorizedAccessException("Email/số điện thoại hoặc mật khẩu không đúng.");
         }
 
         if (user.TrangThai != ActiveStatus)
         {
-            throw new UnauthorizedAccessException("Tai khoan khong o trang thai Active.");
+            throw new UnauthorizedAccessException("Tài khoản không ở trạng thái hoạt động.");
         }
 
         return CreateAuthResponse(user, GetRoleNames(user));

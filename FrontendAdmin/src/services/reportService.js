@@ -40,19 +40,31 @@ const buildDateBuckets = (fromDate, days) => {
 
 const getStatusLabel = (status) => {
   const labels = {
-    Pending: 'Chờ xử lý',
-    Confirmed: 'Đã xác nhận',
-    Paid: 'Đã thanh toán',
-    Completed: 'Hoàn tất',
+    Pending: 'Chờ xác nhận',
+    Checkout: 'Chờ xác nhận',
+    AwaitingPayment: 'Chờ xác nhận',
+    Confirmed: 'Chờ xác nhận',
+    Processing: 'Chờ xác nhận',
+    Shipping: 'Đang giao',
+    Delivered: 'Đã giao',
+    Completed: 'Đã giao',
     Cancelled: 'Đã hủy',
     Canceled: 'Đã hủy',
-    Processing: 'Đang xử lý',
-    Shipping: 'Đang giao',
   };
   return labels[status] || status || 'Khác';
 };
 
 const getProductName = (item) => item?.tenSanPham || item?.productName || item?.name || item?.maSanPham || item?.sku || 'Sản phẩm';
+
+const canReadUsers = () => {
+  try {
+    const user = JSON.parse(localStorage.getItem('admin_user') || '{}');
+    const roles = user?.roles || user?.Roles || (user?.role ? [user.role] : []);
+    return roles.includes('Admin');
+  } catch {
+    return false;
+  }
+};
 
 const getSoldQuantity = (item) => {
   const variants = item?.variants || item?.bienThe || item?.bienSanPham || [];
@@ -65,11 +77,15 @@ const getSoldQuantity = (item) => {
 
 const reportService = {
   getSummary: async () => {
+    const usersRequest = canReadUsers()
+      ? userService.getAll({ page: 1, pageSize: 100 })
+      : Promise.resolve({ data: { items: [], totalItems: 0 } });
+
     const [productsRes, ordersRes, paymentsRes, usersRes] = await Promise.allSettled([
       productService.getAll({ page: 1, pageSize: 100 }),
       orderService.getAll({ page: 1, pageSize: 100 }),
       paymentService.getAll({ page: 1, pageSize: 100 }),
-      userService.getAll({ page: 1, pageSize: 100 }),
+      usersRequest,
     ]);
 
     const productsPayload = productsRes.status === 'fulfilled' ? productsRes.value : {};
@@ -126,13 +142,16 @@ const reportService = {
     const start = new Date(startDate);
     const end = new Date(endDate);
     const diffDays = Math.max(1, Math.round((end - start) / 86400000) + 1);
+    const usersRequest = canReadUsers()
+      ? userService.getAll({ page: 1, pageSize: 100 })
+      : Promise.resolve({ data: { items: [], totalItems: 0 } });
 
     // Fetch with date filters where supported
     const [productsRes, ordersRes, paymentsRes, usersRes] = await Promise.allSettled([
       productService.getAll({ page: 1, pageSize: 100 }),
       orderService.getAll({ page: 1, pageSize: 100, tuNgay: startDate, denNgay: endDate }),
       paymentService.getAll({ page: 1, pageSize: 100 }),
-      userService.getAll({ page: 1, pageSize: 100 }),
+      usersRequest,
     ]);
 
     const products = unwrapList(productsRes.status === 'fulfilled' ? productsRes.value : {});

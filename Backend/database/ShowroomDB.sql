@@ -1702,7 +1702,7 @@ ALTER TABLE [dbo].[DONHANG]  WITH CHECK ADD  CONSTRAINT [CK_DONHANG_LoaiDonHang]
 GO
 ALTER TABLE [dbo].[DONHANG] CHECK CONSTRAINT [CK_DONHANG_LoaiDonHang]
 GO
-ALTER TABLE [dbo].[DONHANG]  WITH NOCHECK ADD  CONSTRAINT [CK_DONHANG_OrderStatus] CHECK  (([TrangThaiDonHang]='Cancelled' OR [TrangThaiDonHang]='Completed' OR [TrangThaiDonHang]='Processing' OR [TrangThaiDonHang]='Confirmed' OR [TrangThaiDonHang]='AwaitingPayment' OR [TrangThaiDonHang]='Checkout' OR [TrangThaiDonHang]='Pending'))
+ALTER TABLE [dbo].[DONHANG]  WITH NOCHECK ADD  CONSTRAINT [CK_DONHANG_OrderStatus] CHECK  (([TrangThaiDonHang]='Cancelled' OR [TrangThaiDonHang]='Completed' OR [TrangThaiDonHang]='Delivered' OR [TrangThaiDonHang]='Processing' OR [TrangThaiDonHang]='Shipping' OR [TrangThaiDonHang]='Confirmed' OR [TrangThaiDonHang]='AwaitingPayment' OR [TrangThaiDonHang]='Checkout' OR [TrangThaiDonHang]='Pending'))
 GO
 ALTER TABLE [dbo].[DONHANG] CHECK CONSTRAINT [CK_DONHANG_OrderStatus]
 GO

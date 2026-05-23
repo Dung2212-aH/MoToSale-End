@@ -1,12 +1,35 @@
-// Trạng thái đơn hàng
-export const ORDER_STATUS = {
-  Pending: { label: 'Chờ xử lý', color: 'warning' },
-  Checkout: { label: 'Đang checkout', color: 'info' },
-  AwaitingPayment: { label: 'Chờ thanh toán', color: 'primary' },
-  Confirmed: { label: 'Đã xác nhận', color: 'success' },
+// Trạng thái đơn hàng (UI gộp 4 trạng thái nghiệp vụ)
+export const ORDER_STATUS_LABELS = {
+  Pending: { label: 'Chờ xác nhận', color: 'warning' },
+  Checkout: { label: 'Chờ xác nhận', color: 'warning' },
+  AwaitingPayment: { label: 'Chờ xác nhận', color: 'warning' },
+  Confirmed: { label: 'Chờ xác nhận', color: 'warning' },
   Shipping: { label: 'Đang giao', color: 'info' },
   Delivered: { label: 'Đã giao', color: 'success' },
   Cancelled: { label: 'Đã hủy', color: 'danger' },
+  Completed: { label: 'Đã giao', color: 'success' },
+  Processing: { label: 'Chờ xác nhận', color: 'warning' },
+};
+
+export const ORDER_STATUS_OPTIONS = [
+  { value: 'Pending', label: 'Chờ xác nhận' },
+  { value: 'Shipping', label: 'Đang giao' },
+  { value: 'Delivered', label: 'Đã giao' },
+  { value: 'Cancelled', label: 'Đã hủy' },
+];
+
+export const normalizeOrderStatus = (status) => {
+  const value = String(status || '');
+  if (['Pending', 'Checkout', 'AwaitingPayment', 'Confirmed', 'Processing'].includes(value)) return 'Pending';
+  if (['Shipping'].includes(value)) return 'Shipping';
+  if (['Delivered', 'Completed'].includes(value)) return 'Delivered';
+  if (['Cancelled', 'Canceled'].includes(value)) return 'Cancelled';
+  return value;
+};
+
+export const getOrderStatusMeta = (status) => {
+  const normalized = normalizeOrderStatus(status);
+  return ORDER_STATUS_LABELS[normalized] || { label: status || 'Khác', color: 'secondary' };
 };
 
 // Trạng thái thanh toán

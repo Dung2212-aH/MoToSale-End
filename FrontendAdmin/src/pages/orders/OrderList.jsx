@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import orderService from '../../services/orderService';
-import { ORDER_STATUS, PAYMENT_STATUS } from '../../utils/constants';
+import { ORDER_STATUS_OPTIONS, PAYMENT_STATUS, getOrderStatusMeta, normalizeOrderStatus } from '../../utils/constants';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { formatDate } from '../../utils/formatDate';
 
@@ -48,8 +48,7 @@ const OrderList = () => {
   };
 
   const getStatusBadge = (status) => {
-    const s = ORDER_STATUS[status];
-    if (!s) return <span className="badge badge-secondary">{status}</span>;
+    const s = getOrderStatusMeta(status);
     return <span className={`badge badge-${s.color}`}>{s.label}</span>;
   };
 
@@ -59,7 +58,16 @@ const OrderList = () => {
     return <span className={`badge badge-${s.color}`}>{s.label}</span>;
   };
 
-  const getOrderStatusValue = (order) => order.trangThaiDonHang || order.trangThai || order.status;
+  const getOrderStatusValue = (order) => normalizeOrderStatus(order.trangThaiDonHang || order.trangThai || order.status);
+  const getCustomerName = (order) => (
+    order.hoTenNhanHang
+    || order.tenNguoiNhan
+    || order.tenKhachHang
+    || order.customerName
+    || order.hoTen
+    || order.fullName
+    || '—'
+  );
 
   return (
     <div className="content-wrapper">
@@ -107,8 +115,8 @@ const OrderList = () => {
                     onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
                   >
                     <option value="">-- Trạng thái đơn --</option>
-                    {Object.entries(ORDER_STATUS).map(([key, val]) => (
-                      <option key={key} value={key}>{val.label}</option>
+                    {ORDER_STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
                 </div>
@@ -148,29 +156,29 @@ const OrderList = () => {
                     <table className="table table-bordered table-striped">
                       <thead>
                         <tr>
-                          <th>Mã đơn</th>
-                          <th>Khách hàng</th>
-                          <th>Tổng tiền</th>
-                          <th>Trạng thái đơn</th>
-                          <th>Trạng thái TT</th>
-                          <th>Ngày tạo</th>
-                          <th>Thao tác</th>
+                          <th className="table-col-code">Mã đơn</th>
+                          <th className="table-col-text">Khách hàng</th>
+                          <th className="table-col-money">Tổng tiền</th>
+                          <th className="table-col-status">Trạng thái đơn</th>
+                          <th className="table-col-status">Trạng thái TT</th>
+                          <th className="table-col-date">Ngày tạo</th>
+                          <th className="table-col-actions">Thao tác</th>
                         </tr>
                       </thead>
                       <tbody>
                         {orders.map((order) => (
                           <tr key={order.id || order.maDonHang}>
-                            <td><strong>{order.maDonHang || order.orderCode || order.id}</strong></td>
-                            <td>{order.tenKhachHang || order.customerName || '—'}</td>
-                            <td>{formatCurrency(order.tongTien || order.totalAmount || 0)}</td>
-                            <td>{getStatusBadge(getOrderStatusValue(order))}</td>
-                            <td>{getPaymentStatusBadge(
+                            <td className="table-col-code"><strong>{order.maDonHang || order.orderCode || order.id}</strong></td>
+                            <td className="table-col-text">{getCustomerName(order)}</td>
+                            <td className="table-col-money">{formatCurrency(order.tongThanhToan ?? order.tongTien ?? order.totalAmount ?? 0)}</td>
+                            <td className="table-col-status">{getStatusBadge(getOrderStatusValue(order))}</td>
+                            <td className="table-col-status">{getPaymentStatusBadge(
                               getOrderStatusValue(order) === 'Cancelled'
                                 ? 'Cancelled'
                                 : (order.trangThaiThanhToan || order.paymentStatus)
                             )}</td>
-                            <td>{formatDate(order.ngayTao || order.createdAt)}</td>
-                            <td>
+                            <td className="table-col-date">{formatDate(order.ngayTao || order.createdAt)}</td>
+                            <td className="table-col-actions">
                               <button
                                 className="btn btn-info btn-sm"
                                 onClick={() => navigate(`/orders/${order.id || order.maDonHang}`)}
