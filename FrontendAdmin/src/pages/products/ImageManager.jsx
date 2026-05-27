@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import productService from '../../services/productService';
+import { useAuth } from '../../contexts/AuthContext';
 
 const ImageManager = ({ productId, onClose }) => {
+  const { isAdmin } = useAuth();
   const [images, setImages] = useState([]);
   const [variants, setVariants] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -284,9 +286,11 @@ const ImageManager = ({ productId, onClose }) => {
                                   <i className="fas fa-star"></i>
                                 </button>
                               )}
-                              <button className="btn btn-outline-danger" onClick={() => handleDelete(img.id || img.maAnhSanPham)} title="Xóa">
-                                <i className="fas fa-trash"></i>
-                              </button>
+                              {isAdmin() && (
+                                <button className="btn btn-outline-danger" onClick={() => handleDelete(img.id || img.maAnhSanPham)} title="Xóa">
+                                  <i className="fas fa-trash"></i>
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>

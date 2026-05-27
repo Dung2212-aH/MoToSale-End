@@ -1,6 +1,7 @@
 using OrderService.Data;
 using OrderService.DTOs.Vouchers;
 using OrderService.Entities;
+using OrderService.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,10 +13,12 @@ namespace OrderService.Controllers;
 public class VouchersController : ControllerBase
 {
     private readonly OrderDbContext _dbContext;
+    private readonly IAuditLogService _auditLog;
 
-    public VouchersController(OrderDbContext dbContext)
+    public VouchersController(OrderDbContext dbContext, IAuditLogService auditLog)
     {
         _dbContext = dbContext;
+        _auditLog = auditLog;
     }
 
     /// <summary>
@@ -119,6 +122,7 @@ public class VouchersController : ControllerBase
         _dbContext.Vouchers.Add(voucher);
         await _dbContext.SaveChangesAsync();
         await SaveVoucherTargetsAsync(voucher.MaVoucher, voucher.PhamViApDung, request);
+        await _auditLog.WriteAsync(this, "Voucher", voucher.MaVoucher.ToString(), "Create", null, new { voucher.MaVoucher, voucher.MaVoucherCode, voucher.LoaiGiamGia, voucher.GiaTriGiam, voucher.PhamViApDung, voucher.DangHoatDong });
 
         return CreatedAtAction(nameof(GetById), new { id = voucher.MaVoucher }, await MapVoucherAsync(voucher));
     }
@@ -132,6 +136,7 @@ public class VouchersController : ControllerBase
         {
             return NotFound(new { message = "Khong tim thay voucher." });
         }
+        var oldValue = new { voucher.MaVoucherCode, voucher.LoaiGiamGia, voucher.GiaTriGiam, voucher.GiaTriDonToiThieu, voucher.GiaTriGiamToiDa, voucher.NgayBatDau, voucher.NgayKetThuc, voucher.GioiHanSuDung, voucher.DangHoatDong, voucher.MoTa, voucher.PhamViApDung, voucher.ApDungLoaiDonHang };
 
         var code = request.Code?.Trim().ToUpperInvariant();
         if (string.IsNullOrWhiteSpace(code))
@@ -173,11 +178,12 @@ public class VouchersController : ControllerBase
 
         await _dbContext.SaveChangesAsync();
         await SaveVoucherTargetsAsync(voucher.MaVoucher, voucher.PhamViApDung, request);
+        await _auditLog.WriteAsync(this, "Voucher", voucher.MaVoucher.ToString(), "Update", oldValue, new { voucher.MaVoucherCode, voucher.LoaiGiamGia, voucher.GiaTriGiam, voucher.GiaTriDonToiThieu, voucher.GiaTriGiamToiDa, voucher.NgayBatDau, voucher.NgayKetThuc, voucher.GioiHanSuDung, voucher.DangHoatDong, voucher.MoTa, voucher.PhamViApDung, voucher.ApDungLoaiDonHang });
 
         return Ok(await MapVoucherAsync(voucher));
     }
 
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
@@ -186,9 +192,11 @@ public class VouchersController : ControllerBase
         {
             return NotFound(new { message = "Khong tim thay voucher." });
         }
+        var oldValue = new { voucher.MaVoucher, voucher.MaVoucherCode, voucher.LoaiGiamGia, voucher.GiaTriGiam, voucher.PhamViApDung, voucher.DangHoatDong };
 
         _dbContext.Vouchers.Remove(voucher);
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "Voucher", id.ToString(), "Delete", oldValue, null);
         return NoContent();
     }
 

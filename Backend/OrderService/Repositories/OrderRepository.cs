@@ -169,6 +169,7 @@ public class OrderRepository : IOrderRepository
             .Include(o => o.Items)
             .Include(o => o.InventoryHolds)
             .Include(o => o.Vouchers)
+            .Include(o => o.Histories)
             .FirstOrDefaultAsync(o => o.MaDonHang == maDonHang);
     }
 
@@ -254,6 +255,22 @@ public class OrderRepository : IOrderRepository
         if (!string.IsNullOrWhiteSpace(search.TrangThaiThanhToan))
         {
             query = query.Where(o => o.TrangThaiThanhToan == search.TrangThaiThanhToan);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search.TrangThaiVanChuyen))
+        {
+            query = query.Where(o => o.TrangThaiVanChuyen == search.TrangThaiVanChuyen);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search.Keyword))
+        {
+            var keyword = search.Keyword.Trim().ToLower();
+            query = query.Where(o =>
+                o.MaDonHang.ToString().Contains(keyword) ||
+                o.MaDonHangKinhDoanh.ToLower().Contains(keyword) ||
+                o.HoTenNhanHang.ToLower().Contains(keyword) ||
+                o.SoDienThoaiNhanHang.Contains(keyword) ||
+                (o.EmailNhanHang != null && o.EmailNhanHang.ToLower().Contains(keyword)));
         }
 
         if (search.TuNgay.HasValue)

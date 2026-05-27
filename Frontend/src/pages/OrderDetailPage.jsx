@@ -19,7 +19,7 @@ function Badge({ label, colorClass }) {
 }
 
 const DELIVERY_SHIPPING_STEPS = ['NotShipped', 'Preparing', 'Shipping', 'Delivered'];
-const PICKUP_SHIPPING_STEPS = ['NotShipped', 'Preparing', 'PickupReady', 'PickedUp'];
+const PICKUP_SHIPPING_STEPS = ['NotShipped', 'PickupReady', 'PickedUp'];
 
 function getOrderPaymentDisplay(order) {
   if (order.paymentMethod) return getPaymentMethodLabel(order.paymentMethod);

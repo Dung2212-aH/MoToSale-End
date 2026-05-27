@@ -34,4 +34,5 @@ public class Order
     public ICollection<OrderItem> Items { get; set; } = new List<OrderItem>();
     public ICollection<InventoryHold> InventoryHolds { get; set; } = new List<InventoryHold>();
     public ICollection<OrderVoucher> Vouchers { get; set; } = new List<OrderVoucher>();
+    public ICollection<OrderHistory> Histories { get; set; } = new List<OrderHistory>();
 }

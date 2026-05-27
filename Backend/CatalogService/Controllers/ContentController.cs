@@ -24,11 +24,13 @@ public class ContentController : ControllerBase
 
     private readonly CatalogDbContext _dbContext;
     private readonly IImageStorageService _imageStorage;
+    private readonly IAuditLogService _auditLog;
 
-    public ContentController(CatalogDbContext dbContext, IImageStorageService imageStorage)
+    public ContentController(CatalogDbContext dbContext, IImageStorageService imageStorage, IAuditLogService auditLog)
     {
         _dbContext = dbContext;
         _imageStorage = imageStorage;
+        _auditLog = auditLog;
     }
 
     [HttpGet("blog-posts")]
@@ -275,6 +277,7 @@ public class ContentController : ControllerBase
 
         _dbContext.Posts.Add(post);
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "Post", post.MaBaiViet.ToString(), "Create", null, new { post.MaBaiViet, post.TieuDe, post.Slug, post.TrangThai, post.DanhMuc });
         return CreatedAtAction(nameof(GetPostById), new { id = post.MaBaiViet }, new { id = post.MaBaiViet });
     }
 
@@ -284,6 +287,7 @@ public class ContentController : ControllerBase
     {
         var post = await _dbContext.Posts.FirstOrDefaultAsync(p => p.MaBaiViet == id);
         if (post == null) return NotFound();
+        var oldValue = new { post.TieuDe, post.Slug, post.TomTat, post.AnhDaiDienUrl, post.DanhMuc, post.TrangThai, post.XuatBanLuc };
 
         post.TieuDe = request.TieuDe.Trim();
         post.Slug = request.Slug.Trim();
@@ -296,18 +300,21 @@ public class ContentController : ControllerBase
         post.NgayCapNhat = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "Post", post.MaBaiViet.ToString(), "Update", oldValue, new { post.TieuDe, post.Slug, post.TomTat, post.AnhDaiDienUrl, post.DanhMuc, post.TrangThai, post.XuatBanLuc });
         return Ok(new { id = post.MaBaiViet });
     }
 
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Roles = "Admin")]
     [HttpDelete("posts/{id:int}")]
     public async Task<IActionResult> DeletePost(int id)
     {
         var post = await _dbContext.Posts.FirstOrDefaultAsync(p => p.MaBaiViet == id);
         if (post == null) return NotFound();
+        var oldValue = new { post.MaBaiViet, post.TieuDe, post.Slug, post.TrangThai, post.DanhMuc };
 
         _dbContext.Posts.Remove(post);
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "Post", id.ToString(), "Delete", oldValue, null);
         return NoContent();
     }
 
@@ -339,6 +346,7 @@ public class ContentController : ControllerBase
         post.AnhDaiDienUrl = url;
         post.NgayCapNhat = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "Post", post.MaBaiViet.ToString(), "UpdateImage", null, new { post.AnhDaiDienUrl });
 
         return Ok(new { id = post.MaBaiViet, anhDaiDienUrl = post.AnhDaiDienUrl });
     }
@@ -397,6 +405,7 @@ public class ContentController : ControllerBase
 
         _dbContext.Faqs.Add(faq);
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "Faq", faq.MaFAQ.ToString(), "Create", null, new { faq.MaFAQ, faq.CauHoi, faq.DanhMuc, faq.ThuTuHienThi, faq.DangHoatDong });
         return CreatedAtAction(nameof(GetFaqAdmin), null, new { id = faq.MaFAQ });
     }
 
@@ -406,6 +415,7 @@ public class ContentController : ControllerBase
     {
         var faq = await _dbContext.Faqs.FirstOrDefaultAsync(f => f.MaFAQ == id);
         if (faq == null) return NotFound();
+        var oldValue = new { faq.CauHoi, faq.CauTraLoi, faq.DanhMuc, faq.ThuTuHienThi, faq.DangHoatDong };
 
         faq.CauHoi = request.CauHoi.Trim();
         faq.CauTraLoi = request.CauTraLoi.Trim();
@@ -415,18 +425,21 @@ public class ContentController : ControllerBase
         faq.NgayCapNhat = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "Faq", faq.MaFAQ.ToString(), "Update", oldValue, new { faq.CauHoi, faq.CauTraLoi, faq.DanhMuc, faq.ThuTuHienThi, faq.DangHoatDong });
         return Ok(new { id = faq.MaFAQ });
     }
 
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Roles = "Admin")]
     [HttpDelete("faq/{id:int}")]
     public async Task<IActionResult> DeleteFaq(int id)
     {
         var faq = await _dbContext.Faqs.FirstOrDefaultAsync(f => f.MaFAQ == id);
         if (faq == null) return NotFound();
+        var oldValue = new { faq.MaFAQ, faq.CauHoi, faq.DanhMuc, faq.ThuTuHienThi, faq.DangHoatDong };
 
         _dbContext.Faqs.Remove(faq);
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "Faq", id.ToString(), "Delete", oldValue, null);
         return NoContent();
     }
 
@@ -473,10 +486,12 @@ public class ContentController : ControllerBase
     {
         var contact = await _dbContext.ContactRequests.FirstOrDefaultAsync(c => c.MaLienHe == id);
         if (contact == null) return NotFound();
+        var oldValue = new { contact.TrangThai, contact.DaXuLyLuc };
 
         contact.TrangThai = "Processed";
         contact.DaXuLyLuc = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "ContactRequest", contact.MaLienHe.ToString(), "Process", oldValue, new { contact.TrangThai, contact.DaXuLyLuc });
 
         return Ok(new { id = contact.MaLienHe, trangThai = contact.TrangThai, daXuLyLuc = contact.DaXuLyLuc });
     }

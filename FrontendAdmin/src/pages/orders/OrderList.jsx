@@ -1,64 +1,78 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import orderService from '../../services/orderService';
-import { ORDER_STATUS_OPTIONS, PAYMENT_STATUS, getOrderStatusMeta, normalizeOrderStatus } from '../../utils/constants';
+import {
+  ORDER_STATUS_OPTIONS,
+  PAYMENT_STATUS_OPTIONS,
+  SHIPPING_STATUS_OPTIONS,
+  getOrderStatusMeta,
+  getPaymentStatusMeta,
+  getShippingStatusMeta,
+} from '../../utils/constants';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { formatDate } from '../../utils/formatDate';
+import { createDateStamp, exportWorkbook } from '../../utils/exportExcel';
+
+const pageSize = 10;
 
 const OrderList = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
-  const [page, setPage] = useState(1);
+  const [keyword, setKeyword] = useState(searchParams.get('keyword') || '');
+  const [orderStatus, setOrderStatus] = useState(searchParams.get('trangThaiDonHang') || '');
+  const [paymentStatus, setPaymentStatus] = useState(searchParams.get('trangThaiThanhToan') || '');
+  const [shippingStatus, setShippingStatus] = useState(searchParams.get('trangThaiVanChuyen') || '');
+  const [page, setPage] = useState(Number(searchParams.get('page')) || 1);
   const [totalPages, setTotalPages] = useState(1);
-  const pageSize = 10;
-
-  const fetchOrders = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const params = { page, pageSize };
-      if (search) params.search = search;
-      if (statusFilter) params.status = statusFilter;
-      if (typeFilter) params.type = typeFilter;
-      const res = await orderService.getAll(params);
-      const data = res.data;
-      setOrders(data.items || data.data || data || []);
-      setTotalPages(data.totalPages || Math.ceil((data.total || 0) / pageSize) || 1);
-    } catch (err) {
-      setError('Không thể tải danh sách đơn hàng. Vui lòng thử lại.');
-      setOrders([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
+    const params = new URLSearchParams();
+    if (keyword.trim()) params.set('keyword', keyword.trim());
+    if (orderStatus) params.set('trangThaiDonHang', orderStatus);
+    if (paymentStatus) params.set('trangThaiThanhToan', paymentStatus);
+    if (shippingStatus) params.set('trangThaiVanChuyen', shippingStatus);
+    if (page > 1) params.set('page', String(page));
+    setSearchParams(params, { replace: true });
+  }, [keyword, orderStatus, paymentStatus, shippingStatus, page, setSearchParams]);
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const params = { page, pageSize };
+        if (keyword.trim()) params.keyword = keyword.trim();
+        if (orderStatus) params.trangThaiDonHang = orderStatus;
+        if (paymentStatus) params.trangThaiThanhToan = paymentStatus;
+        if (shippingStatus) params.trangThaiVanChuyen = shippingStatus;
+
+        const res = await orderService.getAll(params);
+        const data = res.data;
+        const totalItems = data.totalItems ?? data.total ?? 0;
+        setOrders(data.items || data.data || data || []);
+        setTotalPages(data.totalPages || Math.ceil(totalItems / pageSize) || 1);
+      } catch (err) {
+        setError('Không thể tải danh sách đơn hàng. Vui lòng thử lại.');
+        setOrders([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchOrders();
-  }, [page, statusFilter, typeFilter]);
+  }, [page, keyword, orderStatus, paymentStatus, shippingStatus]);
 
   const handleSearch = (e) => {
     e.preventDefault();
     setPage(1);
-    fetchOrders();
   };
 
-  const getStatusBadge = (status) => {
-    const s = getOrderStatusMeta(status);
-    return <span className={`badge badge-${s.color}`}>{s.label}</span>;
-  };
+  const renderBadge = (meta) => <span className={`badge badge-${meta.color}`}>{meta.label}</span>;
 
-  const getPaymentStatusBadge = (status) => {
-    const s = PAYMENT_STATUS[status];
-    if (!s) return <span className="badge badge-secondary">{status}</span>;
-    return <span className={`badge badge-${s.color}`}>{s.label}</span>;
-  };
-
-  const getOrderStatusValue = (order) => normalizeOrderStatus(order.trangThaiDonHang || order.trangThai || order.status);
   const getCustomerName = (order) => (
     order.hoTenNhanHang
     || order.tenNguoiNhan
@@ -66,8 +80,82 @@ const OrderList = () => {
     || order.customerName
     || order.hoTen
     || order.fullName
-    || '—'
+    || '-'
   );
+
+  const getOrderId = (order) => order.maDonHang || order.orderCode || order.id;
+  const getOrderCode = (order) => order.maDonHangKinhDoanh || order.maDonHang || order.orderCode || order.id;
+  const getOrderAmount = (order) => order.tongThanhToan ?? order.tongTien ?? order.totalAmount ?? 0;
+
+  const buildFilterParams = (extra = {}) => {
+    const params = { ...extra };
+    if (keyword.trim()) params.keyword = keyword.trim();
+    if (orderStatus) params.trangThaiDonHang = orderStatus;
+    if (paymentStatus) params.trangThaiThanhToan = paymentStatus;
+    if (shippingStatus) params.trangThaiVanChuyen = shippingStatus;
+    return params;
+  };
+
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const res = await orderService.getAll(buildFilterParams({ page: 1, pageSize: 10000 }));
+      const data = res.data;
+      const exportRows = data.items || data.data || data || [];
+
+      await exportWorkbook({
+        fileName: `don-hang-${createDateStamp()}.xlsx`,
+        sheets: [
+          {
+            name: 'HuongDan',
+            columns: [
+              { header: 'Mục', key: 'label', width: 30 },
+              { header: 'Nội dung', key: 'value', width: 90 },
+            ],
+            rows: [
+              { label: 'Tên báo cáo', value: 'Danh sách đơn hàng theo bộ lọc hiện tại' },
+              { label: 'Mục đích', value: 'Dùng để đối soát đơn hàng, chăm sóc khách hàng, kiểm tra thanh toán và vận chuyển.' },
+              { label: 'Từ khóa', value: keyword.trim() || 'Không lọc' },
+              { label: 'Trạng thái đơn', value: orderStatus ? getOrderStatusMeta(orderStatus).label : 'Tất cả' },
+              { label: 'Thanh toán', value: paymentStatus ? getPaymentStatusMeta(paymentStatus).label : 'Tất cả' },
+              { label: 'Vận chuyển', value: shippingStatus ? getShippingStatusMeta(shippingStatus).label : 'Tất cả' },
+              { label: 'Sheet DonHang', value: 'Mỗi dòng là một đơn hàng, gồm khách hàng, ngày tạo, trạng thái đơn, thanh toán, vận chuyển và tổng tiền.' },
+              { label: 'Lưu ý doanh thu', value: 'File này là danh sách đơn để đối soát, không thay thế báo cáo doanh thu.' },
+            ],
+          },
+          {
+            name: 'DonHang',
+            columns: [
+              { header: 'Mã đơn', key: 'orderCode', width: 18 },
+              { header: 'Khách hàng', key: 'customerName', width: 28 },
+              { header: 'SĐT', key: 'phone', width: 16 },
+              { header: 'Email', key: 'email', width: 26 },
+              { header: 'Ngày tạo', key: 'createdAt', type: 'date', width: 20 },
+              { header: 'Trạng thái đơn', key: 'orderStatus', width: 24 },
+              { header: 'Thanh toán', key: 'paymentStatus', width: 24 },
+              { header: 'Vận chuyển', key: 'shippingStatus', width: 24 },
+              { header: 'Tổng tiền', key: 'amount', type: 'currency', width: 18 },
+            ],
+            rows: exportRows.map((order) => ({
+              orderCode: getOrderCode(order),
+              customerName: getCustomerName(order),
+              phone: order.soDienThoaiNhanHang || order.soDienThoai || order.phone || '',
+              email: order.emailNhanHang || order.email || '',
+              createdAt: order.ngayTao || order.createdAt,
+              orderStatus: getOrderStatusMeta(order.trangThaiDonHang || order.trangThai || order.status).label,
+              paymentStatus: getPaymentStatusMeta(order.trangThaiThanhToan || order.paymentStatus).label,
+              shippingStatus: getShippingStatusMeta(order.trangThaiVanChuyen || order.shippingStatus).label,
+              amount: getOrderAmount(order),
+            })),
+          },
+        ],
+      });
+    } catch (err) {
+      alert('Xuất Excel đơn hàng thất bại. Vui lòng thử lại.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="content-wrapper">
@@ -75,7 +163,7 @@ const OrderList = () => {
         <div className="container-fluid">
           <div className="row mb-2">
             <div className="col-sm-6">
-              <h1 className="m-0">Quản lý Đơn hàng</h1>
+              <h1 className="m-0">Quản lý đơn hàng</h1>
             </div>
           </div>
         </div>
@@ -86,9 +174,18 @@ const OrderList = () => {
           <div className="card">
             <div className="card-header">
               <h3 className="card-title">Danh sách đơn hàng</h3>
+              <div className="card-tools">
+                <button
+                  className="btn btn-success btn-sm"
+                  onClick={handleExportExcel}
+                  disabled={exporting || loading}
+                  title="Xuất danh sách đơn hàng theo bộ lọc hiện tại để đối soát khách hàng, thanh toán và vận chuyển"
+                >
+                  <i className="fas fa-file-excel"></i>{exporting ? ' Đang xuất...' : ' Xuất danh sách đơn'}
+                </button>
+              </div>
             </div>
             <div className="card-body">
-              {/* Filters */}
               <div className="row mb-3">
                 <div className="col-md-4">
                   <form onSubmit={handleSearch}>
@@ -96,9 +193,9 @@ const OrderList = () => {
                       <input
                         type="text"
                         className="form-control"
-                        placeholder="Tìm theo mã đơn hàng..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Mã đơn, tên, SĐT, email..."
+                        value={keyword}
+                        onChange={(e) => { setKeyword(e.target.value); setPage(1); }}
                       />
                       <div className="input-group-append">
                         <button className="btn btn-default" type="submit">
@@ -108,37 +205,28 @@ const OrderList = () => {
                     </div>
                   </form>
                 </div>
-                <div className="col-md-3">
-                  <select
-                    className="form-control"
-                    value={statusFilter}
-                    onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-                  >
-                    <option value="">-- Trạng thái đơn --</option>
-                    {ORDER_STATUS_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
+                <div className="col-md-2">
+                  <select className="form-control" value={orderStatus} onChange={(e) => { setOrderStatus(e.target.value); setPage(1); }}>
+                    <option value="">Trạng thái đơn</option>
+                    {ORDER_STATUS_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                   </select>
                 </div>
                 <div className="col-md-3">
-                  <select
-                    className="form-control"
-                    value={typeFilter}
-                    onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
-                  >
-                    <option value="">-- Loại đơn hàng --</option>
-                    <option value="Online">Online</option>
-                    <option value="InStore">Tại cửa hàng</option>
+                  <select className="form-control" value={paymentStatus} onChange={(e) => { setPaymentStatus(e.target.value); setPage(1); }}>
+                    <option value="">Thanh toán</option>
+                    {PAYMENT_STATUS_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                  </select>
+                </div>
+                <div className="col-md-3">
+                  <select className="form-control" value={shippingStatus} onChange={(e) => { setShippingStatus(e.target.value); setPage(1); }}>
+                    <option value="">Vận chuyển</option>
+                    {SHIPPING_STATUS_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                   </select>
                 </div>
               </div>
 
-              {/* Error */}
-              {error && (
-                <div className="alert alert-danger">{error}</div>
-              )}
+              {error && <div className="alert alert-danger">{error}</div>}
 
-              {/* Loading */}
               {loading ? (
                 <div className="text-center py-4">
                   <div className="spinner-border text-primary" role="status">
@@ -160,28 +248,26 @@ const OrderList = () => {
                           <th className="table-col-text">Khách hàng</th>
                           <th className="table-col-money">Tổng tiền</th>
                           <th className="table-col-status">Trạng thái đơn</th>
-                          <th className="table-col-status">Trạng thái TT</th>
+                          <th className="table-col-status">Thanh toán</th>
+                          <th className="table-col-status">Vận chuyển</th>
                           <th className="table-col-date">Ngày tạo</th>
                           <th className="table-col-actions">Thao tác</th>
                         </tr>
                       </thead>
                       <tbody>
                         {orders.map((order) => (
-                          <tr key={order.id || order.maDonHang}>
-                            <td className="table-col-code"><strong>{order.maDonHang || order.orderCode || order.id}</strong></td>
+                          <tr key={order.maDonHang || order.id}>
+                            <td className="table-col-code"><strong>{getOrderId(order)}</strong></td>
                             <td className="table-col-text">{getCustomerName(order)}</td>
                             <td className="table-col-money">{formatCurrency(order.tongThanhToan ?? order.tongTien ?? order.totalAmount ?? 0)}</td>
-                            <td className="table-col-status">{getStatusBadge(getOrderStatusValue(order))}</td>
-                            <td className="table-col-status">{getPaymentStatusBadge(
-                              getOrderStatusValue(order) === 'Cancelled'
-                                ? 'Cancelled'
-                                : (order.trangThaiThanhToan || order.paymentStatus)
-                            )}</td>
+                            <td className="table-col-status">{renderBadge(getOrderStatusMeta(order.trangThaiDonHang || order.trangThai || order.status))}</td>
+                            <td className="table-col-status">{renderBadge(getPaymentStatusMeta(order.trangThaiThanhToan || order.paymentStatus))}</td>
+                            <td className="table-col-status">{renderBadge(getShippingStatusMeta(order.trangThaiVanChuyen || order.shippingStatus))}</td>
                             <td className="table-col-date">{formatDate(order.ngayTao || order.createdAt)}</td>
                             <td className="table-col-actions">
                               <button
                                 className="btn btn-info btn-sm"
-                                onClick={() => navigate(`/orders/${order.id || order.maDonHang}`)}
+                                onClick={() => navigate(`/orders/${order.maDonHang || order.id}`)}
                                 title="Xem chi tiết"
                               >
                                 <i className="fas fa-eye"></i> Chi tiết
@@ -193,7 +279,6 @@ const OrderList = () => {
                     </table>
                   </div>
 
-                  {/* Pagination */}
                   {totalPages > 1 && (
                     <nav className="mt-3">
                       <ul className="pagination justify-content-center">

@@ -13,11 +13,13 @@ public class CategoriesController : ControllerBase
 {
     private readonly ICatalogService _catalogService;
     private readonly CatalogDbContext _dbContext;
+    private readonly IAuditLogService _auditLog;
 
-    public CategoriesController(ICatalogService catalogService, CatalogDbContext dbContext)
+    public CategoriesController(ICatalogService catalogService, CatalogDbContext dbContext, IAuditLogService auditLog)
     {
         _catalogService = catalogService;
         _dbContext = dbContext;
+        _auditLog = auditLog;
     }
 
     [HttpGet]
@@ -82,6 +84,15 @@ public class CategoriesController : ControllerBase
 
         _dbContext.Categories.Add(category);
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "Category", category.MaDanhMuc.ToString(), "Create", null, new
+        {
+            category.MaDanhMuc,
+            category.TenDanhMuc,
+            category.Slug,
+            category.MaDanhMucCha,
+            category.ThuTuHienThi,
+            category.DangHoatDong
+        });
 
         return CreatedAtAction(nameof(GetCategoryById), new { id = category.MaDanhMuc }, new { id = category.MaDanhMuc });
     }
@@ -95,6 +106,15 @@ public class CategoriesController : ControllerBase
         {
             return NotFound(new { message = "Khong tim thay danh muc." });
         }
+        var oldValue = new
+        {
+            category.TenDanhMuc,
+            category.Slug,
+            category.MoTa,
+            category.MaDanhMucCha,
+            category.ThuTuHienThi,
+            category.DangHoatDong
+        };
 
         var slug = NormalizeSlug(request.Slug, request.TenDanhMuc);
         if (await _dbContext.Categories.AnyAsync(c => c.MaDanhMuc != id && c.Slug == slug))
@@ -126,10 +146,19 @@ public class CategoriesController : ControllerBase
         category.NgayCapNhat = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "Category", category.MaDanhMuc.ToString(), "Update", oldValue, new
+        {
+            category.TenDanhMuc,
+            category.Slug,
+            category.MoTa,
+            category.MaDanhMucCha,
+            category.ThuTuHienThi,
+            category.DangHoatDong
+        });
         return Ok(new { id = category.MaDanhMuc });
     }
 
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteCategory(int id)
     {
@@ -138,6 +167,14 @@ public class CategoriesController : ControllerBase
         {
             return NotFound(new { message = "Khong tim thay danh muc." });
         }
+        var oldValue = new
+        {
+            category.MaDanhMuc,
+            category.TenDanhMuc,
+            category.Slug,
+            category.MaDanhMucCha,
+            category.DangHoatDong
+        };
 
         if (await _dbContext.Categories.AnyAsync(c => c.MaDanhMucCha == id))
         {
@@ -151,6 +188,7 @@ public class CategoriesController : ControllerBase
 
         _dbContext.Categories.Remove(category);
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "Category", id.ToString(), "Delete", oldValue, null);
         return NoContent();
     }
 

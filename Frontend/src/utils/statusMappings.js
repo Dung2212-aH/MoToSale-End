@@ -1,33 +1,37 @@
 export const ORDER_STATUS_MAP = {
-  AwaitingPayment: 'Chờ thanh toán',
+  AwaitingPayment: 'Chờ thanh toán / xác nhận',
   Confirmed: 'Đã xác nhận',
-  Completed: 'Hoàn thành',
+  Processing: 'Đang chuẩn bị hàng',
+  Shipping: 'Đang giao',
+  Delivered: 'Đã giao',
+  Completed: 'Hoàn tất',
   Cancelled: 'Đã hủy',
-  Pending: 'Chờ xử lý',
-  Processing: 'Đang xử lý',
+  Pending: 'Legacy: chờ xử lý',
+  Checkout: 'Đang checkout',
 };
 
 export const SHIPPING_STATUS_MAP = {
-  NotShipped: 'Chưa giao hàng',
-  Preparing: 'Đang chuẩn bị hàng',
-  Shipping: 'Đang giao hàng',
-  Delivered: 'Đã giao thành công',
+  NotShipped: 'Chưa giao',
+  Preparing: 'Đang chuẩn bị giao',
+  Shipping: 'Đang giao',
+  Delivered: 'Đã giao',
   PickupReady: 'Sẵn sàng nhận tại showroom',
   PickedUp: 'Đã nhận tại showroom',
-  Cancelled: 'Đã hủy',
+  Cancelled: 'Đã hủy giao hàng',
   AwaitingPickup: 'Chờ lấy hàng',
-  InTransit: 'Đang giao hàng',
+  InTransit: 'Đang giao',
 };
 
 export const PAYMENT_STATUS_MAP = {
   Unpaid: 'Chưa thanh toán',
-  Pending: 'Đang chờ xử lý',
+  Pending: 'Chờ xác nhận thanh toán',
   Paid: 'Đã thanh toán',
   DepositPaid: 'Đã thanh toán tiền cọc',
-  PartiallyPaid: 'Thanh toán một phần',
+  PartiallyPaid: 'Thanh toán một phần / đã đặt cọc',
   Refunded: 'Đã hoàn tiền',
   PartiallyRefunded: 'Hoàn tiền một phần',
-  Failed: 'Thất bại',
+  Failed: 'Thanh toán thất bại',
+  Cancelled: 'Đã hủy thanh toán',
 };
 
 export const PAYMENT_METHOD_MAP = {
@@ -35,6 +39,7 @@ export const PAYMENT_METHOD_MAP = {
   Card: 'Thẻ tín dụng/ghi nợ',
   Momo: 'Ví MoMo',
   VNPay: 'VNPay',
+  COD: 'Tiền mặt (COD)',
 };
 
 export const ORDER_TYPE_MAP = {
@@ -51,11 +56,13 @@ export const RECEIVING_METHOD_MAP = {
 const ORDER_STATUS_COLOR_MAP = {
   AwaitingPayment: 'bg-amber-100 text-amber-700',
   Confirmed: 'bg-blue-100 text-blue-700',
-  Completed: 'bg-green-100 text-green-700',
+  Processing: 'bg-sky-100 text-sky-700',
+  Shipping: 'bg-blue-100 text-blue-700',
+  Delivered: 'bg-green-100 text-green-700',
+  Completed: 'bg-emerald-100 text-emerald-700',
   Cancelled: 'bg-red-100 text-red-700',
-  Pending: 'bg-amber-100 text-amber-700',
-  Processing: 'bg-blue-100 text-blue-700',
-  Failed: 'bg-red-100 text-red-700',
+  Pending: 'bg-zinc-100 text-zinc-700',
+  Checkout: 'bg-zinc-100 text-zinc-700',
 };
 
 const SHIPPING_STATUS_COLOR_MAP = {
@@ -71,13 +78,15 @@ const SHIPPING_STATUS_COLOR_MAP = {
 };
 
 const PAYMENT_STATUS_COLOR_MAP = {
-  Unpaid: 'bg-red-100 text-red-700',
-  Pending: 'bg-red-100 text-red-700',
+  Unpaid: 'bg-zinc-100 text-zinc-700',
+  Pending: 'bg-amber-100 text-amber-700',
   Paid: 'bg-green-100 text-green-700',
   DepositPaid: 'bg-orange-100 text-orange-700',
   PartiallyPaid: 'bg-orange-100 text-orange-700',
   Refunded: 'bg-purple-100 text-purple-700',
   PartiallyRefunded: 'bg-purple-100 text-purple-700',
+  Failed: 'bg-red-100 text-red-700',
+  Cancelled: 'bg-zinc-100 text-zinc-700',
 };
 
 export function getOrderStatusLabel(status) {

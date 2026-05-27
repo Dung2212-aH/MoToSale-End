@@ -6,8 +6,8 @@ const Sidebar = ({ collapsed = false }) => {
   const location = useLocation();
   const { user, isAdmin } = useAuth();
 
-  const isActive = (path) => location.pathname === path ? 'active' : '';
-  const isActiveGroup = (prefix) => location.pathname.startsWith(prefix) ? 'active' : '';
+  const isActive = (path) => (location.pathname === path ? 'active' : '');
+  const isActiveGroup = (prefix) => (location.pathname.startsWith(prefix) ? 'active' : '');
 
   return (
     <aside className={`main-sidebar sidebar-dark-primary elevation-4 sidebar-no-expand ${collapsed ? 'is-collapsed' : ''}`}>
@@ -81,6 +81,12 @@ const Sidebar = ({ collapsed = false }) => {
                 <p>Tồn kho</p>
               </Link>
             </li>
+            <li className="nav-item">
+              <Link to="/stock-documents" className={`nav-link ${isActiveGroup('/stock-documents')}`}>
+                <i className="nav-icon fas fa-clipboard-check"></i>
+                <p>Phiếu kho</p>
+              </Link>
+            </li>
 
             <li className="nav-header">NGƯỜI DÙNG & NỘI DUNG</li>
             {isAdmin() && (
@@ -91,6 +97,18 @@ const Sidebar = ({ collapsed = false }) => {
                 </Link>
               </li>
             )}
+            <li className="nav-item">
+              <Link to="/customers" className={`nav-link ${isActiveGroup('/customers')}`}>
+                <i className="nav-icon fas fa-user-tag"></i>
+                <p>Khách hàng</p>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link to="/warranties" className={`nav-link ${isActiveGroup('/warranties')}`}>
+                <i className="nav-icon fas fa-tools"></i>
+                <p>Bảo hành</p>
+              </Link>
+            </li>
             <li className="nav-item">
               <Link to="/reviews" className={`nav-link ${isActiveGroup('/reviews')}`}>
                 <i className="nav-icon fas fa-star"></i>
@@ -121,6 +139,20 @@ const Sidebar = ({ collapsed = false }) => {
               <Link to="/reports" className={`nav-link ${isActiveGroup('/reports')}`}>
                 <i className="nav-icon fas fa-chart-bar"></i>
                 <p>Báo cáo & Thống kê</p>
+              </Link>
+            </li>
+            {isAdmin() && (
+              <li className="nav-item">
+                <Link to="/audit-logs" className={`nav-link ${isActiveGroup('/audit-logs')}`}>
+                  <i className="nav-icon fas fa-clipboard-list"></i>
+                  <p>Nhật ký hệ thống</p>
+                </Link>
+              </li>
+            )}
+            <li className="nav-item">
+              <Link to="/settings" className={`nav-link ${isActiveGroup('/settings')}`}>
+                <i className="nav-icon fas fa-cog"></i>
+                <p>Cấu hình vận hành</p>
               </Link>
             </li>
           </ul>

@@ -5,6 +5,7 @@ import categoryService from '../../services/categoryService';
 import brandService from '../../services/brandService';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { formatDateShort } from '../../utils/formatDate';
+import { useAuth } from '../../contexts/AuthContext';
 
 const VOUCHER_TYPES = {
   Percent: 'Phần trăm (%)',
@@ -60,6 +61,7 @@ const getStatus = (voucher) => voucher.status || voucher.trangThai || (voucher.d
 const toDateInputValue = (value) => (value ? String(value).substring(0, 10) : '');
 
 const VoucherList = () => {
+  const { isAdmin } = useAuth();
   const [vouchers, setVouchers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -336,9 +338,11 @@ const VoucherList = () => {
                               <button className="btn btn-warning btn-sm mr-1" onClick={() => openEditModal(voucher)} title="Sửa">
                                 <i className="fas fa-edit"></i>
                               </button>
-                              <button className="btn btn-danger btn-sm" onClick={() => handleDelete(getVoucherId(voucher))} title="Xóa">
-                                <i className="fas fa-trash"></i>
-                              </button>
+                              {isAdmin() && (
+                                <button className="btn btn-danger btn-sm" onClick={() => handleDelete(getVoucherId(voucher))} title="Xóa">
+                                  <i className="fas fa-trash"></i>
+                                </button>
+                              )}
                             </td>
                           </tr>
                         ))}

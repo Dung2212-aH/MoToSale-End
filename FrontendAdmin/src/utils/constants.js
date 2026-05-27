@@ -1,48 +1,99 @@
-// Trạng thái đơn hàng (UI gộp 4 trạng thái nghiệp vụ)
 export const ORDER_STATUS_LABELS = {
-  Pending: { label: 'Chờ xác nhận', color: 'warning' },
-  Checkout: { label: 'Chờ xác nhận', color: 'warning' },
-  AwaitingPayment: { label: 'Chờ xác nhận', color: 'warning' },
-  Confirmed: { label: 'Chờ xác nhận', color: 'warning' },
+  Pending: { label: 'Legacy: chờ xử lý', color: 'secondary' },
+  Checkout: { label: 'Đang checkout', color: 'secondary' },
+  AwaitingPayment: { label: 'Chờ thanh toán / xác nhận', color: 'warning' },
+  Confirmed: { label: 'Đã xác nhận', color: 'primary' },
+  Processing: { label: 'Đang chuẩn bị hàng', color: 'info' },
   Shipping: { label: 'Đang giao', color: 'info' },
   Delivered: { label: 'Đã giao', color: 'success' },
+  Completed: { label: 'Hoàn tất', color: 'success' },
   Cancelled: { label: 'Đã hủy', color: 'danger' },
-  Completed: { label: 'Đã giao', color: 'success' },
-  Processing: { label: 'Chờ xác nhận', color: 'warning' },
 };
 
 export const ORDER_STATUS_OPTIONS = [
-  { value: 'Pending', label: 'Chờ xác nhận' },
+  { value: 'AwaitingPayment', label: 'Chờ thanh toán / xác nhận' },
+  { value: 'Confirmed', label: 'Đã xác nhận' },
+  { value: 'Processing', label: 'Đang chuẩn bị hàng' },
   { value: 'Shipping', label: 'Đang giao' },
   { value: 'Delivered', label: 'Đã giao' },
+  { value: 'Completed', label: 'Hoàn tất' },
   { value: 'Cancelled', label: 'Đã hủy' },
 ];
 
-export const normalizeOrderStatus = (status) => {
-  const value = String(status || '');
-  if (['Pending', 'Checkout', 'AwaitingPayment', 'Confirmed', 'Processing'].includes(value)) return 'Pending';
-  if (['Shipping'].includes(value)) return 'Shipping';
-  if (['Delivered', 'Completed'].includes(value)) return 'Delivered';
-  if (['Cancelled', 'Canceled'].includes(value)) return 'Cancelled';
-  return value;
+export const ORDER_NEXT_STATUS = {
+  Pending: ['AwaitingPayment', 'Confirmed', 'Cancelled'],
+  Checkout: ['AwaitingPayment', 'Confirmed', 'Cancelled'],
+  AwaitingPayment: ['Confirmed', 'Cancelled'],
+  Confirmed: ['Processing', 'Cancelled'],
+  Processing: ['Shipping', 'Cancelled'],
+  Shipping: ['Delivered'],
+  Delivered: ['Completed'],
+  Completed: [],
+  Cancelled: [],
 };
 
-export const getOrderStatusMeta = (status) => {
-  const normalized = normalizeOrderStatus(status);
-  return ORDER_STATUS_LABELS[normalized] || { label: status || 'Khác', color: 'secondary' };
-};
+export const normalizeOrderStatus = (status) => String(status || '');
 
-// Trạng thái thanh toán
+export const getOrderStatusMeta = (status) => (
+  ORDER_STATUS_LABELS[normalizeOrderStatus(status)] || { label: status || 'Khác', color: 'secondary' }
+);
+
 export const PAYMENT_STATUS = {
   Unpaid: { label: 'Chưa thanh toán', color: 'secondary' },
-  Pending: { label: 'Chờ thanh toán', color: 'warning' },
+  Pending: { label: 'Chờ xác nhận thanh toán', color: 'warning' },
+  PartiallyPaid: { label: 'Thanh toán một phần / đã đặt cọc', color: 'info' },
   Paid: { label: 'Đã thanh toán', color: 'success' },
-  PartiallyPaid: { label: 'Thanh toán một phần', color: 'info' },
-  Failed: { label: 'Thất bại', color: 'danger' },
-  Cancelled: { label: 'Đã hủy', color: 'secondary' },
+  Failed: { label: 'Thanh toán thất bại', color: 'danger' },
+  Refunded: { label: 'Đã hoàn tiền', color: 'dark' },
+  Cancelled: { label: 'Đã hủy thanh toán', color: 'secondary' },
 };
 
-// Phương thức thanh toán
+export const PAYMENT_STATUS_OPTIONS = [
+  { value: 'Unpaid', label: 'Chưa thanh toán' },
+  { value: 'Pending', label: 'Chờ xác nhận thanh toán' },
+  { value: 'PartiallyPaid', label: 'Thanh toán một phần / đã đặt cọc' },
+  { value: 'Paid', label: 'Đã thanh toán' },
+  { value: 'Failed', label: 'Thanh toán thất bại' },
+  { value: 'Refunded', label: 'Đã hoàn tiền' },
+  { value: 'Cancelled', label: 'Đã hủy thanh toán' },
+];
+
+export const SHIPPING_STATUS = {
+  NotShipped: { label: 'Chưa giao', color: 'secondary' },
+  Preparing: { label: 'Đang chuẩn bị giao', color: 'warning' },
+  Shipping: { label: 'Đang giao', color: 'info' },
+  Delivered: { label: 'Đã giao', color: 'success' },
+  PickupReady: { label: 'Sẵn sàng nhận tại showroom', color: 'primary' },
+  PickedUp: { label: 'Đã nhận tại showroom', color: 'success' },
+  Cancelled: { label: 'Đã hủy giao hàng', color: 'danger' },
+};
+
+export const SHIPPING_STATUS_OPTIONS = [
+  { value: 'NotShipped', label: 'Chưa giao' },
+  { value: 'Preparing', label: 'Đang chuẩn bị giao' },
+  { value: 'Shipping', label: 'Đang giao' },
+  { value: 'Delivered', label: 'Đã giao' },
+  { value: 'PickupReady', label: 'Sẵn sàng nhận tại showroom' },
+  { value: 'PickedUp', label: 'Đã nhận tại showroom' },
+  { value: 'Cancelled', label: 'Đã hủy giao hàng' },
+];
+
+export const DELIVERY_SHIPPING_STATUS_OPTIONS = SHIPPING_STATUS_OPTIONS.filter((item) =>
+  ['NotShipped', 'Preparing', 'Shipping', 'Delivered'].includes(item.value)
+);
+
+export const PICKUP_SHIPPING_STATUS_OPTIONS = SHIPPING_STATUS_OPTIONS.filter((item) =>
+  ['NotShipped', 'PickupReady', 'PickedUp'].includes(item.value)
+);
+
+export const getPaymentStatusMeta = (status) => (
+  PAYMENT_STATUS[status] || { label: status || 'Khác', color: 'secondary' }
+);
+
+export const getShippingStatusMeta = (status) => (
+  SHIPPING_STATUS[status] || { label: status || 'Khác', color: 'secondary' }
+);
+
 export const PAYMENT_METHODS = {
   COD: 'Tiền mặt (COD)',
   BankTransfer: 'Chuyển khoản',
@@ -51,7 +102,6 @@ export const PAYMENT_METHODS = {
   VNPay: 'VNPay',
 };
 
-// Trạng thái sản phẩm
 export const PRODUCT_STATUS = {
   Available: { label: 'Đang bán', color: 'success' },
   Inactive: { label: 'Ngừng bán', color: 'secondary' },
@@ -59,13 +109,11 @@ export const PRODUCT_STATUS = {
   Discontinued: { label: 'Ngừng kinh doanh', color: 'dark' },
 };
 
-// Trạng thái user
 export const USER_STATUS = {
   Active: { label: 'Hoạt động', color: 'success' },
   Inactive: { label: 'Khóa', color: 'danger' },
 };
 
-// Vai trò
 export const ROLES = {
   Admin: 'Quản trị viên',
   Staff: 'Nhân viên',

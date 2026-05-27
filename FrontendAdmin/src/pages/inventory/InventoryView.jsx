@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import inventoryService from '../../services/inventoryService';
 import { formatDate } from '../../utils/formatDate';
+import { createDateStamp, exportWorkbook } from '../../utils/exportExcel';
 
 const PAGE_SIZE = 15;
 
@@ -242,17 +243,122 @@ const InventoryView = () => {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const res = await inventoryService.exportCsv({ ...params, page: 1, pageSize: 10000 });
-      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'text/csv;charset=utf-8' }));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `inventory-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      const [inventoryRes, adjustmentsRes, holdsRes] = await Promise.allSettled([
+        inventoryService.getAll({ ...params, page: 1, pageSize: 10000 }),
+        inventoryService.getAdjustments({ page: 1, pageSize: 10000 }),
+        inventoryService.getHolds({ page: 1, pageSize: 10000 }),
+      ]);
+
+      const inventoryData = inventoryRes.status === 'fulfilled' ? inventoryRes.value.data : {};
+      const adjustmentData = adjustmentsRes.status === 'fulfilled' ? adjustmentsRes.value.data : {};
+      const holdsData = holdsRes.status === 'fulfilled' ? holdsRes.value.data : {};
+      const inventoryRows = inventoryData.items || inventoryData.data || inventoryData || [];
+      const adjustmentRows = adjustmentData.items || adjustmentData.data || adjustmentData || [];
+      const holdRows = holdsData.items || holdsData.data || holdsData || [];
+
+      await exportWorkbook({
+        fileName: `ton-kho-${createDateStamp()}.xlsx`,
+        sheets: [
+          {
+            name: 'HuongDan',
+            columns: [
+              { header: 'Mục', key: 'label', width: 30 },
+              { header: 'Nội dung', key: 'value', width: 90 },
+            ],
+            rows: [
+              { label: 'Tên báo cáo', value: 'Báo cáo tồn kho và đối soát giữ chỗ' },
+              { label: 'Mục đích', value: 'Dùng để kiểm kê tồn thực tế, tồn khả dụng, hàng đang giữ chỗ và lịch sử điều chỉnh kho.' },
+              { label: 'Từ khóa', value: search || 'Không lọc' },
+              { label: 'Trạng thái tồn', value: stockStatus ? STOCK_STATUS[stockStatus]?.label || stockStatus : 'Tất cả' },
+              { label: 'Chỉ đang giữ chỗ', value: hasHold ? 'Có' : 'Không' },
+              { label: 'Chỉ tồn thấp/hết hàng', value: lowStockOnly ? 'Có' : 'Không' },
+              { label: 'Tồn thực tế', value: 'Số lượng vật lý đang có trong kho.' },
+              { label: 'Đang giữ chỗ', value: 'Số lượng đã bị giữ cho đơn hàng nhưng chưa xuất kho/hoàn tất.' },
+              { label: 'Tồn khả dụng', value: 'Tồn thực tế trừ số lượng đang giữ chỗ.' },
+              { label: 'Sheet TonKho', value: 'Dùng kiểm kê và rà mặt hàng cần nhập thêm.' },
+              { label: 'Sheet GiuCho', value: 'Dùng kiểm tra hàng đang giữ thuộc đơn nào, số lượng bao nhiêu, hết hạn lúc nào.' },
+              { label: 'Sheet LichSuDieuChinh', value: 'Dùng audit các lần nhập kho, xuất kho hoặc điều chỉnh tồn.' },
+            ],
+          },
+          {
+            name: 'TonKho',
+            columns: [
+              { header: 'Mã sản phẩm', key: 'productCode', width: 18 },
+              { header: 'Mã biến thể/SKU', key: 'sku', width: 20 },
+              { header: 'Tên sản phẩm', key: 'productName', width: 34 },
+              { header: 'Tên biến thể', key: 'variantName', width: 30 },
+              { header: 'Tồn thực tế', key: 'actualStock', type: 'number', width: 14 },
+              { header: 'Đang giữ chỗ', key: 'reservedStock', type: 'number', width: 16 },
+              { header: 'Tồn khả dụng', key: 'availableStock', type: 'number', width: 16 },
+              { header: 'Ngưỡng cảnh báo', key: 'threshold', type: 'number', width: 18 },
+              { header: 'Trạng thái tồn', key: 'status', width: 18 },
+              { header: 'Ngày cập nhật', key: 'updatedAt', type: 'date', width: 20 },
+            ],
+            rows: inventoryRows.map((item) => ({
+              productCode: getProductCode(item) || getId(item),
+              sku: getSku(item),
+              productName: getProductName(item),
+              variantName: getVariantName(item),
+              actualStock: getActualStock(item),
+              reservedStock: getReservedStock(item),
+              availableStock: getAvailableStock(item),
+              threshold: getLowStockThreshold(item),
+              status: STOCK_STATUS[getStockStatus(item)]?.label || getStockStatus(item),
+              updatedAt: getUpdatedAt(item),
+            })),
+          },
+          {
+            name: 'GiuCho',
+            columns: [
+              { header: 'Mã đơn', key: 'orderCode', width: 18 },
+              { header: 'Sản phẩm', key: 'productName', width: 34 },
+              { header: 'Biến thể/SKU', key: 'variantName', width: 28 },
+              { header: 'Số lượng giữ', key: 'quantity', type: 'number', width: 16 },
+              { header: 'Trạng thái', key: 'status', width: 16 },
+              { header: 'Hết hạn lúc', key: 'expiresAt', type: 'date', width: 20 },
+              { header: 'Ngày tạo', key: 'createdAt', type: 'date', width: 20 },
+              { header: 'Ghi chú', key: 'note', width: 32 },
+            ],
+            rows: holdRows.map((item) => ({
+              orderCode: item.maDonHangKinhDoanh ?? item.MaDonHangKinhDoanh ?? item.maDonHang ?? item.MaDonHang,
+              productName: item.tenSanPham ?? item.TenSanPham ?? '',
+              variantName: item.tenBienThe ?? item.TenBienThe ?? item.sku ?? item.SKU ?? '',
+              quantity: item.soLuong ?? item.SoLuong ?? 0,
+              status: item.trangThai ?? item.TrangThai ?? '',
+              expiresAt: item.hetHanLuc ?? item.HetHanLuc,
+              createdAt: item.ngayTao ?? item.NgayTao,
+              note: item.ghiChu ?? item.GhiChu ?? '',
+            })),
+          },
+          {
+            name: 'LichSuDieuChinh',
+            columns: [
+              { header: 'Mã sản phẩm', key: 'productCode', width: 18 },
+              { header: 'SKU', key: 'sku', width: 18 },
+              { header: 'Sản phẩm', key: 'productName', width: 34 },
+              { header: 'Loại giao dịch', key: 'type', width: 18 },
+              { header: 'Thay đổi', key: 'change', type: 'number', width: 14 },
+              { header: 'Tồn trước', key: 'before', type: 'number', width: 14 },
+              { header: 'Tồn sau', key: 'after', type: 'number', width: 14 },
+              { header: 'Lý do', key: 'reason', width: 32 },
+              { header: 'Ngày tạo', key: 'createdAt', type: 'date', width: 20 },
+            ],
+            rows: adjustmentRows.map((item) => ({
+              productCode: item.maSanPhamKinhDoanh ?? item.MaSanPhamKinhDoanh,
+              sku: item.sku ?? item.SKU,
+              productName: `${item.tenSanPham ?? item.TenSanPham ?? ''}${item.tenBienThe || item.TenBienThe ? ` - ${item.tenBienThe ?? item.TenBienThe}` : ''}`,
+              type: ADJUSTMENT_TYPES[item.loaiGiaoDich ?? item.LoaiGiaoDich] || item.loaiGiaoDich || item.LoaiGiaoDich,
+              change: item.soLuongThayDoi ?? item.SoLuongThayDoi ?? 0,
+              before: item.tonTruoc ?? item.TonTruoc ?? 0,
+              after: item.tonSau ?? item.TonSau ?? 0,
+              reason: item.lyDo ?? item.LyDo ?? '',
+              createdAt: item.ngayTao ?? item.NgayTao,
+            })),
+          },
+        ],
+      });
     } catch (err) {
-      alert(getApiMessage(err, 'Xuất dữ liệu tồn kho thất bại.'));
+      alert(getApiMessage(err, 'Xuất Excel tồn kho thất bại.'));
     } finally {
       setExporting(false);
     }
@@ -307,8 +413,13 @@ const InventoryView = () => {
                 <small className="text-muted">
                   Lần đồng bộ: {lastSyncAt ? formatDate(lastSyncAt) : 'Chưa có'}
                 </small>
-                <button className="btn btn-outline-primary btn-sm" onClick={handleExport} disabled={exporting}>
-                  <i className="fas fa-file-export"></i>{exporting ? ' Đang xuất...' : ' Xuất CSV'}
+                <button
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={handleExport}
+                  disabled={exporting}
+                  title="Xuất tồn kho, giữ chỗ và lịch sử điều chỉnh để kiểm kê/đối soát"
+                >
+                  <i className="fas fa-file-excel"></i>{exporting ? ' Đang xuất...' : ' Xuất báo cáo tồn kho'}
                 </button>
                 <button className="btn btn-success btn-sm" onClick={handleSync} disabled={syncing}>
                   <i className={`fas fa-sync-alt ${syncing ? 'fa-spin' : ''}`}></i>

@@ -33,4 +33,5 @@ public class OrderDto
     public DateTime? CheckoutHetHanLuc { get; set; }
     public List<OrderItemDto> Items { get; set; } = new();
     public List<OrderVoucherDto> Vouchers { get; set; } = new();
+    public List<OrderHistoryDto> LichSu { get; set; } = new();
 }

@@ -17,15 +17,18 @@ public class ProductsController : ControllerBase
     private readonly ICatalogService _catalogService;
     private readonly CatalogDbContext _dbContext;
     private readonly IImageStorageService _imageStorage;
+    private readonly IAuditLogService _auditLog;
 
     public ProductsController(
         ICatalogService catalogService,
         CatalogDbContext dbContext,
-        IImageStorageService imageStorage)
+        IImageStorageService imageStorage,
+        IAuditLogService auditLog)
     {
         _catalogService = catalogService;
         _dbContext = dbContext;
         _imageStorage = imageStorage;
+        _auditLog = auditLog;
     }
 
     [HttpGet]
@@ -143,6 +146,20 @@ public class ProductsController : ControllerBase
 
         _dbContext.Products.Add(product);
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "Product", product.MaSanPham.ToString(), "Create", null, new
+        {
+            product.MaSanPham,
+            product.MaSanPhamKinhDoanh,
+            product.TenSanPham,
+            product.LoaiSanPham,
+            product.MaDanhMuc,
+            product.MaHangXe,
+            product.MaDongXe,
+            product.GiaGoc,
+            product.GiaKhuyenMai,
+            product.TrangThaiSanPham,
+            product.DangHoatDong
+        });
 
         if (product.SoLuongTon > 0)
         {
@@ -159,6 +176,22 @@ public class ProductsController : ControllerBase
     {
         var product = await _dbContext.Products.FirstOrDefaultAsync(p => p.MaSanPham == id);
         if (product == null) return NotFound();
+        var oldValue = new
+        {
+            product.MaSanPhamKinhDoanh,
+            product.TenSanPham,
+            product.Slug,
+            product.LoaiSanPham,
+            product.MaDanhMuc,
+            product.MaHangXe,
+            product.MaDongXe,
+            product.MoTaNgan,
+            product.GiaGoc,
+            product.GiaKhuyenMai,
+            product.AnhChinhUrl,
+            product.TrangThaiSanPham,
+            product.DangHoatDong
+        };
 
         var nextType = string.IsNullOrWhiteSpace(request.LoaiSanPham) ? product.LoaiSanPham : request.LoaiSanPham;
         var nextCategoryId = request.MaDanhMuc ?? product.MaDanhMuc;
@@ -195,15 +228,41 @@ public class ProductsController : ControllerBase
         product.NgayCapNhat = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "Product", product.MaSanPham.ToString(), "Update", oldValue, new
+        {
+            product.MaSanPhamKinhDoanh,
+            product.TenSanPham,
+            product.Slug,
+            product.LoaiSanPham,
+            product.MaDanhMuc,
+            product.MaHangXe,
+            product.MaDongXe,
+            product.MoTaNgan,
+            product.GiaGoc,
+            product.GiaKhuyenMai,
+            product.AnhChinhUrl,
+            product.TrangThaiSanPham,
+            product.DangHoatDong
+        });
         return Ok(new { id = product.MaSanPham, message = "Cập nhật sản phẩm thành công." });
     }
 
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteProduct(int id)
     {
         var product = await _dbContext.Products.FirstOrDefaultAsync(p => p.MaSanPham == id);
         if (product == null) return NotFound();
+        var oldValue = new
+        {
+            product.MaSanPham,
+            product.MaSanPhamKinhDoanh,
+            product.TenSanPham,
+            product.LoaiSanPham,
+            product.MaDanhMuc,
+            product.TrangThaiSanPham,
+            product.DangHoatDong
+        };
 
         var hasOrderHistory = await _dbContext.ReviewOrderItems.AnyAsync(i => i.MaSanPham == id);
         if (hasOrderHistory)
@@ -223,6 +282,7 @@ public class ProductsController : ControllerBase
         _dbContext.Products.Remove(product);
         await _dbContext.SaveChangesAsync();
         await transaction.CommitAsync();
+        await _auditLog.WriteAsync(this, "Product", id.ToString(), "Delete", oldValue, null, "Xoa cung san pham");
 
         return NoContent();
     }
@@ -348,6 +408,7 @@ public class ProductsController : ControllerBase
 
         _dbContext.PartCompatibilities.Add(compatibility);
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "PartCompatibility", compatibility.MaTuongThich.ToString(), "Create", null, compatibility);
         return CreatedAtAction(nameof(GetPartCompatibilities), new { partId }, new { id = compatibility.MaTuongThich });
     }
 
@@ -360,6 +421,17 @@ public class ProductsController : ControllerBase
         {
             return NotFound(new { message = "Khong tim thay cau hinh tuong thich." });
         }
+        var oldValue = new
+        {
+            compatibility.MaPhuTung,
+            compatibility.MaHangXe,
+            compatibility.MaDongXe,
+            compatibility.NamTu,
+            compatibility.NamDen,
+            compatibility.ApDungTatCaXe,
+            compatibility.GhiChu,
+            compatibility.DangHoatDong
+        };
 
         request.MaPhuTung = partId;
         var error = await ValidatePartCompatibilityRequestAsync(request.MaPhuTung, request.MaHangXe, request.MaDongXe, request.NamTu, request.NamDen, request.ApDungTatCaXe);
@@ -380,10 +452,11 @@ public class ProductsController : ControllerBase
         compatibility.NgayCapNhat = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "PartCompatibility", compatibility.MaTuongThich.ToString(), "Update", oldValue, compatibility);
         return Ok(new { id = compatibility.MaTuongThich });
     }
 
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{partId:int}/compatibilities/{id:int}")]
     public async Task<IActionResult> DeletePartCompatibility(int partId, int id)
     {
@@ -392,9 +465,22 @@ public class ProductsController : ControllerBase
         {
             return NotFound();
         }
+        var oldValue = new
+        {
+            compatibility.MaTuongThich,
+            compatibility.MaPhuTung,
+            compatibility.MaHangXe,
+            compatibility.MaDongXe,
+            compatibility.NamTu,
+            compatibility.NamDen,
+            compatibility.ApDungTatCaXe,
+            compatibility.GhiChu,
+            compatibility.DangHoatDong
+        };
 
         _dbContext.PartCompatibilities.Remove(compatibility);
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "PartCompatibility", id.ToString(), "Delete", oldValue, null);
         return NoContent();
     }
 
@@ -450,6 +536,7 @@ public class ProductsController : ControllerBase
 
         _dbContext.ProductVariants.Add(variant);
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "ProductVariant", variant.MaBienSanPham.ToString(), "Create", null, variant);
 
         if ((variant.SoLuongTon ?? 0) > 0)
         {
@@ -466,6 +553,15 @@ public class ProductsController : ControllerBase
     {
         var variant = await _dbContext.ProductVariants.FirstOrDefaultAsync(v => v.MaBienSanPham == variantId && v.MaSanPham == productId);
         if (variant == null) return NotFound();
+        var oldValue = new
+        {
+            variant.TenBienThe,
+            variant.SKU,
+            variant.PhienBan,
+            variant.MauSac,
+            variant.GiaGhiDe,
+            variant.TrangThai
+        };
 
         if (request.TenBienThe != null) variant.TenBienThe = request.TenBienThe.Trim();
         if (request.Sku != null) variant.SKU = request.Sku.Trim();
@@ -476,18 +572,28 @@ public class ProductsController : ControllerBase
         variant.NgayCapNhat = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "ProductVariant", variant.MaBienSanPham.ToString(), "Update", oldValue, variant);
         return Ok(new { id = variant.MaBienSanPham, message = "Cập nhật biến thể thành công." });
     }
 
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{productId:int}/variants/{variantId:int}")]
     public async Task<IActionResult> DeleteVariant(int productId, int variantId)
     {
         var variant = await _dbContext.ProductVariants.FirstOrDefaultAsync(v => v.MaBienSanPham == variantId && v.MaSanPham == productId);
         if (variant == null) return NotFound();
+        var oldValue = new
+        {
+            variant.MaBienSanPham,
+            variant.MaSanPham,
+            variant.TenBienThe,
+            variant.SKU,
+            variant.TrangThai
+        };
 
         _dbContext.ProductVariants.Remove(variant);
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "ProductVariant", variantId.ToString(), "Delete", oldValue, null);
         return NoContent();
     }
 
@@ -539,6 +645,7 @@ public class ProductsController : ControllerBase
                 product.NgayCapNhat = DateTime.UtcNow;
             }
             await _dbContext.SaveChangesAsync();
+            await _auditLog.WriteAsync(this, "ProductImage", existingImg.MaAnhSanPham.ToString(), "SetMain", null, new { existingImg.MaAnhSanPham, existingImg.UrlAnh, existingImg.MaBienSanPham });
             return Ok(new { id = existingImg.MaAnhSanPham, laAnhChinh = true });
         }
 
@@ -605,6 +712,7 @@ public class ProductsController : ControllerBase
         }
 
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "ProductImage", image.MaAnhSanPham.ToString(), "Create", null, new { image.MaAnhSanPham, image.MaSanPham, image.MaBienSanPham, image.UrlAnh, image.LaAnhChinh });
 
         return Ok(new
         {
@@ -616,7 +724,7 @@ public class ProductsController : ControllerBase
         });
     }
 
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{productId:int}/images/{imageId:int}")]
     public async Task<IActionResult> DeleteImage(int productId, int imageId)
     {
@@ -627,6 +735,7 @@ public class ProductsController : ControllerBase
         {
             return NotFound();
         }
+        var oldValue = new { image.MaAnhSanPham, image.MaSanPham, image.MaBienSanPham, image.UrlAnh, image.LaAnhChinh };
 
         var product = await _dbContext.Products.FirstOrDefaultAsync(p => p.MaSanPham == productId);
         var shouldReplaceProductMainImage = product?.AnhChinhUrl == image.UrlAnh;
@@ -647,6 +756,7 @@ public class ProductsController : ControllerBase
         }
 
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "ProductImage", imageId.ToString(), "Delete", oldValue, null);
 
         return NoContent();
     }

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import productService from '../../services/productService';
 import brandService from '../../services/brandService';
+import { useAuth } from '../../contexts/AuthContext';
 
 const emptyForm = {
   scopeMode: 'brand',
@@ -19,6 +20,7 @@ const scopeOptions = [
 ];
 
 const CompatibilityManager = ({ product, onClose }) => {
+  const { isAdmin } = useAuth();
   const productId = product?.maSanPham || product?.id;
   const productName = product?.tenSanPham || product?.name || 'Phụ tùng';
   const [items, setItems] = useState([]);
@@ -315,9 +317,11 @@ const CompatibilityManager = ({ product, onClose }) => {
                           <button type="button" className="btn btn-xs btn-info mr-1" title="Sửa" onClick={() => openEdit(item)}>
                             <i className="fas fa-edit"></i>
                           </button>
-                          <button type="button" className="btn btn-xs btn-danger" title="Xóa" onClick={() => handleDelete(item)}>
-                            <i className="fas fa-trash"></i>
-                          </button>
+                          {isAdmin() && (
+                            <button type="button" className="btn btn-xs btn-danger" title="Xóa" onClick={() => handleDelete(item)}>
+                              <i className="fas fa-trash"></i>
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}

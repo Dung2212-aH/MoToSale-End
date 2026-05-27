@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import reviewService from '../../services/reviewService';
 import { formatDate } from '../../utils/formatDate';
+import { useAuth } from '../../contexts/AuthContext';
 
 const REVIEW_STATUS = {
   Pending: { label: 'Chờ duyệt', color: 'warning' },
@@ -9,6 +10,7 @@ const REVIEW_STATUS = {
 };
 
 const ReviewList = () => {
+  const { isAdmin } = useAuth();
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -198,9 +200,11 @@ const ReviewList = () => {
                                   <i className="fas fa-eye-slash"></i>
                                 </button>
                               )}
-                              <button className="btn btn-xs btn-danger" onClick={() => handleDelete(reviewId)} title="Xóa">
-                                <i className="fas fa-trash"></i>
-                              </button>
+                              {isAdmin() && (
+                                <button className="btn btn-xs btn-danger" onClick={() => handleDelete(reviewId)} title="Xóa">
+                                  <i className="fas fa-trash"></i>
+                                </button>
+                              )}
                             </td>
                           </tr>
                           );

@@ -12,12 +12,17 @@ import OrderList from './pages/orders/OrderList';
 import OrderDetail from './pages/orders/OrderDetail';
 import VoucherList from './pages/vouchers/VoucherList';
 import InventoryView from './pages/inventory/InventoryView';
+import StockDocumentList from './pages/inventory/StockDocumentList';
 import UserList from './pages/users/UserList';
+import CustomerList from './pages/customers/CustomerList';
 import ReviewList from './pages/reviews/ReviewList';
 import PostList from './pages/posts/PostList';
 import FaqList from './pages/faq/FaqList';
 import ContactList from './pages/contacts/ContactList';
 import ReportsPage from './pages/reports/ReportsPage';
+import AuditLogList from './pages/audit/AuditLogList';
+import WarrantyList from './pages/warranties/WarrantyList';
+import OperationsSettings from './pages/settings/OperationsSettings';
 
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -69,9 +74,12 @@ function AppRoutes() {
       <Route path="/orders/:id" element={<ProtectedRoute><MainLayout><OrderDetail /></MainLayout></ProtectedRoute>} />
       <Route path="/vouchers" element={<ProtectedRoute><MainLayout><VoucherList /></MainLayout></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><MainLayout><InventoryView /></MainLayout></ProtectedRoute>} />
+      <Route path="/stock-documents" element={<ProtectedRoute><MainLayout><StockDocumentList /></MainLayout></ProtectedRoute>} />
 
       {/* Users & Content */}
       <Route path="/users" element={<ProtectedRoute roles={['Admin']}><MainLayout><UserList /></MainLayout></ProtectedRoute>} />
+      <Route path="/customers" element={<ProtectedRoute><MainLayout><CustomerList /></MainLayout></ProtectedRoute>} />
+      <Route path="/warranties" element={<ProtectedRoute><MainLayout><WarrantyList /></MainLayout></ProtectedRoute>} />
       <Route path="/reviews" element={<ProtectedRoute><MainLayout><ReviewList /></MainLayout></ProtectedRoute>} />
       <Route path="/posts" element={<ProtectedRoute><MainLayout><PostList /></MainLayout></ProtectedRoute>} />
       <Route path="/faq" element={<ProtectedRoute><MainLayout><FaqList /></MainLayout></ProtectedRoute>} />
@@ -79,6 +87,8 @@ function AppRoutes() {
 
       {/* Reports */}
       <Route path="/reports" element={<ProtectedRoute><MainLayout><ReportsPage /></MainLayout></ProtectedRoute>} />
+      <Route path="/audit-logs" element={<ProtectedRoute roles={['Admin']}><MainLayout><AuditLogList /></MainLayout></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute><MainLayout><OperationsSettings /></MainLayout></ProtectedRoute>} />
 
       {/* Catch all */}
       <Route path="*" element={<Navigate to="/" replace />} />

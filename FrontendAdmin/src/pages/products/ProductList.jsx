@@ -8,6 +8,7 @@ import ProductForm from './ProductForm';
 import VariantManager from './VariantManager';
 import ImageManager from './ImageManager';
 import CompatibilityManager from './CompatibilityManager';
+import { useAuth } from '../../contexts/AuthContext';
 
 const PAGE_CONFIG = {
   XeMay: {
@@ -51,6 +52,7 @@ const normalizeText = (value) => String(value || '')
   .trim();
 
 const ProductList = ({ productType = 'XeMay' }) => {
+  const { isAdmin } = useAuth();
   const config = PAGE_CONFIG[productType] || PAGE_CONFIG.XeMay;
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -360,9 +362,11 @@ const ProductList = ({ productType = 'XeMay' }) => {
                                 <button type="button" className="btn btn-xs btn-success mr-1" title="Ảnh" onClick={() => setShowImages(getProductId(product))}>
                                   <i className="fas fa-images"></i>
                                 </button>
-                                <button type="button" className="btn btn-xs btn-danger" title="Xóa" onClick={() => handleDelete(getProductId(product), product.tenSanPham || product.name)}>
-                                  <i className="fas fa-trash"></i>
-                                </button>
+                                {isAdmin() && (
+                                  <button type="button" className="btn btn-xs btn-danger" title="Xóa" onClick={() => handleDelete(getProductId(product), product.tenSanPham || product.name)}>
+                                    <i className="fas fa-trash"></i>
+                                  </button>
+                                )}
                               </td>
                             </tr>
                           );

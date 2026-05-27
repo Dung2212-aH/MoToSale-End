@@ -16,6 +16,7 @@ public class OrderDbContext : DbContext
     public DbSet<CartItem> CartItems { get; set; }
     public DbSet<Order> Orders { get; set; }
     public DbSet<OrderItem> OrderItems { get; set; }
+    public DbSet<OrderHistory> OrderHistories { get; set; }
     public DbSet<InventoryHold> InventoryHolds { get; set; }
     public DbSet<OrderVoucher> OrderVouchers { get; set; }
     public DbSet<Voucher> Vouchers { get; set; }
@@ -33,6 +34,7 @@ public class OrderDbContext : DbContext
         ConfigureCartItems(modelBuilder);
         ConfigureOrders(modelBuilder);
         ConfigureOrderItems(modelBuilder);
+        ConfigureOrderHistories(modelBuilder);
         ConfigureInventoryHolds(modelBuilder);
         ConfigureOrderVouchers(modelBuilder);
         ConfigureVouchers(modelBuilder);
@@ -86,6 +88,7 @@ public class OrderDbContext : DbContext
             e.ToTable("SANPHAM");
             e.HasKey(x => x.MaSanPham);
             e.Property(x => x.MaSanPham).ValueGeneratedOnAdd();
+            e.Ignore(x => x.MaShowroom);
             e.Property(x => x.MaSanPhamKinhDoanh).HasMaxLength(50).IsRequired();
             e.Property(x => x.TenSanPham).HasMaxLength(255).IsRequired();
             e.Property(x => x.Slug).HasMaxLength(280).IsRequired();
@@ -214,6 +217,29 @@ public class OrderDbContext : DbContext
 
             e.HasMany(x => x.Vouchers)
                 .WithOne(x => x.Order)
+                .HasForeignKey(x => x.MaDonHang);
+
+            e.HasMany(x => x.Histories)
+                .WithOne(x => x.Order)
+                .HasForeignKey(x => x.MaDonHang);
+        });
+    }
+
+    private static void ConfigureOrderHistories(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<OrderHistory>(e =>
+        {
+            e.ToTable("DONHANG_LICHSU_TRANGTHAI");
+            e.HasKey(x => x.MaLichSuDonHang);
+            e.Property(x => x.MaLichSuDonHang).ValueGeneratedOnAdd();
+            e.Property(x => x.LoaiSuKien).HasMaxLength(30).IsUnicode(false).IsRequired();
+            e.Property(x => x.GiaTriCu).HasMaxLength(50).IsUnicode(false);
+            e.Property(x => x.GiaTriMoi).HasMaxLength(50).IsUnicode(false);
+            e.Property(x => x.GhiChu).HasMaxLength(500);
+            e.Property(x => x.ThoiGian).HasColumnType("datetime2(0)");
+
+            e.HasOne(x => x.Order)
+                .WithMany(x => x.Histories)
                 .HasForeignKey(x => x.MaDonHang);
         });
     }

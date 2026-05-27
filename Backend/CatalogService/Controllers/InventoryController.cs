@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text;
 using CatalogService.Data;
 using CatalogService.Entities;
+using CatalogService.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -15,8 +16,13 @@ public class InventoryController : ControllerBase
 {
     private const int DefaultLowStockThreshold = 5;
     private readonly CatalogDbContext _db;
+    private readonly IAuditLogService _auditLog;
 
-    public InventoryController(CatalogDbContext db) => _db = db;
+    public InventoryController(CatalogDbContext db, IAuditLogService auditLog)
+    {
+        _db = db;
+        _auditLog = auditLog;
+    }
 
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] InventorySearchRequest request)
@@ -162,6 +168,7 @@ public class InventoryController : ControllerBase
                 INSERT (MaSanPham, MaBienSanPham, MucCanhBaoTonThap, NgayCapNhat)
                 VALUES ({request.MaSanPham}, {request.MaBienSanPham}, {request.MucCanhBaoTonThap}, SYSDATETIME());
             """);
+        await _auditLog.WriteAsync(this, "InventoryThreshold", $"{request.MaSanPham}:{request.MaBienSanPham}", "Update", null, request);
 
         return Ok(new { message = "Cap nhat nguong ton thap thanh cong." });
     }
@@ -217,6 +224,7 @@ public class InventoryController : ControllerBase
             variant.NgayCapNhat = now;
             await _db.SaveChangesAsync();
             await InsertAdjustmentLogAsync(product, variant, type, after - before, before, after, request.LyDo, userId);
+            await _auditLog.WriteAsync(this, "Inventory", $"{request.MaSanPham}:{request.MaBienSanPham}", "Adjust", new { Stock = before }, new { Stock = after, Type = type, Quantity = request.SoLuong }, request.LyDo);
         }
         else
         {
@@ -237,12 +245,295 @@ public class InventoryController : ControllerBase
             product.NgayCapNhat = now;
             await _db.SaveChangesAsync();
             await InsertAdjustmentLogAsync(product, null, type, after - before, before, after, request.LyDo, userId);
+            await _auditLog.WriteAsync(this, "Inventory", request.MaSanPham.ToString(), "Adjust", new { Stock = before }, new { Stock = after, Type = type, Quantity = request.SoLuong }, request.LyDo);
         }
 
         await _db.Database.ExecuteSqlRawAsync("EXEC sp_SANPHAM_DongBoTatCaSoLuongTon");
         await transaction.CommitAsync();
 
         return Ok(new { message = "Dieu chinh ton kho thanh cong." });
+    }
+
+    [HttpGet("documents")]
+    public async Task<IActionResult> GetStockDocuments([FromQuery] string? status, [FromQuery] string? type, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        await EnsureSupportTablesAsync();
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var rows = await _db.Database.SqlQueryRaw<InventoryDocumentRow>(
+            """
+            SELECT
+                p.MaPhieuKho,
+                p.MaPhieu,
+                p.LoaiPhieu,
+                p.TrangThai,
+                p.GhiChu,
+                p.MaNguoiTao,
+                p.MaNguoiDuyet,
+                p.NgayTao,
+                p.NgayDuyet,
+                COUNT(ct.MaChiTietPhieuKho) AS SoDong,
+                ISNULL(SUM(ABS(ct.SoLuongThayDoi)), 0) AS TongSoLuong
+            FROM dbo.TONKHO_PHIEU p
+            LEFT JOIN dbo.TONKHO_PHIEU_CHITIET ct ON ct.MaPhieuKho = p.MaPhieuKho
+            GROUP BY p.MaPhieuKho, p.MaPhieu, p.LoaiPhieu, p.TrangThai, p.GhiChu, p.MaNguoiTao, p.MaNguoiDuyet, p.NgayTao, p.NgayDuyet
+            ORDER BY p.NgayTao DESC, p.MaPhieuKho DESC
+            """
+        ).ToListAsync();
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            rows = rows.Where(x => string.Equals(x.TrangThai, status, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(type))
+        {
+            rows = rows.Where(x => string.Equals(x.LoaiPhieu, NormalizeAdjustmentType(type), StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        var total = rows.Count;
+        var items = rows.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        return Ok(new { items, page, pageSize, totalItems = total, totalPages = (int)Math.Ceiling(total / (double)pageSize) });
+    }
+
+    [HttpGet("documents/{id:int}")]
+    public async Task<IActionResult> GetStockDocumentById(int id)
+    {
+        await EnsureSupportTablesAsync();
+        var document = (await _db.Database.SqlQueryRaw<InventoryDocumentRow>(
+            $"""
+            SELECT
+                p.MaPhieuKho,
+                p.MaPhieu,
+                p.LoaiPhieu,
+                p.TrangThai,
+                p.GhiChu,
+                p.MaNguoiTao,
+                p.MaNguoiDuyet,
+                p.NgayTao,
+                p.NgayDuyet,
+                COUNT(ct.MaChiTietPhieuKho) AS SoDong,
+                ISNULL(SUM(ABS(ct.SoLuongThayDoi)), 0) AS TongSoLuong
+            FROM dbo.TONKHO_PHIEU p
+            LEFT JOIN dbo.TONKHO_PHIEU_CHITIET ct ON ct.MaPhieuKho = p.MaPhieuKho
+            WHERE p.MaPhieuKho = {id}
+            GROUP BY p.MaPhieuKho, p.MaPhieu, p.LoaiPhieu, p.TrangThai, p.GhiChu, p.MaNguoiTao, p.MaNguoiDuyet, p.NgayTao, p.NgayDuyet
+            """
+        ).ToListAsync()).FirstOrDefault();
+
+        if (document is null)
+        {
+            return NotFound(new { message = "Khong tim thay phieu kho." });
+        }
+
+        var details = await _db.Database.SqlQueryRaw<InventoryDocumentDetailRow>(
+            $"""
+            SELECT
+                MaChiTietPhieuKho,
+                MaPhieuKho,
+                MaSanPham,
+                MaBienSanPham,
+                MaSanPhamKinhDoanh,
+                SKU,
+                TenSanPham,
+                TenBienThe,
+                TonTruoc,
+                SoLuongThayDoi,
+                TonSau,
+                GhiChu
+            FROM dbo.TONKHO_PHIEU_CHITIET
+            WHERE MaPhieuKho = {id}
+            ORDER BY MaChiTietPhieuKho
+            """
+        ).ToListAsync();
+
+        return Ok(new { document, details });
+    }
+
+    [HttpPost("documents")]
+    public async Task<IActionResult> CreateStockDocument([FromBody] InventoryDocumentRequest request)
+    {
+        var type = NormalizeAdjustmentType(request.LoaiPhieu);
+        if (type is null)
+        {
+            return BadRequest(new { message = "Loai phieu kho khong hop le." });
+        }
+
+        if (request.Items.Count == 0)
+        {
+            return BadRequest(new { message = "Phieu kho phai co it nhat mot dong hang." });
+        }
+
+        await EnsureSupportTablesAsync();
+        await using var transaction = await _db.Database.BeginTransactionAsync();
+
+        var now = DateTime.UtcNow;
+        var userId = GetCurrentUserId();
+        var code = $"PK-{now:yyyyMMddHHmmss}-{Random.Shared.Next(100, 999)}";
+
+        await _db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO dbo.TONKHO_PHIEU (MaPhieu, LoaiPhieu, TrangThai, GhiChu, MaNguoiTao, NgayTao, NgayCapNhat)
+            VALUES ({code}, {type}, N'Draft', {TrimToNull(request.GhiChu)}, {userId}, {now}, {now})
+            """);
+
+        var documentId = (await _db.Database.SqlQueryRaw<InventoryDocumentIdRow>(
+            $"SELECT MaPhieuKho FROM dbo.TONKHO_PHIEU WHERE MaPhieu = N'{code.Replace("'", "''")}'"
+        ).ToListAsync()).First().MaPhieuKho;
+
+        foreach (var item in request.Items)
+        {
+            if (item.MaSanPham <= 0 || item.SoLuong <= 0)
+            {
+                return BadRequest(new { message = "Dong phieu kho co san pham hoac so luong khong hop le." });
+            }
+
+            var product = await _db.Products.FirstOrDefaultAsync(x => x.MaSanPham == item.MaSanPham);
+            if (product is null)
+            {
+                return NotFound(new { message = $"Khong tim thay san pham #{item.MaSanPham}." });
+            }
+
+            ProductVariant? variant = null;
+            int before;
+            if (item.MaBienSanPham.HasValue)
+            {
+                variant = await _db.ProductVariants.FirstOrDefaultAsync(x => x.MaSanPham == item.MaSanPham && x.MaBienSanPham == item.MaBienSanPham.Value);
+                if (variant is null)
+                {
+                    return NotFound(new { message = $"Khong tim thay bien the #{item.MaBienSanPham}." });
+                }
+
+                before = variant.SoLuongTon ?? 0;
+            }
+            else
+            {
+                before = product.SoLuongTon;
+            }
+
+            var after = CalculateNewStock(before, item.SoLuong, type);
+            if (after < 0)
+            {
+                return BadRequest(new { message = "Ton kho du kien sau duyet khong duoc am." });
+            }
+
+            await _db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO dbo.TONKHO_PHIEU_CHITIET
+                    (MaPhieuKho, MaSanPham, MaBienSanPham, MaSanPhamKinhDoanh, SKU, TenSanPham, TenBienThe, TonTruoc, SoLuongThayDoi, TonSau, GhiChu)
+                VALUES
+                    ({documentId}, {product.MaSanPham}, {item.MaBienSanPham}, {product.MaSanPhamKinhDoanh}, {variant?.SKU}, {product.TenSanPham}, {variant?.TenBienThe}, {before}, {after - before}, {after}, {TrimToNull(item.GhiChu)})
+                """);
+        }
+
+        await _auditLog.WriteAsync(this, "InventoryDocument", documentId.ToString(), "Create", null, new { code, Type = type, request.Items.Count }, request.GhiChu);
+        await transaction.CommitAsync();
+
+        return CreatedAtAction(nameof(GetStockDocumentById), new { id = documentId }, new { id = documentId, maPhieu = code, trangThai = "Draft" });
+    }
+
+    [HttpPost("documents/{id:int}/approve")]
+    public async Task<IActionResult> ApproveStockDocument(int id)
+    {
+        await EnsureSupportTablesAsync();
+        var documents = await _db.Database.SqlQueryRaw<InventoryDocumentRow>($"SELECT MaPhieuKho, MaPhieu, LoaiPhieu, TrangThai, GhiChu, MaNguoiTao, MaNguoiDuyet, NgayTao, NgayDuyet, 0 AS SoDong, 0 AS TongSoLuong FROM dbo.TONKHO_PHIEU WHERE MaPhieuKho = {id}").ToListAsync();
+        var document = documents.FirstOrDefault();
+        if (document is null)
+        {
+            return NotFound(new { message = "Khong tim thay phieu kho." });
+        }
+
+        if (!string.Equals(document.TrangThai, "Draft", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { message = "Chi phieu kho dang nhap moi duoc duyet." });
+        }
+
+        var details = await _db.Database.SqlQueryRaw<InventoryDocumentDetailRow>($"SELECT MaChiTietPhieuKho, MaPhieuKho, MaSanPham, MaBienSanPham, MaSanPhamKinhDoanh, SKU, TenSanPham, TenBienThe, TonTruoc, SoLuongThayDoi, TonSau, GhiChu FROM dbo.TONKHO_PHIEU_CHITIET WHERE MaPhieuKho = {id}").ToListAsync();
+        if (details.Count == 0)
+        {
+            return BadRequest(new { message = "Phieu kho chua co dong hang." });
+        }
+
+        await using var transaction = await _db.Database.BeginTransactionAsync();
+        var now = DateTime.UtcNow;
+        var userId = GetCurrentUserId();
+
+        foreach (var detail in details)
+        {
+            var product = await _db.Products.FirstAsync(x => x.MaSanPham == detail.MaSanPham);
+            ProductVariant? variant = null;
+            int before;
+            if (detail.MaBienSanPham.HasValue)
+            {
+                variant = await _db.ProductVariants.FirstAsync(x => x.MaBienSanPham == detail.MaBienSanPham.Value);
+                before = variant.SoLuongTon ?? 0;
+            }
+            else
+            {
+                before = product.SoLuongTon;
+            }
+
+            var after = before + detail.SoLuongThayDoi;
+            if (document.LoaiPhieu.Equals("Adjust", StringComparison.OrdinalIgnoreCase))
+            {
+                after = detail.TonSau;
+            }
+
+            if (after < 0)
+            {
+                return BadRequest(new { message = $"Ton kho sau duyet cua {detail.TenSanPham} khong duoc am." });
+            }
+
+            if (variant is not null)
+            {
+                variant.SoLuongTon = after;
+                variant.NgayCapNhat = now;
+            }
+            else
+            {
+                product.SoLuongTon = after;
+                product.NgayCapNhat = now;
+            }
+
+            await _db.SaveChangesAsync();
+            await InsertAdjustmentLogAsync(product, variant, document.LoaiPhieu, after - before, before, after, document.MaPhieu, userId);
+        }
+
+        await _db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE dbo.TONKHO_PHIEU
+            SET TrangThai = N'Approved', MaNguoiDuyet = {userId}, NgayDuyet = {now}, NgayCapNhat = {now}
+            WHERE MaPhieuKho = {id}
+            """);
+        await _db.Database.ExecuteSqlRawAsync("EXEC sp_SANPHAM_DongBoTatCaSoLuongTon");
+        await _auditLog.WriteAsync(this, "InventoryDocument", id.ToString(), "Approve", new { document.TrangThai }, new { TrangThai = "Approved" }, document.MaPhieu);
+        await transaction.CommitAsync();
+
+        return Ok(new { message = "Duyet phieu kho thanh cong." });
+    }
+
+    [HttpPost("documents/{id:int}/cancel")]
+    public async Task<IActionResult> CancelStockDocument(int id, [FromBody] InventoryDocumentCancelRequest request)
+    {
+        await EnsureSupportTablesAsync();
+        var documents = await _db.Database.SqlQueryRaw<InventoryDocumentRow>($"SELECT MaPhieuKho, MaPhieu, LoaiPhieu, TrangThai, GhiChu, MaNguoiTao, MaNguoiDuyet, NgayTao, NgayDuyet, 0 AS SoDong, 0 AS TongSoLuong FROM dbo.TONKHO_PHIEU WHERE MaPhieuKho = {id}").ToListAsync();
+        var document = documents.FirstOrDefault();
+        if (document is null)
+        {
+            return NotFound(new { message = "Khong tim thay phieu kho." });
+        }
+
+        if (!string.Equals(document.TrangThai, "Draft", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { message = "Chi phieu kho dang nhap moi duoc huy." });
+        }
+
+        var now = DateTime.UtcNow;
+        await _db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE dbo.TONKHO_PHIEU
+            SET TrangThai = N'Cancelled', GhiChu = CONCAT(ISNULL(GhiChu, N''), N' | Huy: ', {TrimToNull(request.LyDo)}), NgayCapNhat = {now}
+            WHERE MaPhieuKho = {id}
+            """);
+        await _auditLog.WriteAsync(this, "InventoryDocument", id.ToString(), "Cancel", new { document.TrangThai }, new { TrangThai = "Cancelled" }, request.LyDo);
+        return Ok(new { message = "Huy phieu kho thanh cong." });
     }
 
     [HttpPost("sync")]
@@ -257,6 +548,7 @@ public class InventoryController : ControllerBase
             WHEN MATCHED THEN UPDATE SET [Value] = {DateTime.UtcNow.ToString("O")}
             WHEN NOT MATCHED THEN INSERT ([Key], [Value]) VALUES (N'LastSyncAt', {DateTime.UtcNow.ToString("O")});
             """);
+        await _auditLog.WriteAsync(this, "Inventory", "All", "Sync", null, new { SyncedAt = DateTime.UtcNow });
         return Ok(new { message = "Dong bo ton kho thanh cong." });
     }
 
@@ -455,6 +747,46 @@ public class InventoryController : ControllerBase
                     [Value] NVARCHAR(500) NULL
                 );
             END;
+
+            IF OBJECT_ID(N'dbo.TONKHO_PHIEU', N'U') IS NULL
+            BEGIN
+                CREATE TABLE dbo.TONKHO_PHIEU (
+                    MaPhieuKho INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                    MaPhieu NVARCHAR(40) NOT NULL UNIQUE,
+                    LoaiPhieu VARCHAR(20) NOT NULL,
+                    TrangThai VARCHAR(20) NOT NULL,
+                    GhiChu NVARCHAR(1000) NULL,
+                    MaNguoiTao INT NULL,
+                    MaNguoiDuyet INT NULL,
+                    NgayTao DATETIME2(0) NOT NULL,
+                    NgayDuyet DATETIME2(0) NULL,
+                    NgayCapNhat DATETIME2(0) NOT NULL
+                );
+                CREATE INDEX IX_TONKHO_PHIEU_Status_Time
+                    ON dbo.TONKHO_PHIEU (TrangThai, NgayTao DESC);
+            END;
+
+            IF OBJECT_ID(N'dbo.TONKHO_PHIEU_CHITIET', N'U') IS NULL
+            BEGIN
+                CREATE TABLE dbo.TONKHO_PHIEU_CHITIET (
+                    MaChiTietPhieuKho INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                    MaPhieuKho INT NOT NULL,
+                    MaSanPham INT NOT NULL,
+                    MaBienSanPham INT NULL,
+                    MaSanPhamKinhDoanh NVARCHAR(50) NOT NULL,
+                    SKU NVARCHAR(80) NULL,
+                    TenSanPham NVARCHAR(255) NOT NULL,
+                    TenBienThe NVARCHAR(180) NULL,
+                    TonTruoc INT NOT NULL,
+                    SoLuongThayDoi INT NOT NULL,
+                    TonSau INT NOT NULL,
+                    GhiChu NVARCHAR(500) NULL,
+                    CONSTRAINT FK_TONKHO_PHIEU_CHITIET_PHIEU
+                        FOREIGN KEY (MaPhieuKho) REFERENCES dbo.TONKHO_PHIEU (MaPhieuKho)
+                );
+                CREATE INDEX IX_TONKHO_PHIEU_CHITIET_Phieu
+                    ON dbo.TONKHO_PHIEU_CHITIET (MaPhieuKho);
+            END;
             """);
     }
 
@@ -486,6 +818,11 @@ public class InventoryController : ControllerBase
     private static bool Contains(string? value, string search)
     {
         return value?.Contains(search, StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    private static string? TrimToNull(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
     private static string EscapeTsv(string? value)
@@ -580,6 +917,26 @@ public class InventoryAdjustRequest
     public string LyDo { get; set; } = string.Empty;
 }
 
+public class InventoryDocumentRequest
+{
+    public string LoaiPhieu { get; set; } = string.Empty;
+    public string? GhiChu { get; set; }
+    public List<InventoryDocumentItemRequest> Items { get; set; } = new();
+}
+
+public class InventoryDocumentItemRequest
+{
+    public int MaSanPham { get; set; }
+    public int? MaBienSanPham { get; set; }
+    public int SoLuong { get; set; }
+    public string? GhiChu { get; set; }
+}
+
+public class InventoryDocumentCancelRequest
+{
+    public string? LyDo { get; set; }
+}
+
 public class InventoryRow
 {
     public int MaSanPham { get; set; }
@@ -637,4 +994,40 @@ public class InventoryMetaRow
 {
     public string Key { get; set; } = "";
     public string? Value { get; set; }
+}
+
+public class InventoryDocumentIdRow
+{
+    public int MaPhieuKho { get; set; }
+}
+
+public class InventoryDocumentRow
+{
+    public int MaPhieuKho { get; set; }
+    public string MaPhieu { get; set; } = "";
+    public string LoaiPhieu { get; set; } = "";
+    public string TrangThai { get; set; } = "";
+    public string? GhiChu { get; set; }
+    public int? MaNguoiTao { get; set; }
+    public int? MaNguoiDuyet { get; set; }
+    public DateTime NgayTao { get; set; }
+    public DateTime? NgayDuyet { get; set; }
+    public int SoDong { get; set; }
+    public int TongSoLuong { get; set; }
+}
+
+public class InventoryDocumentDetailRow
+{
+    public int MaChiTietPhieuKho { get; set; }
+    public int MaPhieuKho { get; set; }
+    public int MaSanPham { get; set; }
+    public int? MaBienSanPham { get; set; }
+    public string MaSanPhamKinhDoanh { get; set; } = "";
+    public string? SKU { get; set; }
+    public string TenSanPham { get; set; } = "";
+    public string? TenBienThe { get; set; }
+    public int TonTruoc { get; set; }
+    public int SoLuongThayDoi { get; set; }
+    public int TonSau { get; set; }
+    public string? GhiChu { get; set; }
 }

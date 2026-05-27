@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import productService from '../../services/productService';
+import { useAuth } from '../../contexts/AuthContext';
 
 const VariantManager = ({ productId, onClose }) => {
+  const { isAdmin } = useAuth();
   const [variants, setVariants] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -169,9 +171,11 @@ const VariantManager = ({ productId, onClose }) => {
                           <button className="btn btn-xs btn-info mr-1" onClick={() => openEdit(v)}>
                             <i className="fas fa-edit"></i>
                           </button>
-                          <button className="btn btn-xs btn-danger" onClick={() => handleDelete(v.id, v.tenBienThe || v.name)}>
-                            <i className="fas fa-trash"></i>
-                          </button>
+                          {isAdmin() && (
+                            <button className="btn btn-xs btn-danger" onClick={() => handleDelete(v.id, v.tenBienThe || v.name)}>
+                              <i className="fas fa-trash"></i>
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}

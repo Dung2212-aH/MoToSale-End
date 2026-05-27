@@ -31,11 +31,13 @@ public class ReviewsController : ControllerBase
 
     private readonly CatalogDbContext _dbContext;
     private readonly IImageStorageService _imageStorage;
+    private readonly IAuditLogService _auditLog;
 
-    public ReviewsController(CatalogDbContext dbContext, IImageStorageService imageStorage)
+    public ReviewsController(CatalogDbContext dbContext, IImageStorageService imageStorage, IAuditLogService auditLog)
     {
         _dbContext = dbContext;
         _imageStorage = imageStorage;
+        _auditLog = auditLog;
     }
 
     [HttpGet("~/api/products/{productId:int}/reviews")]
@@ -329,10 +331,12 @@ public class ReviewsController : ControllerBase
         {
             return NotFound(new { message = "Khong tim thay danh gia." });
         }
+        var oldValue = new { review.TrangThai, review.NgayCapNhat };
 
         review.TrangThai = status;
         review.NgayCapNhat = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "ProductReview", review.MaDanhGia.ToString(), "UpdateStatus", oldValue, new { review.TrangThai, review.NgayCapNhat });
 
         return Ok(new ProductReviewDto
         {
@@ -351,7 +355,7 @@ public class ReviewsController : ControllerBase
         });
     }
 
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteReview(int id)
     {
@@ -360,9 +364,11 @@ public class ReviewsController : ControllerBase
         {
             return NotFound(new { message = "Khong tim thay danh gia." });
         }
+        var oldValue = new { review.MaDanhGia, review.MaSanPham, review.MaNguoiDung, review.MaDonHang, review.Diem, review.TieuDe, review.TrangThai };
 
         _dbContext.ProductReviews.Remove(review);
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "ProductReview", id.ToString(), "Delete", oldValue, null);
 
         return NoContent();
     }

@@ -2,6 +2,7 @@ import productService from './productService';
 import orderService from './orderService';
 import paymentService from './paymentService';
 import userService from './userService';
+import { getOrderStatusMeta } from '../utils/constants';
 
 const unwrapList = (payload) => {
   const data = payload?.data ?? payload;
@@ -15,12 +16,54 @@ const unwrapList = (payload) => {
 const unwrapTotal = (payload) => {
   const data = payload?.data ?? payload;
   const list = unwrapList(data);
-  return Number(data?.total ?? data?.totalCount ?? data?.count ?? list.length ?? 0);
+  return Number(data?.total ?? data?.totalItems ?? data?.totalCount ?? data?.totalRecords ?? data?.count ?? list.length ?? 0);
 };
 
-const getAmount = (item) => Number(item?.soTien ?? item?.tongTien ?? item?.amount ?? item?.totalAmount ?? item?.paidAmount ?? 0);
+const fetchAllPages = async (fetcher, params = {}) => {
+  const pageSize = params.pageSize || 100;
+  const firstPayload = await fetcher({ ...params, page: 1, pageSize });
+  const firstItems = unwrapList(firstPayload);
+  const total = unwrapTotal(firstPayload);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-const getDateValue = (item) => item?.ngayTao || item?.createdAt || item?.createdDate || item?.paidAt || item?.ngayThanhToan;
+  if (totalPages === 1) {
+    return { items: firstItems, total };
+  }
+
+  const restResults = await Promise.allSettled(
+    Array.from({ length: totalPages - 1 }, (_, index) =>
+      fetcher({ ...params, page: index + 2, pageSize })
+    )
+  );
+
+  const restItems = restResults.flatMap((result) =>
+    result.status === 'fulfilled' ? unwrapList(result.value) : []
+  );
+
+  return {
+    items: [...firstItems, ...restItems],
+    total,
+  };
+};
+
+const getOrderAmount = (order) => Number(order?.tongThanhToan ?? order?.tongTien ?? order?.totalAmount ?? order?.amount ?? 0);
+
+const getOrderStatus = (order) => order?.trangThaiDonHang || order?.TrangThaiDonHang || order?.trangThai || order?.status || '';
+
+const getPaymentStatus = (order) => order?.trangThaiThanhToan || order?.TrangThaiThanhToan || order?.paymentStatus || order?.thanhToan?.trangThai || order?.payment?.status || '';
+
+const getDateValue = (item) => item?.ngayTao || item?.NgayTao || item?.createdAt || item?.createdDate || item?.paidAt || item?.ngayThanhToan;
+
+const getPaymentDateValue = (item) => item?.ngayThanhToanThanhCong || item?.NgayThanhToanThanhCong || item?.ngayThanhToan || item?.paidAt || item?.createdAt || item?.ngayTao;
+
+const isPaidOrder = (order) => getPaymentStatus(order) === 'Paid';
+
+const isRevenueOrder = (order) => ['Delivered', 'Completed'].includes(getOrderStatus(order)) && isPaidOrder(order);
+
+const isDateInRange = (value, start, end) => {
+  const date = new Date(value);
+  return !Number.isNaN(date.getTime()) && date >= start && date <= end;
+};
 
 const toDateKey = (date) => date.toISOString().slice(0, 10);
 
@@ -38,23 +81,25 @@ const buildDateBuckets = (fromDate, days) => {
   });
 };
 
-const getStatusLabel = (status) => {
-  const labels = {
-    Pending: 'Chờ xác nhận',
-    Checkout: 'Chờ xác nhận',
-    AwaitingPayment: 'Chờ xác nhận',
-    Confirmed: 'Chờ xác nhận',
-    Processing: 'Chờ xác nhận',
-    Shipping: 'Đang giao',
-    Delivered: 'Đã giao',
-    Completed: 'Đã giao',
+const getStatusReportGroup = (status) => {
+  const groups = {
+    Pending: 'Chờ xử lý',
+    Checkout: 'Chờ xử lý',
+    AwaitingPayment: 'Chờ xử lý',
+    Confirmed: 'Chờ xử lý',
+    Processing: 'Đang xử lý',
+    Shipping: 'Đang xử lý',
+    Delivered: 'Hoàn tất',
+    Completed: 'Hoàn tất',
     Cancelled: 'Đã hủy',
     Canceled: 'Đã hủy',
   };
-  return labels[status] || status || 'Khác';
+  return groups[status] || 'Khác';
 };
 
 const getProductName = (item) => item?.tenSanPham || item?.productName || item?.name || item?.maSanPham || item?.sku || 'Sản phẩm';
+
+const getOrderItems = (order) => order?.items || order?.Items || order?.chiTiet || order?.ChiTiet || [];
 
 const canReadUsers = () => {
   try {
@@ -75,39 +120,68 @@ const getSoldQuantity = (item) => {
   return Number(item?.soldQuantity || item?.soLuongDaBan || item?.totalSold || item?.quantitySold || fromVariants || 0);
 };
 
+const buildTopProductsFromOrders = (orders, limit) => {
+  const productMap = new Map();
+
+  orders.filter(isRevenueOrder).forEach((order) => {
+    getOrderItems(order).forEach((item) => {
+      const id = item?.maSanPham || item?.MaSanPham || item?.productId || item?.id || item?.skuSnapshot || item?.SKUSnapshot || getProductName(item);
+      const quantity = Number(item?.soLuong ?? item?.SoLuong ?? item?.quantity ?? 0);
+      const revenue = Number(item?.thanhTien ?? item?.ThanhTien ?? 0) ||
+        quantity * Number(item?.donGia ?? item?.DonGia ?? item?.unitPrice ?? 0);
+
+      if (!id || quantity <= 0) return;
+
+      const current = productMap.get(id) || {
+        id,
+        name: item?.tenSanPhamSnapshot || item?.TenSanPhamSnapshot || getProductName(item),
+        sold: 0,
+        revenue: 0,
+      };
+
+      current.sold += quantity;
+      current.revenue += revenue;
+      productMap.set(id, current);
+    });
+  });
+
+  return Array.from(productMap.values())
+    .sort((a, b) => b.sold - a.sold || b.revenue - a.revenue)
+    .slice(0, limit);
+};
+
 const reportService = {
   getSummary: async () => {
     const usersRequest = canReadUsers()
-      ? userService.getAll({ page: 1, pageSize: 100 })
-      : Promise.resolve({ data: { items: [], totalItems: 0 } });
+      ? fetchAllPages(userService.getAll)
+      : Promise.resolve({ items: [], total: 0 });
 
     const [productsRes, ordersRes, paymentsRes, usersRes] = await Promise.allSettled([
-      productService.getAll({ page: 1, pageSize: 100 }),
-      orderService.getAll({ page: 1, pageSize: 100 }),
-      paymentService.getAll({ page: 1, pageSize: 100 }),
+      fetchAllPages(productService.getAll),
+      fetchAllPages(orderService.getAll),
+      fetchAllPages(paymentService.getAll),
       usersRequest,
     ]);
 
-    const productsPayload = productsRes.status === 'fulfilled' ? productsRes.value : {};
-    const ordersPayload = ordersRes.status === 'fulfilled' ? ordersRes.value : {};
-    const paymentsPayload = paymentsRes.status === 'fulfilled' ? paymentsRes.value : {};
-    const usersPayload = usersRes.status === 'fulfilled' ? usersRes.value : {};
+    const productsPayload = productsRes.status === 'fulfilled' ? productsRes.value : { items: [], total: 0 };
+    const ordersPayload = ordersRes.status === 'fulfilled' ? ordersRes.value : { items: [], total: 0 };
+    const paymentsPayload = paymentsRes.status === 'fulfilled' ? paymentsRes.value : { items: [], total: 0 };
+    const usersPayload = usersRes.status === 'fulfilled' ? usersRes.value : { items: [], total: 0 };
 
-    const products = unwrapList(productsPayload);
-    const orders = unwrapList(ordersPayload);
-    const payments = unwrapList(paymentsPayload);
-    const users = unwrapList(usersPayload);
+    const products = productsPayload.items;
+    const orders = ordersPayload.items;
+    const payments = paymentsPayload.items;
+    const users = usersPayload.items;
 
     const now = new Date();
     const month = now.getMonth();
     const year = now.getFullYear();
-    const monthRevenue = payments.reduce((sum, payment) => {
-      const date = new Date(getDateValue(payment));
-      if (Number.isNaN(date.getTime()) || date.getMonth() !== month || date.getFullYear() !== year) {
-        return sum;
-      }
-      return sum + getAmount(payment);
-    }, 0);
+    const monthRevenueOrders = orders.filter((order) => {
+      if (!isRevenueOrder(order)) return false;
+      const date = new Date(getPaymentDateValue(order));
+      return !Number.isNaN(date.getTime()) && date.getMonth() === month && date.getFullYear() === year;
+    });
+    const monthRevenue = monthRevenueOrders.reduce((sum, order) => sum + getOrderAmount(order), 0);
 
     return {
       products,
@@ -115,10 +189,11 @@ const reportService = {
       payments,
       users,
       stats: {
-        productCount: unwrapTotal(productsPayload),
-        orderCount: unwrapTotal(ordersPayload),
+        productCount: productsPayload.total,
+        orderCount: ordersPayload.total,
         monthRevenue,
-        userCount: unwrapTotal(usersPayload),
+        revenueOrderCount: monthRevenueOrders.length,
+        userCount: usersPayload.total,
       },
     };
   },
@@ -131,10 +206,10 @@ const reportService = {
 
     return {
       ...summary,
-      revenueSeries: reportService.buildRevenueSeries(summary.payments, startDate, 7),
+      revenueSeries: reportService.buildRevenueSeries(summary.orders, startDate, 7),
       orderStatusSeries: reportService.buildOrderStatusSeries(summary.orders),
       recentOrders: reportService.getRecentOrders(summary.orders, 5),
-      topProducts: reportService.getTopProducts(summary.products, 5),
+      topProducts: reportService.getTopProducts(summary.orders, summary.products, 5),
     };
   },
 
@@ -143,21 +218,20 @@ const reportService = {
     const end = new Date(endDate);
     const diffDays = Math.max(1, Math.round((end - start) / 86400000) + 1);
     const usersRequest = canReadUsers()
-      ? userService.getAll({ page: 1, pageSize: 100 })
-      : Promise.resolve({ data: { items: [], totalItems: 0 } });
+      ? fetchAllPages(userService.getAll)
+      : Promise.resolve({ items: [], total: 0 });
 
-    // Fetch with date filters where supported
     const [productsRes, ordersRes, paymentsRes, usersRes] = await Promise.allSettled([
-      productService.getAll({ page: 1, pageSize: 100 }),
-      orderService.getAll({ page: 1, pageSize: 100, tuNgay: startDate, denNgay: endDate }),
-      paymentService.getAll({ page: 1, pageSize: 100 }),
+      fetchAllPages(productService.getAll),
+      fetchAllPages(orderService.getAll),
+      fetchAllPages(paymentService.getAll),
       usersRequest,
     ]);
 
-    const products = unwrapList(productsRes.status === 'fulfilled' ? productsRes.value : {});
-    const orders = unwrapList(ordersRes.status === 'fulfilled' ? ordersRes.value : {});
-    const allPayments = unwrapList(paymentsRes.status === 'fulfilled' ? paymentsRes.value : {});
-    const users = unwrapList(usersRes.status === 'fulfilled' ? usersRes.value : {});
+    const products = productsRes.status === 'fulfilled' ? productsRes.value.items : [];
+    const allOrders = ordersRes.status === 'fulfilled' ? ordersRes.value.items : [];
+    const allPayments = paymentsRes.status === 'fulfilled' ? paymentsRes.value.items : [];
+    const users = usersRes.status === 'fulfilled' ? usersRes.value.items : [];
 
     // Filter payments client-side by date (payment API may not support date filter)
     const payments = allPayments.filter((payment) => {
@@ -165,7 +239,12 @@ const reportService = {
       return !Number.isNaN(date.getTime()) && date >= start && date <= new Date(`${endDate}T23:59:59`);
     });
 
-    const totalRevenue = payments.reduce((sum, p) => sum + getAmount(p), 0);
+    const rangeEnd = new Date(`${endDate}T23:59:59`);
+    const orders = allOrders.filter((order) => isDateInRange(getDateValue(order), start, rangeEnd));
+    const revenueOrders = allOrders.filter((order) =>
+      isRevenueOrder(order) && isDateInRange(getPaymentDateValue(order), start, rangeEnd)
+    );
+    const totalRevenue = revenueOrders.reduce((sum, order) => sum + getOrderAmount(order), 0);
 
     return {
       products,
@@ -176,24 +255,26 @@ const reportService = {
         productCount: products.length,
         orderCount: orders.length,
         monthRevenue: totalRevenue,
+        revenueOrderCount: revenueOrders.length,
         userCount: users.length,
       },
-      revenueSeries: reportService.buildRevenueSeries(payments, start, diffDays),
+      revenueSeries: reportService.buildRevenueSeries(orders, start, diffDays),
       orderStatusSeries: reportService.buildOrderStatusSeries(orders),
-      topProducts: reportService.getTopProducts(products, 10),
+      topProducts: reportService.getTopProducts(orders, products, 10),
     };
   },
 
-  buildRevenueSeries: (payments, fromDate, days) => {
+  buildRevenueSeries: (orders, fromDate, days) => {
     const buckets = buildDateBuckets(fromDate, days);
     const map = new Map(buckets.map((bucket) => [bucket.key, bucket]));
 
-    payments.forEach((payment) => {
-      const date = new Date(getDateValue(payment));
+    orders.forEach((order) => {
+      if (!isRevenueOrder(order)) return;
+      const date = new Date(getPaymentDateValue(order));
       if (Number.isNaN(date.getTime())) return;
       const bucket = map.get(toDateKey(date));
       if (bucket) {
-        bucket.value += getAmount(payment);
+        bucket.value += getOrderAmount(order);
       }
     });
 
@@ -202,16 +283,18 @@ const reportService = {
 
   buildOrderStatusSeries: (orders) => {
     const counts = orders.reduce((acc, order) => {
-      const status = order?.trangThai || order?.status || 'Khác';
-      acc[status] = (acc[status] || 0) + 1;
+      const group = getStatusReportGroup(getOrderStatus(order));
+      acc[group] = (acc[group] || 0) + 1;
       return acc;
     }, {});
 
-    return Object.entries(counts).map(([status, value]) => ({
-      label: getStatusLabel(status),
+    return Object.entries(counts).map(([label, value]) => ({
+      label,
       value,
     }));
   },
+
+  getOrderStatusLabel: (order) => getOrderStatusMeta(getOrderStatus(order)).label,
 
   getRecentOrders: (orders, limit) => {
     return [...orders]
@@ -219,7 +302,10 @@ const reportService = {
       .slice(0, limit);
   },
 
-  getTopProducts: (products, limit) => {
+  getTopProducts: (orders, products, limit) => {
+    const fromOrders = buildTopProductsFromOrders(orders, limit);
+    if (fromOrders.length > 0) return fromOrders;
+
     return [...products]
       .map((product) => ({
         id: product?.id || product?.maSanPham || product?.productId,

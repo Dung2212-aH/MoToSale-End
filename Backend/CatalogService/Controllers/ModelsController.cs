@@ -1,4 +1,5 @@
 using CatalogService.Data;
+using CatalogService.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +11,12 @@ namespace CatalogService.Controllers;
 public class ModelsController : ControllerBase
 {
     private readonly CatalogDbContext _db;
-    public ModelsController(CatalogDbContext db) => _db = db;
+    private readonly IAuditLogService _auditLog;
+    public ModelsController(CatalogDbContext db, IAuditLogService auditLog)
+    {
+        _db = db;
+        _auditLog = auditLog;
+    }
 
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] int? brandId, [FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
@@ -65,6 +71,7 @@ public class ModelsController : ControllerBase
 
         _db.VehicleModels.Add(model);
         await _db.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "VehicleModel", model.MaDongXe.ToString(), "Create", null, new { model.MaDongXe, model.MaHangXe, model.TenDongXe, model.Slug, model.DangHoatDong });
         return CreatedAtAction(nameof(GetById), new { id = model.MaDongXe }, new { id = model.MaDongXe, maHangXe = model.MaHangXe, tenDongXe = model.TenDongXe, slug = model.Slug, dangHoatDong = model.DangHoatDong });
     }
 
@@ -74,6 +81,7 @@ public class ModelsController : ControllerBase
     {
         var model = await _db.VehicleModels.FirstOrDefaultAsync(m => m.MaDongXe == id);
         if (model is null) return NotFound();
+        var oldValue = new { model.MaHangXe, model.TenDongXe, model.Slug, model.DangHoatDong };
 
         if (!await _db.Brands.AnyAsync(b => b.MaHangXe == request.MaHangXe))
         {
@@ -87,15 +95,17 @@ public class ModelsController : ControllerBase
         model.NgayCapNhat = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "VehicleModel", model.MaDongXe.ToString(), "Update", oldValue, new { model.MaHangXe, model.TenDongXe, model.Slug, model.DangHoatDong });
         return Ok(new { id = model.MaDongXe, maHangXe = model.MaHangXe, tenDongXe = model.TenDongXe, slug = model.Slug, dangHoatDong = model.DangHoatDong });
     }
 
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
         var model = await _db.VehicleModels.FirstOrDefaultAsync(m => m.MaDongXe == id);
         if (model is null) return NotFound();
+        var oldValue = new { model.MaDongXe, model.MaHangXe, model.TenDongXe, model.Slug, model.DangHoatDong };
 
         var hasProducts = await _db.Products.AnyAsync(p => p.MaDongXe == id);
         if (hasProducts)
@@ -105,6 +115,7 @@ public class ModelsController : ControllerBase
 
         _db.VehicleModels.Remove(model);
         await _db.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "VehicleModel", id.ToString(), "Delete", oldValue, null);
         return NoContent();
     }
 }

@@ -4,6 +4,10 @@ import StatCard from '../components/StatCard';
 import RevenueChart from '../components/charts/RevenueChart';
 import OrderStatusChart from '../components/charts/OrderStatusChart';
 import reportService from '../services/reportService';
+import inventoryService from '../services/inventoryService';
+import contactService from '../services/contactService';
+import voucherService from '../services/voucherService';
+import warrantyService from '../services/warrantyService';
 import { useAuth } from '../contexts/AuthContext';
 import { formatCurrency } from '../utils/formatCurrency';
 import { formatDate } from '../utils/formatDate';
@@ -24,6 +28,16 @@ const Dashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [operations, setOperations] = useState({
+    awaitingOrders: 0,
+    unpaidOrders: 0,
+    shippingOrders: 0,
+    outOfStock: 0,
+    lowStock: 0,
+    newContacts: 0,
+    expiringVouchers: 0,
+    activeWarranties: 0,
+  });
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -32,6 +46,31 @@ const Dashboard = () => {
       try {
         const dashboard = await reportService.getDashboard();
         setData(dashboard);
+        const [inventoryRes, contactsRes, vouchersRes, warrantiesRes] = await Promise.allSettled([
+          inventoryService.getAll({ page: 1, pageSize: 1 }),
+          contactService.getAll({ status: 'New', page: 1, pageSize: 1 }),
+          voucherService.getAll({ page: 1, pageSize: 100 }),
+          warrantyService.getAll({ page: 1, pageSize: 100 }),
+        ]);
+
+        const orders = dashboard.recentOrders || [];
+        const vouchers = vouchersRes.status === 'fulfilled' ? (vouchersRes.value.data.items || []) : [];
+        const warranties = warrantiesRes.status === 'fulfilled' ? (warrantiesRes.value.data.items || []) : [];
+        const now = new Date();
+        const nextSevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        setOperations({
+          awaitingOrders: orders.filter((o) => ['AwaitingPayment', 'Pending', 'Checkout', 'Confirmed'].includes(o.trangThaiDonHang || o.status)).length,
+          unpaidOrders: orders.filter((o) => ['Unpaid', 'Pending'].includes(o.trangThaiThanhToan || o.paymentStatus)).length,
+          shippingOrders: orders.filter((o) => ['Shipping', 'Preparing'].includes(o.trangThaiVanChuyen || o.shippingStatus)).length,
+          outOfStock: inventoryRes.status === 'fulfilled' ? (inventoryRes.value.data.summary?.outOfStock || 0) : 0,
+          lowStock: inventoryRes.status === 'fulfilled' ? (inventoryRes.value.data.summary?.lowStock || 0) : 0,
+          newContacts: contactsRes.status === 'fulfilled' ? (contactsRes.value.data.totalItems || contactsRes.value.data.items?.length || 0) : 0,
+          expiringVouchers: vouchers.filter((v) => {
+            const end = new Date(v.endsAt || v.ngayKetThuc);
+            return !Number.isNaN(end.getTime()) && end >= now && end <= nextSevenDays;
+          }).length,
+          activeWarranties: warranties.filter((w) => ['Received', 'Processing', 'WaitingParts'].includes(w.trangThai || w.TrangThai)).length,
+        });
       } catch (err) {
         setError('Không thể tải dữ liệu tổng quan. Vui lòng thử lại.');
       } finally {
@@ -42,10 +81,11 @@ const Dashboard = () => {
     fetchDashboard();
   }, []);
 
-  const getOrderCode = (order) => order.maDonHang || order.orderCode || order.id || 'N/A';
-  const getCustomerName = (order) => order.tenKhachHang || order.customerName || order.userName || 'Khách hàng';
+  const getOrderCode = (order) => order.maDonHangKinhDoanh || order.maDonHang || order.orderCode || order.id || 'N/A';
+  const getOrderId = (order) => order.maDonHang || order.id;
+  const getCustomerName = (order) => order.hoTenNhanHang || order.tenKhachHang || order.customerName || order.userName || 'Khách hàng';
   const getOrderAmount = (order) => order.tongThanhToan ?? order.tongTien ?? order.totalAmount ?? order.amount ?? 0;
-  const getOrderStatus = (order) => order.trangThai || order.status || 'Mới';
+  const getOrderStatus = (order) => reportService.getOrderStatusLabel(order);
 
   return (
     <div className="content-wrapper">
@@ -107,6 +147,20 @@ const Dashboard = () => {
                   value={formatCurrency(data.stats.monthRevenue)}
                   to="/reports"
                 />
+              </div>
+
+              <div className="row">
+                <StatCard color="primary" icon="fas fa-clipboard-check" label="Đơn cần xử lý" value={operations.awaitingOrders} to="/orders" />
+                <StatCard color="warning" icon="fas fa-money-bill-wave" label="Chưa thanh toán" value={operations.unpaidOrders} to="/orders" />
+                <StatCard color="info" icon="fas fa-truck" label="Đang giao/chuẩn bị" value={operations.shippingOrders} to="/orders" />
+                <StatCard color="danger" icon="fas fa-box-open" label="Hết hàng" value={operations.outOfStock} to="/inventory" />
+              </div>
+
+              <div className="row">
+                <StatCard color="warning" icon="fas fa-exclamation-triangle" label="Sắp hết hàng" value={operations.lowStock} to="/inventory" />
+                <StatCard color="secondary" icon="fas fa-envelope" label="Liên hệ mới" value={operations.newContacts} to="/contacts" />
+                <StatCard color="success" icon="fas fa-ticket-alt" label="Voucher sắp hết hạn" value={operations.expiringVouchers} to="/vouchers" />
+                <StatCard color="info" icon="fas fa-tools" label="Bảo hành đang xử lý" value={operations.activeWarranties} to="/warranties" />
               </div>
 
               <div className="row">
@@ -173,7 +227,7 @@ const Dashboard = () => {
                             data.recentOrders.map((order) => (
                               <tr key={getOrderCode(order)}>
                                 <td className="table-col-code">
-                                  <Link to={`/orders/${order.id || order.maDonHang}`}>
+                                  <Link to={`/orders/${getOrderId(order)}`}>
                                     <strong>{getOrderCode(order)}</strong>
                                   </Link>
                                 </td>

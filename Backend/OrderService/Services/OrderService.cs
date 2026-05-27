@@ -39,6 +39,20 @@ public class OrderService : IOrderService
         AwaitingPaymentStatus
     };
 
+    private static readonly HashSet<string> AdminCancelBlockedStatuses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Delivered",
+        "Completed",
+        CancelledOrderStatus
+    };
+
+    private static readonly HashSet<string> SuccessfulPaymentStatuses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Paid",
+        "PartiallyPaid",
+        "Refunded"
+    };
+
     private readonly IOrderRepository _orderRepository;
 
     public OrderService(IOrderRepository orderRepository)
@@ -295,10 +309,21 @@ public class OrderService : IOrderService
         {
             throw new BusinessException("Don hang hien tai khong the huy.");
         }
+        if (canManageAll && AdminCancelBlockedStatuses.Contains(order.TrangThaiDonHang))
+        {
+            throw new BusinessException("Don hang hien tai khong the huy.");
+        }
+        if (canManageAll && string.IsNullOrWhiteSpace(request.LyDoHuyDon))
+        {
+            throw new BusinessException("Ly do huy don la bat buoc.");
+        }
 
         var now = DateTime.UtcNow;
         order.TrangThaiDonHang = CancelledOrderStatus;
-        order.TrangThaiThanhToan = CancelledPaymentStatus;
+        if (!SuccessfulPaymentStatuses.Contains(order.TrangThaiThanhToan))
+        {
+            order.TrangThaiThanhToan = CancelledPaymentStatus;
+        }
         order.TrangThaiVanChuyen = "Cancelled";
         order.NgayHuyDon = now;
         order.LyDoHuyDon = TrimToNull(request.LyDoHuyDon) ?? "Khach hang huy don";
@@ -578,7 +603,9 @@ public class OrderService : IOrderService
             TrangThaiThanhToan = order.TrangThaiThanhToan,
             TrangThaiVanChuyen = order.TrangThaiVanChuyen,
             LoaiDonHang = order.LoaiDonHang,
-            NgayTao = order.NgayTao
+            NgayTao = order.NgayTao,
+            NgayThanhToanThanhCong = order.NgayThanhToanThanhCong,
+            Items = order.Items.Select(MapOrderItem).ToList()
         };
     }
 
@@ -622,7 +649,12 @@ public class OrderService : IOrderService
             GhiChuGiaoNhan = order.GhiChuGiaoNhan,
             CheckoutHetHanLuc = activeHoldExpiry,
             Items = order.Items.Select(MapOrderItem).ToList(),
-            Vouchers = order.Vouchers.Select(MapOrderVoucher).ToList()
+            Vouchers = order.Vouchers.Select(MapOrderVoucher).ToList(),
+            LichSu = order.Histories
+                .OrderBy(h => h.ThoiGian)
+                .ThenBy(h => h.MaLichSuDonHang)
+                .Select(MapOrderHistory)
+                .ToList()
         };
     }
 
@@ -650,6 +682,21 @@ public class OrderService : IOrderService
             SoTienGiam = voucher.SoTienGiam,
             LoaiGiamGiaSnapshot = voucher.LoaiGiamGiaSnapshot,
             GiaTriGiamSnapshot = voucher.GiaTriGiamSnapshot
+        };
+    }
+
+    private static OrderHistoryDto MapOrderHistory(OrderHistory history)
+    {
+        return new OrderHistoryDto
+        {
+            MaLichSuDonHang = history.MaLichSuDonHang,
+            MaDonHang = history.MaDonHang,
+            LoaiSuKien = history.LoaiSuKien,
+            GiaTriCu = history.GiaTriCu,
+            GiaTriMoi = history.GiaTriMoi,
+            GhiChu = history.GhiChu,
+            MaNguoiThucHien = history.MaNguoiThucHien,
+            ThoiGian = history.ThoiGian
         };
     }
 

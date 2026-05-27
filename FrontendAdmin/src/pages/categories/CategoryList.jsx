@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import categoryService from '../../services/categoryService';
+import { useAuth } from '../../contexts/AuthContext';
 
 function generateSlug(str) {
   if (!str) return '';
@@ -27,6 +28,7 @@ const getParentId = (category) => category.danhMucChaId || category.maDanhMucCha
 const getCategoryName = (category) => category.tenDanhMuc || category.name || '';
 
 const CategoryList = () => {
+  const { isAdmin } = useAuth();
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -346,9 +348,11 @@ const CategoryList = () => {
                               <button className="btn btn-xs btn-info mr-1" onClick={() => openEdit(category)} title="Sửa">
                                 <i className="fas fa-edit"></i>
                               </button>
-                              <button className="btn btn-xs btn-danger" onClick={() => handleDelete(id, getCategoryName(category))} title="Xóa">
-                                <i className="fas fa-trash"></i>
-                              </button>
+                              {isAdmin() && (
+                                <button className="btn btn-xs btn-danger" onClick={() => handleDelete(id, getCategoryName(category))} title="Xóa">
+                                  <i className="fas fa-trash"></i>
+                                </button>
+                              )}
                             </td>
                           </tr>
                         );

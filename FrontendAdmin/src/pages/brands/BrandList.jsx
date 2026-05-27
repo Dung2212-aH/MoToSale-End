@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import brandService from '../../services/brandService';
+import { useAuth } from '../../contexts/AuthContext';
 
 /**
  * Tạo slug từ chuỗi tiếng Việt
@@ -22,6 +23,7 @@ function generateSlug(str) {
 }
 
 const BrandList = () => {
+  const { isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState('brands');
 
   // === BRANDS STATE ===
@@ -358,9 +360,11 @@ const BrandList = () => {
                                 <button className="btn btn-xs btn-info mr-1" onClick={() => openEditBrand(b)}>
                                   <i className="fas fa-edit"></i>
                                 </button>
-                                <button className="btn btn-xs btn-danger" onClick={() => handleDeleteBrand(b.id, b.tenHang || b.name)}>
-                                  <i className="fas fa-trash"></i>
-                                </button>
+                                {isAdmin() && (
+                                  <button className="btn btn-xs btn-danger" onClick={() => handleDeleteBrand(b.id, b.tenHang || b.name)}>
+                                    <i className="fas fa-trash"></i>
+                                  </button>
+                                )}
                               </td>
                             </tr>
                           ))}
@@ -451,9 +455,11 @@ const BrandList = () => {
                                 <button className="btn btn-xs btn-info mr-1" onClick={() => openEditModel(m)}>
                                   <i className="fas fa-edit"></i>
                                 </button>
-                                <button className="btn btn-xs btn-danger" onClick={() => handleDeleteModel(m.id, m.tenDongXe || m.name)}>
-                                  <i className="fas fa-trash"></i>
-                                </button>
+                                {isAdmin() && (
+                                  <button className="btn btn-xs btn-danger" onClick={() => handleDeleteModel(m.id, m.tenDongXe || m.name)}>
+                                    <i className="fas fa-trash"></i>
+                                  </button>
+                                )}
                               </td>
                             </tr>
                           ))}

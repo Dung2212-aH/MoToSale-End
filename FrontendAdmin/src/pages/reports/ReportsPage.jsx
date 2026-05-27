@@ -4,6 +4,7 @@ import OrderStatusChart from '../../components/charts/OrderStatusChart';
 import TopProductChart from '../../components/charts/TopProductChart';
 import reportService from '../../services/reportService';
 import { formatCurrency } from '../../utils/formatCurrency';
+import { createDateStamp, exportWorkbook } from '../../utils/exportExcel';
 
 const getDefaultRange = () => {
   const end = new Date();
@@ -51,12 +52,83 @@ const ReportsPage = () => {
     fetchReports();
   };
 
-  const totalRevenue = data.payments.reduce(
-    (sum, p) => sum + Number(p.soTien || p.amount || p.tongTien || p.totalAmount || 0),
-    0
-  );
+  const totalRevenue = data.stats.monthRevenue || 0;
   const totalOrders = data.orders.length;
-  const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+  const revenueOrderCount = data.stats.revenueOrderCount || 0;
+  const avgOrderValue = revenueOrderCount > 0 ? totalRevenue / revenueOrderCount : 0;
+
+  const handleExportExcel = async () => {
+    try {
+      await exportWorkbook({
+        fileName: `bao-cao-admin-${range.startDate}-${range.endDate}-${createDateStamp()}.xlsx`,
+        sheets: [
+          {
+            name: 'HuongDan',
+            columns: [
+              { header: 'Mục', key: 'label', width: 30 },
+              { header: 'Nội dung', key: 'value', width: 90 },
+            ],
+            rows: [
+              { label: 'Tên báo cáo', value: 'Báo cáo doanh thu và hiệu quả bán hàng' },
+              { label: 'Mục đích', value: 'Dùng để đối soát doanh thu, số đơn, trạng thái đơn và sản phẩm bán chạy trong kỳ.' },
+              { label: 'Khoảng thời gian', value: `${range.startDate} đến ${range.endDate}` },
+              { label: 'Tiêu chí doanh thu', value: 'Chỉ tính đơn đã thanh toán đầy đủ và đã giao/hoàn tất.' },
+              { label: 'Tổng đơn hàng', value: 'Tính theo ngày tạo đơn trong khoảng thời gian đã chọn.' },
+              { label: 'Sản phẩm bán chạy', value: 'Tổng hợp từ chi tiết sản phẩm của các đơn có doanh thu hợp lệ.' },
+              { label: 'Sheet TongQuan', value: 'Các chỉ số chính để quản lý nhìn nhanh hiệu quả kinh doanh.' },
+              { label: 'Sheet DoanhThuTheoNgay', value: 'Dùng kiểm tra doanh thu từng ngày và so với biểu đồ.' },
+              { label: 'Sheet TrangThaiDonHang', value: 'Dùng xem phân bổ đơn theo nhóm trạng thái nghiệp vụ.' },
+              { label: 'Sheet SanPhamBanChay', value: 'Dùng quyết định nhập hàng, khuyến mãi hoặc theo dõi mặt hàng bán tốt.' },
+            ],
+          },
+          {
+            name: 'TongQuan',
+            columns: [
+              { header: 'Chỉ tiêu', key: 'label', width: 28 },
+              { header: 'Giá trị', key: 'value', width: 24 },
+            ],
+            rows: [
+              { label: 'Từ ngày', value: range.startDate },
+              { label: 'Đến ngày', value: range.endDate },
+              { label: 'Tổng doanh thu', value: formatCurrency(totalRevenue) },
+              { label: 'Tổng đơn hàng', value: totalOrders },
+              { label: 'Số đơn có doanh thu', value: revenueOrderCount },
+              { label: 'Giá trị đơn trung bình', value: formatCurrency(avgOrderValue) },
+            ],
+          },
+          {
+            name: 'DoanhThuTheoNgay',
+            columns: [
+              { header: 'Ngày', key: 'label', width: 16 },
+              { header: 'Doanh thu', key: 'value', type: 'currency', width: 18 },
+            ],
+            rows: data.revenueSeries,
+          },
+          {
+            name: 'TrangThaiDonHang',
+            columns: [
+              { header: 'Nhóm trạng thái', key: 'label', width: 24 },
+              { header: 'Số lượng', key: 'value', type: 'number', width: 14 },
+            ],
+            rows: data.orderStatusSeries,
+          },
+          {
+            name: 'SanPhamBanChay',
+            columns: [
+              { header: 'STT', key: 'index', type: 'number', width: 8 },
+              { header: 'Mã sản phẩm/SKU', key: 'id', width: 18 },
+              { header: 'Tên sản phẩm', key: 'name', width: 36 },
+              { header: 'Số lượng bán', key: 'sold', type: 'number', width: 16 },
+              { header: 'Doanh thu', key: 'revenue', type: 'currency', width: 18 },
+            ],
+            rows: data.topProducts.map((product, index) => ({ index: index + 1, ...product })),
+          },
+        ],
+      });
+    } catch (err) {
+      alert('Xuất Excel thất bại. Vui lòng thử lại.');
+    }
+  };
 
   return (
     <div className="content-wrapper">
@@ -92,6 +164,15 @@ const ReportsPage = () => {
                 />
                 <button type="submit" className="btn btn-primary btn-sm" disabled={loading}>
                   <i className="fas fa-filter"></i> Áp dụng
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-success btn-sm ml-2"
+                  onClick={handleExportExcel}
+                  disabled={loading}
+                  title="Xuất báo cáo doanh thu, trạng thái đơn và sản phẩm bán chạy theo khoảng thời gian đang chọn"
+                >
+                  <i className="fas fa-file-excel"></i> Xuất báo cáo doanh thu
                 </button>
               </form>
             </div>

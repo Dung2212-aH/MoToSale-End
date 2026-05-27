@@ -14,4 +14,6 @@ public class OrderSummaryDto
     public string TrangThaiVanChuyen { get; set; } = string.Empty;
     public string LoaiDonHang { get; set; } = string.Empty;
     public DateTime NgayTao { get; set; }
+    public DateTime? NgayThanhToanThanhCong { get; set; }
+    public List<OrderItemDto> Items { get; set; } = new();
 }

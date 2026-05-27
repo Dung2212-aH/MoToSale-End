@@ -12,11 +12,13 @@ public class BrandsController : ControllerBase
 {
     private readonly CatalogDbContext _db;
     private readonly IImageStorageService _imageStorage;
+    private readonly IAuditLogService _auditLog;
 
-    public BrandsController(CatalogDbContext db, IImageStorageService imageStorage)
+    public BrandsController(CatalogDbContext db, IImageStorageService imageStorage, IAuditLogService auditLog)
     {
         _db = db;
         _imageStorage = imageStorage;
+        _auditLog = auditLog;
     }
 
     [HttpGet]
@@ -66,6 +68,7 @@ public class BrandsController : ControllerBase
 
         _db.Brands.Add(brand);
         await _db.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "Brand", brand.MaHangXe.ToString(), "Create", null, new { brand.MaHangXe, brand.TenHang, brand.Slug, brand.LogoUrl, brand.DangHoatDong });
         return CreatedAtAction(nameof(GetById), new { id = brand.MaHangXe }, new { id = brand.MaHangXe, tenHang = brand.TenHang, slug = brand.Slug, logoUrl = brand.LogoUrl, dangHoatDong = brand.DangHoatDong });
     }
 
@@ -75,6 +78,7 @@ public class BrandsController : ControllerBase
     {
         var brand = await _db.Brands.FirstOrDefaultAsync(b => b.MaHangXe == id);
         if (brand is null) return NotFound();
+        var oldValue = new { brand.TenHang, brand.Slug, brand.LogoUrl, brand.DangHoatDong };
 
         brand.TenHang = request.TenHang.Trim();
         brand.Slug = request.Slug.Trim();
@@ -83,15 +87,17 @@ public class BrandsController : ControllerBase
         brand.NgayCapNhat = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "Brand", brand.MaHangXe.ToString(), "Update", oldValue, new { brand.TenHang, brand.Slug, brand.LogoUrl, brand.DangHoatDong });
         return Ok(new { id = brand.MaHangXe, tenHang = brand.TenHang, slug = brand.Slug, logoUrl = brand.LogoUrl, dangHoatDong = brand.DangHoatDong });
     }
 
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
         var brand = await _db.Brands.FirstOrDefaultAsync(b => b.MaHangXe == id);
         if (brand is null) return NotFound();
+        var oldValue = new { brand.MaHangXe, brand.TenHang, brand.Slug, brand.LogoUrl, brand.DangHoatDong };
 
         var hasModels = await _db.VehicleModels.AnyAsync(m => m.MaHangXe == id);
         var hasProducts = await _db.Products.AnyAsync(p => p.MaHangXe == id);
@@ -102,6 +108,7 @@ public class BrandsController : ControllerBase
 
         _db.Brands.Remove(brand);
         await _db.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "Brand", id.ToString(), "Delete", oldValue, null);
         return NoContent();
     }
 
@@ -119,11 +126,13 @@ public class BrandsController : ControllerBase
         {
             return NotFound(new { message = "Khong tim thay hang xe." });
         }
+        var oldLogoUrl = brand.LogoUrl;
 
         var url = await _imageStorage.SaveImageAsync(file, "brands", HttpContext.RequestAborted);
         brand.LogoUrl = url;
         brand.NgayCapNhat = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "Brand", brand.MaHangXe.ToString(), "UpdateLogo", new { LogoUrl = oldLogoUrl }, new { brand.LogoUrl });
 
         return Ok(new { id = brand.MaHangXe, logoUrl = brand.LogoUrl });
     }

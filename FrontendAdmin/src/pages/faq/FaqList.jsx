@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import faqService from '../../services/faqService';
+import { useAuth } from '../../contexts/AuthContext';
 
 const FaqList = () => {
+  const { isAdmin } = useAuth();
   const [faqs, setFaqs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -183,9 +185,11 @@ const FaqList = () => {
                               <button className="btn btn-xs btn-info mr-1" onClick={() => openEdit(f)} title="Sửa">
                                 <i className="fas fa-edit"></i>
                               </button>
-                              <button className="btn btn-xs btn-danger" onClick={() => handleDelete(f.id, f.cauHoi || f.question)} title="Xóa">
-                                <i className="fas fa-trash"></i>
-                              </button>
+                              {isAdmin() && (
+                                <button className="btn btn-xs btn-danger" onClick={() => handleDelete(f.id, f.cauHoi || f.question)} title="Xóa">
+                                  <i className="fas fa-trash"></i>
+                                </button>
+                              )}
                             </td>
                           </tr>
                         ))}

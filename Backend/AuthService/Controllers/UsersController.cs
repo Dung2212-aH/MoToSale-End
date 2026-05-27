@@ -3,6 +3,7 @@ using System.Security.Claims;
 using AuthService.Data;
 using AuthService.Entities;
 using AuthService.Security;
+using AuthService.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -18,11 +19,13 @@ public class UsersController : ControllerBase
 
     private readonly AuthDbContext _dbContext;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly IAuditLogService _auditLog;
 
-    public UsersController(AuthDbContext dbContext, IPasswordHasher passwordHasher)
+    public UsersController(AuthDbContext dbContext, IPasswordHasher passwordHasher, IAuditLogService auditLog)
     {
         _dbContext = dbContext;
         _passwordHasher = passwordHasher;
+        _auditLog = auditLog;
     }
 
     [Authorize(Roles = "Admin")]
@@ -75,6 +78,95 @@ public class UsersController : ControllerBase
             .ToListAsync();
 
         return Ok(new { items = users, page, pageSize, totalItems = total, totalPages = (int)Math.Ceiling(total / (double)pageSize) });
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpGet("customers")]
+    public async Task<IActionResult> GetCustomers([FromQuery] string? search, [FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        await EnsureCustomerNoteTableAsync();
+        page = page <= 0 ? 1 : page;
+        pageSize = pageSize <= 0 ? 20 : Math.Min(pageSize, 100);
+
+        var query = _dbContext.Users
+            .AsNoTracking()
+            .Where(u => _dbContext.UserRoles.Any(ur => ur.UserId == u.Id && ur.Role.TenVaiTro == "Customer"));
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLowerInvariant();
+            query = query.Where(u => u.HoTen.ToLower().Contains(s) || u.Email.ToLower().Contains(s) || u.SoDienThoai.Contains(s));
+        }
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            query = query.Where(u => u.TrangThai == status.Trim());
+        }
+
+        var total = await query.CountAsync();
+        var customers = await query
+            .OrderByDescending(u => u.NgayTao)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(u => new
+            {
+                id = u.Id,
+                hoTen = u.HoTen,
+                email = u.Email,
+                soDienThoai = u.SoDienThoai,
+                trangThai = u.TrangThai,
+                ngayTao = u.NgayTao
+            })
+            .ToListAsync();
+
+        var customerIds = customers.Select(c => c.id).ToList();
+        var notes = await _dbContext.Database.SqlQueryRaw<CustomerCareNoteRow>(
+            "SELECT MaNguoiDung, GhiChuChamSoc, NgayCapNhat FROM dbo.KHACHHANG_GHICHU_CHAMSOC"
+        ).ToListAsync();
+        var noteMap = notes.Where(n => customerIds.Contains(n.MaNguoiDung)).ToDictionary(n => n.MaNguoiDung, n => n);
+
+        var items = customers.Select(c => new
+        {
+            c.id,
+            c.hoTen,
+            c.email,
+            c.soDienThoai,
+            c.trangThai,
+            c.ngayTao,
+            ghiChuChamSoc = noteMap.TryGetValue(c.id, out var note) ? note.GhiChuChamSoc : null,
+            ngayCapNhatGhiChu = noteMap.TryGetValue(c.id, out var noteDate) ? (DateTime?)noteDate.NgayCapNhat : null
+        });
+
+        return Ok(new { items, page, pageSize, totalItems = total, totalPages = (int)Math.Ceiling(total / (double)pageSize) });
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPatch("customers/{id:int}/care-note")]
+    public async Task<IActionResult> UpdateCustomerCareNote(int id, CustomerCareNoteRequest request)
+    {
+        await EnsureCustomerNoteTableAsync();
+        var isCustomer = await _dbContext.UserRoles.AnyAsync(ur => ur.UserId == id && ur.Role.TenVaiTro == "Customer");
+        if (!isCustomer)
+        {
+            return NotFound(new { message = "Khong tim thay khach hang." });
+        }
+
+        var note = string.IsNullOrWhiteSpace(request.GhiChuChamSoc) ? null : request.GhiChuChamSoc.Trim();
+        var now = DateTime.UtcNow;
+        var actorId = GetCurrentUserId();
+        await _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            MERGE dbo.KHACHHANG_GHICHU_CHAMSOC AS target
+            USING (SELECT {id} AS MaNguoiDung) AS source
+            ON target.MaNguoiDung = source.MaNguoiDung
+            WHEN MATCHED THEN
+                UPDATE SET GhiChuChamSoc = {note}, MaNguoiCapNhat = {actorId}, NgayCapNhat = {now}
+            WHEN NOT MATCHED THEN
+                INSERT (MaNguoiDung, GhiChuChamSoc, MaNguoiCapNhat, NgayCapNhat)
+                VALUES ({id}, {note}, {actorId}, {now});
+            """);
+        await _auditLog.WriteAsync(this, "Customer", id.ToString(), "UpdateCareNote", null, new { GhiChuChamSoc = note });
+
+        return Ok(new { id, ghiChuChamSoc = note, ngayCapNhat = now });
     }
 
     [Authorize(Roles = "Admin")]
@@ -152,6 +244,7 @@ public class UsersController : ControllerBase
         }
 
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "User", user.Id.ToString(), "Create", null, new { user.Id, user.HoTen, user.Email, user.SoDienThoai, user.TrangThai, Roles = roleNames });
         return CreatedAtAction(nameof(GetUserById), new { id = user.Id }, await BuildAdminUserResponseAsync(user.Id));
     }
 
@@ -168,6 +261,8 @@ public class UsersController : ControllerBase
 
         var currentUserId = GetCurrentUserId();
         var existingIsAdmin = await IsAdminAsync(id);
+        var oldRoles = await GetUserRoleNamesAsync(id);
+        var oldValue = new { user.HoTen, user.Email, user.SoDienThoai, user.TrangThai, Roles = oldRoles };
 
         var email = request.Email.Trim().ToLowerInvariant();
         var phone = request.SoDienThoai.Trim();
@@ -228,6 +323,7 @@ public class UsersController : ControllerBase
         }
 
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "User", id.ToString(), "Update", oldValue, new { user.HoTen, user.Email, user.SoDienThoai, user.TrangThai, Roles = nextRoleNames, PasswordChanged = !string.IsNullOrWhiteSpace(request.MatKhau) });
         return Ok(await BuildAdminUserResponseAsync(id));
     }
 
@@ -259,10 +355,12 @@ public class UsersController : ControllerBase
         {
             return BadRequest(new { message = validationError });
         }
+        var oldValue = new { user.TrangThai };
 
         user.TrangThai = status.Trim();
         user.NgayCapNhat = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "User", id.ToString(), "UpdateStatus", oldValue, new { user.TrangThai });
         return Ok(await BuildAdminUserResponseAsync(id));
     }
 
@@ -285,10 +383,12 @@ public class UsersController : ControllerBase
         {
             return BadRequest(new { message = "Khong the xoa quan tri vien hoat dong cuoi cung." });
         }
+        var oldValue = new { user.Id, user.HoTen, user.Email, user.SoDienThoai, user.TrangThai, Roles = user.UserRoles.Select(ur => ur.RoleId).ToList() };
 
         user.TrangThai = "Inactive";
         user.NgayCapNhat = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "User", id.ToString(), "Deactivate", oldValue, new { user.TrangThai });
         return Ok(await BuildAdminUserResponseAsync(id));
     }
 
@@ -422,6 +522,22 @@ public class UsersController : ControllerBase
             ?? User.FindFirstValue("sub");
 
         return int.TryParse(value, out var userId) ? userId : null;
+    }
+
+    private async Task EnsureCustomerNoteTableAsync()
+    {
+        await _dbContext.Database.ExecuteSqlRawAsync(
+            """
+            IF OBJECT_ID(N'dbo.KHACHHANG_GHICHU_CHAMSOC', N'U') IS NULL
+            BEGIN
+                CREATE TABLE dbo.KHACHHANG_GHICHU_CHAMSOC (
+                    MaNguoiDung INT NOT NULL PRIMARY KEY,
+                    GhiChuChamSoc NVARCHAR(1000) NULL,
+                    MaNguoiCapNhat INT NULL,
+                    NgayCapNhat DATETIME2(0) NOT NULL
+                );
+            END;
+            """);
     }
 
     private static object ToProfile(User user)
@@ -612,6 +728,18 @@ public class UpdateAddressRequest
 
     [MaxLength(255)]
     public string? GhiChu { get; set; }
+}
+
+public class CustomerCareNoteRequest
+{
+    public string? GhiChuChamSoc { get; set; }
+}
+
+public class CustomerCareNoteRow
+{
+    public int MaNguoiDung { get; set; }
+    public string? GhiChuChamSoc { get; set; }
+    public DateTime NgayCapNhat { get; set; }
 }
 
 public class AdminCreateUserRequest

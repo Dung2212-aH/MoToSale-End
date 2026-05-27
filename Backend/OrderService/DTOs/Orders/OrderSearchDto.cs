@@ -7,6 +7,18 @@ public class OrderSearchDto
     public int? MaNguoiDung { get; set; }
     public string? TrangThaiDonHang { get; set; }
     public string? TrangThaiThanhToan { get; set; }
+    public string? TrangThaiVanChuyen { get; set; }
+    public string? Keyword { get; set; }
+    public string? Search
+    {
+        get => Keyword;
+        set => Keyword = value;
+    }
+    public string? Status
+    {
+        get => TrangThaiDonHang;
+        set => TrangThaiDonHang = value;
+    }
     public DateTime? TuNgay { get; set; }
     public DateTime? DenNgay { get; set; }
     public DateTime? StartDate

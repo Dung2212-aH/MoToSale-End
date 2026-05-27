@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import postService from '../../services/postService';
 import { formatDate } from '../../utils/formatDate';
+import { useAuth } from '../../contexts/AuthContext';
 
 function generateSlug(value) {
   return value
@@ -41,6 +42,7 @@ const getStatus = (post) => post.trangThai || post.status || 'Draft';
 const getPublishedAt = (post) => post.xuatBanLuc || post.ngayXuatBan || post.publishedAt || post.createdAt || post.ngayTao;
 
 const PostList = () => {
+  const { isAdmin } = useAuth();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -274,9 +276,11 @@ const PostList = () => {
                               <button className="btn btn-xs btn-info mr-1" onClick={() => openEdit(post)} title="Sửa">
                                 <i className="fas fa-edit"></i>
                               </button>
-                              <button className="btn btn-xs btn-danger" onClick={() => handleDelete(getPostId(post), getTitle(post))} title="Xóa">
-                                <i className="fas fa-trash"></i>
-                              </button>
+                              {isAdmin() && (
+                                <button className="btn btn-xs btn-danger" onClick={() => handleDelete(getPostId(post), getTitle(post))} title="Xóa">
+                                  <i className="fas fa-trash"></i>
+                                </button>
+                              )}
                             </td>
                           </tr>
                         ))}
