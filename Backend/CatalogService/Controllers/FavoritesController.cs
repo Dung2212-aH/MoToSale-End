@@ -133,7 +133,6 @@ public class FavoritesController : ControllerBase
             giaBan = product.GiaKhuyenMai ?? product.GiaGoc,
             tyLeGiam = GetDiscountPercent(product),
             soLuongTon = product.SoLuongTon,
-            anhChinhUrl = product.AnhChinhUrl,
             dangHoatDong = product.DangHoatDong,
             trangThaiSanPham = product.TrangThaiSanPham
         };

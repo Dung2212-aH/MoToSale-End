@@ -25,9 +25,9 @@ public class ReviewsController : ControllerBase
         HiddenReviewStatus
     };
 
-    // Trang thai hoan tat lay theo OrderService: Delivered/PickedUp tu dong dua don hang ve Completed.
+    // Trang thai hoan tat lay theo OrderService.
     private static readonly string[] CompletedOrderStatuses = { "Completed" };
-    private static readonly string[] CompletedShippingStatuses = { "Delivered", "PickedUp" };
+    private static readonly string[] CompletedShippingStatuses = { "Delivered" };
 
     private readonly CatalogDbContext _dbContext;
     private readonly IImageStorageService _imageStorage;

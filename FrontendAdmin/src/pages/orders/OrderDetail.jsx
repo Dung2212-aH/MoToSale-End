@@ -22,7 +22,6 @@ const SHIPPING_STATUS_BY_ORDER_STATUS = {
   Processing: 'Preparing',
   Shipping: 'Shipping',
   Delivered: 'Delivered',
-  Cancelled: 'Cancelled',
 };
 
 const EVENT_LABELS = {

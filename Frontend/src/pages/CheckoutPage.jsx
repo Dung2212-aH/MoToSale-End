@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FiLoader } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
-import { orderApi, voucherApi } from '../services/api.js';
+import { orderApi, userApi, voucherApi } from '../services/api.js';
 import Breadcrumb from '../components/Breadcrumb.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { useCart } from '../contexts/CartContext.jsx';
@@ -55,6 +55,23 @@ function getCartVoucherContext(items) {
   };
 }
 
+function normalizeAddress(data = {}) {
+  return {
+    id: data.id ?? data.Id ?? data.maDiaChi ?? data.MaDiaChi,
+    fullName: data.fullName ?? data.FullName ?? data.hoTenNhanHang ?? data.HoTenNhanHang ?? '',
+    phoneNumber: data.phoneNumber ?? data.PhoneNumber ?? data.soDienThoaiNhanHang ?? data.SoDienThoaiNhanHang ?? '',
+    addressLine: data.addressLine ?? data.AddressLine ?? data.diaChiNhanHang ?? data.DiaChiNhanHang ?? '',
+    ward: data.ward ?? data.Ward ?? data.phuongXa ?? data.PhuongXa ?? '',
+    district: data.district ?? data.District ?? data.quanHuyen ?? data.QuanHuyen ?? '',
+    province: data.province ?? data.Province ?? data.tinhThanh ?? data.TinhThanh ?? '',
+    note: data.note ?? data.Note ?? data.ghiChu ?? data.GhiChu ?? '',
+    isDefault: Boolean(data.isDefault ?? data.IsDefault ?? data.laMacDinh ?? data.LaMacDinh),
+  };
+}
+
+function formatAddress(address) {
+  return [address.addressLine, address.ward, address.district, address.province].filter(Boolean).join(', ');
+}
 
 function validateForm(form, totalAmount) {
   const errors = {};
@@ -79,6 +96,7 @@ function validateForm(form, totalAmount) {
 
 function buildOrderPayload({ form, cart, items, appliedVoucher, voucherDiscount, amounts }) {
   return {
+    shippingAddressId: form.shippingAddressId || null,
     shippingFullName: form.shippingFullName.trim(),
     shippingPhoneNumber: form.shippingPhoneNumber.trim(),
     shippingEmail: form.shippingEmail.trim() || null,
@@ -96,7 +114,6 @@ function buildOrderPayload({ form, cart, items, appliedVoucher, voucherDiscount,
     cartId: cart?.id || null,
     voucherCode: appliedVoucher ? appliedVoucher.code : null,
     discountAmount: appliedVoucher ? voucherDiscount : 0,
-    shippingFee: 0,
     holdMinutes: 15,
     items: items.map((item) => ({
       productId: item.productId || item.product?.id,
@@ -126,6 +143,13 @@ function CheckoutPage() {
   const [voucherDiscount, setVoucherDiscount] = useState(0);
   const [applicableVouchers, setApplicableVouchers] = useState([]);
   const [loadingVouchersList, setLoadingVouchersList] = useState(false);
+  const [shippingQuote, setShippingQuote] = useState(null);
+  const [shippingLoading, setShippingLoading] = useState(false);
+  const [shippingError, setShippingError] = useState('');
+  const [addresses, setAddresses] = useState([]);
+  const [selectedAddressId, setSelectedAddressId] = useState('');
+  const [addressesLoading, setAddressesLoading] = useState(false);
+  const [addressesError, setAddressesError] = useState('');
 
   useEffect(() => {
     if (!isAuthenticated) navigate('/login?redirect=/checkout', { replace: true });
@@ -135,7 +159,74 @@ function CheckoutPage() {
     if (isAuthenticated && !items.length) refreshCart().catch(() => {});
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    let cancelled = false;
+    async function loadAddresses() {
+      setAddressesLoading(true);
+      setAddressesError('');
+      try {
+        const rows = await userApi.getAddresses();
+        if (cancelled) return;
+
+        const nextAddresses = (Array.isArray(rows) ? rows : []).map(normalizeAddress);
+        setAddresses(nextAddresses);
+        const defaultAddress = nextAddresses.find((item) => item.isDefault) || nextAddresses[0];
+        setSelectedAddressId(defaultAddress?.id ? String(defaultAddress.id) : '');
+      } catch (err) {
+        if (cancelled) return;
+        setAddresses([]);
+        setSelectedAddressId('');
+        setAddressesError(err?.response?.data?.message || err?.message || 'Không thể tải địa chỉ nhận hàng.');
+      } finally {
+        if (!cancelled) setAddressesLoading(false);
+      }
+    }
+
+    loadAddresses();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
+
   const subtotal = getSubtotal(cart, items);
+  const selectedAddress = addresses.find((item) => String(item.id) === String(selectedAddressId));
+
+  useEffect(() => {
+    if (!selectedAddress) {
+      setForm((prev) => ({
+        ...prev,
+        shippingFullName: '',
+        shippingPhoneNumber: '',
+        shippingEmail: prev.shippingEmail,
+        shippingAddressLine: '',
+        shippingWard: '',
+        shippingDistrict: '',
+        shippingProvince: '',
+      }));
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      shippingFullName: selectedAddress.fullName,
+      shippingAddressId: selectedAddress.id,
+      shippingPhoneNumber: selectedAddress.phoneNumber,
+      shippingAddressLine: selectedAddress.addressLine,
+      shippingWard: selectedAddress.ward,
+      shippingDistrict: selectedAddress.district,
+      shippingProvince: selectedAddress.province,
+      fulfillmentNote: selectedAddress.note || prev.fulfillmentNote,
+    }));
+    setFieldErrors((prev) => ({
+      ...prev,
+      shippingFullName: '',
+      shippingPhoneNumber: '',
+      shippingAddressLine: '',
+      shippingProvince: '',
+    }));
+  }, [selectedAddressId, selectedAddress?.id]);
 
   useEffect(() => {
     if (items.length > 0 && subtotal > 0) {
@@ -158,7 +249,44 @@ function CheckoutPage() {
     }
   }, [items, subtotal, form.orderType]);
 
-  const shippingFee = 0;
+  useEffect(() => {
+    if (!isAuthenticated || !items.length || subtotal <= 0) {
+      setShippingQuote(null);
+      return;
+    }
+
+    if (form.receivingMethod === 'Delivery' && !form.shippingProvince.trim()) {
+      setShippingQuote(null);
+      setShippingError('');
+      return;
+    }
+
+    const fetchShippingQuote = async () => {
+      setShippingLoading(true);
+      setShippingError('');
+      try {
+        const quote = await orderApi.getShippingQuote({
+          receivingMethod: form.receivingMethod,
+          shippingProvince: form.shippingProvince,
+          voucherCode: appliedVoucher?.code,
+          orderType: form.orderType,
+        });
+        setShippingQuote(quote);
+      } catch (err) {
+        setShippingQuote(null);
+        setShippingError(err?.response?.data?.message || err?.message || 'Không thể tính phí giao hàng.');
+      } finally {
+        setShippingLoading(false);
+      }
+    };
+
+    fetchShippingQuote();
+  }, [isAuthenticated, items.length, subtotal, form.receivingMethod, form.shippingProvince, form.orderType, appliedVoucher?.code]);
+
+  const shippingFee = Number(shippingQuote?.shippingFee ?? shippingQuote?.ShippingFee ?? 0);
+  const originalShippingFee = Number(shippingQuote?.originalShippingFee ?? shippingQuote?.OriginalShippingFee ?? shippingFee);
+  const shippingDiscount = Number(shippingQuote?.discountAmount ?? shippingQuote?.DiscountAmount ?? 0);
+  const carrierName = shippingQuote?.carrierName ?? shippingQuote?.CarrierName;
   const totalAmount = Math.max(0, subtotal - voucherDiscount + shippingFee);
   const requiresDepositInput = form.orderType === 'Deposit';
   const depositNum = requiresDepositInput ? Number(form.depositAmount) || 0 : 0;
@@ -186,10 +314,10 @@ function CheckoutPage() {
 
     try {
       const { productIds, categoryIds, brandIds } = getCartVoucherContext(items);
-      const res = await voucherApi.validateVoucher({ code: code.trim(), subtotal, productIds, categoryIds, brandIds, orderType: form.orderType });
+      const res = await voucherApi.validateVoucher({ code: code.trim(), subtotal, productIds, categoryIds, brandIds, orderType: form.orderType, shippingFee: originalShippingFee });
       if (res.valid) {
         setAppliedVoucher(res.voucher);
-        setVoucherDiscount(res.discountAmount || 0);
+        setVoucherDiscount(res.voucher?.discountType === 'FreeShipping' ? 0 : res.discountAmount || 0);
         setVoucherError('');
       } else {
         setVoucherError(res.message || 'Voucher không hợp lệ');
@@ -224,7 +352,13 @@ function CheckoutPage() {
 
   function validate() {
     const errors = validateForm(form, totalAmount);
+    if (form.receivingMethod === 'Delivery' && !selectedAddress) {
+      errors.shippingAddressLine = 'Vui lòng thêm địa chỉ nhận hàng trước khi đặt hàng';
+    }
     setFieldErrors(errors);
+    if (errors.shippingAddressLine && !selectedAddress) {
+      setError('Bạn chưa có địa chỉ nhận hàng. Vui lòng thêm địa chỉ trong tài khoản trước khi thanh toán.');
+    }
     return Object.keys(errors).length === 0;
   }
 
@@ -241,11 +375,16 @@ function CheckoutPage() {
       return;
     }
 
+    if (shippingError) {
+      setError(shippingError);
+      return;
+    }
+
     setSubmitting(true);
 
     try {
       const payload = buildOrderPayload({
-        form,
+        form: { ...form, shippingAddressId: selectedAddress?.id },
         cart,
         items,
         appliedVoucher,
@@ -306,6 +445,71 @@ function CheckoutPage() {
 
             {/* Address */}
             {form.receivingMethod === 'Delivery' && (
+              <div className="rounded-[28px] border border-zinc-200 bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.07)]">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h2 className="text-[18px] font-black text-zinc-950">Địa chỉ giao hàng</h2>
+                    <p className="mt-1 text-sm text-zinc-500">Chọn địa chỉ đã lưu trong tài khoản để giao hàng.</p>
+                  </div>
+                  <Link to="/account?tab=address" className="inline-flex min-h-10 items-center justify-center rounded-full border border-[#d71920] px-4 text-sm font-extrabold text-[#d71920] transition hover:bg-red-50">
+                    Thêm địa chỉ
+                  </Link>
+                </div>
+
+                {addressesLoading && (
+                  <div className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4 text-sm font-medium text-zinc-500">Đang tải địa chỉ nhận hàng...</div>
+                )}
+
+                {!addressesLoading && addressesError && (
+                  <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm font-medium text-red-700">{addressesError}</div>
+                )}
+
+                {!addressesLoading && !addressesError && addresses.length === 0 && (
+                  <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+                    <div className="text-sm font-extrabold text-amber-800">Bạn chưa có địa chỉ nhận hàng</div>
+                    <p className="mt-1 text-sm leading-6 text-amber-700">Vui lòng thêm địa chỉ nhận hàng trong tài khoản trước khi đặt đơn giao tận nơi.</p>
+                    <Link to="/account?tab=address" className="mt-3 inline-flex min-h-10 items-center justify-center rounded-full bg-[#d71920] px-4 text-sm font-extrabold text-white transition hover:bg-[#b61016]">
+                      Thêm địa chỉ nhận hàng
+                    </Link>
+                  </div>
+                )}
+
+                {!addressesLoading && !addressesError && addresses.length > 0 && (
+                  <div className="mt-5 space-y-3">
+                    {addresses.map((address) => (
+                      <label
+                        key={address.id}
+                        className={`flex cursor-pointer gap-3 rounded-2xl border p-4 transition ${
+                          String(selectedAddressId) === String(address.id)
+                            ? 'border-[#d71920] bg-red-50/50'
+                            : 'border-zinc-200 bg-zinc-50 hover:border-zinc-300'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="selectedAddressId"
+                          value={address.id}
+                          checked={String(selectedAddressId) === String(address.id)}
+                          onChange={(event) => setSelectedAddressId(event.target.value)}
+                          className="mt-1 h-4 w-4 accent-[#d71920]"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex flex-wrap items-center gap-2 text-sm font-black text-zinc-950">
+                            {address.fullName}
+                            <span className="font-bold text-zinc-400">|</span>
+                            <span>{address.phoneNumber}</span>
+                            {address.isDefault && <span className="rounded-full bg-[#d71920] px-2 py-0.5 text-[11px] font-extrabold text-white">Mặc định</span>}
+                          </span>
+                          <span className="mt-1 block text-sm leading-6 text-zinc-600">{formatAddress(address)}</span>
+                          {address.note && <span className="mt-1 block text-xs text-zinc-400">{address.note}</span>}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {false && form.receivingMethod === 'Delivery' && (
               <div className="rounded-[28px] border border-zinc-200 bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.07)]">
                 <h2 className="text-[18px] font-black text-zinc-950">Địa chỉ giao hàng</h2>
                 <div className="mt-5"><Field label="Địa chỉ *" id="shippingAddressLine" name="shippingAddressLine" value={form.shippingAddressLine} onChange={handleChange} error={fieldErrors.shippingAddressLine} placeholder="Số nhà, tên đường..." /></div>
@@ -400,7 +604,9 @@ function CheckoutPage() {
                     <span className="text-lg">🎫</span>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-bold text-green-700">{appliedVoucher.code}</div>
-                      <div className="text-xs text-green-600">Giảm {formatCurrency(voucherDiscount)}</div>
+                      <div className="text-xs text-green-600">
+                        {appliedVoucher.discountType === 'FreeShipping' ? 'Áp dụng voucher miễn phí vận chuyển' : `Giảm ${formatCurrency(voucherDiscount)}`}
+                      </div>
                     </div>
                     <button type="button" onClick={handleRemoveVoucher} className="text-xs font-bold text-red-500 hover:text-red-700 transition">Xóa</button>
                   </div>
@@ -460,9 +666,24 @@ function CheckoutPage() {
                   <strong className="font-bold text-zinc-950">{formatCurrency(subtotal)}</strong>
                 </div>
                 <div className="flex items-center justify-between text-sm text-zinc-600">
-                  <span>Phí giao hàng</span>
-                  <strong className="font-bold text-zinc-950">{formatCurrency(shippingFee)}</strong>
+                  <span>Phí giao hàng{carrierName ? ` (${carrierName})` : ''}</span>
+                  <strong className="font-bold text-zinc-950">{shippingLoading ? 'Đang tính...' : formatCurrency(shippingFee)}</strong>
                 </div>
+                {shippingError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">{shippingError}</div>
+                )}
+                {shippingDiscount > 0 && (
+                  <div className="flex items-center justify-between text-sm text-green-600">
+                    <span>Voucher miễn phí vận chuyển</span>
+                    <strong className="font-bold">-{formatCurrency(shippingDiscount)}</strong>
+                  </div>
+                )}
+                {shippingDiscount > 0 && originalShippingFee > shippingFee && (
+                  <div className="flex items-center justify-between text-xs text-zinc-400">
+                    <span>Phí vận chuyển gốc</span>
+                    <span>{formatCurrency(originalShippingFee)}</span>
+                  </div>
+                )}
                 {voucherDiscount > 0 && (
                   <div className="flex items-center justify-between text-sm text-green-600">
                     <span>Giảm voucher</span>
@@ -488,7 +709,7 @@ function CheckoutPage() {
               </div>
 
               <button
-                type="submit" form="checkout-form" disabled={submitting || !items.length}
+                type="submit" form="checkout-form" disabled={submitting || shippingLoading || addressesLoading || !items.length || (form.receivingMethod === 'Delivery' && !selectedAddress)}
                 className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#d71920] px-5 text-sm font-extrabold uppercase tracking-[0.08em] text-white transition hover:bg-[#b61016] disabled:cursor-not-allowed disabled:bg-zinc-300"
               >
                 {submitting ? (

@@ -12,6 +12,7 @@ import CheckoutSuccessPage from './pages/CheckoutSuccessPage.jsx';
 import FavoritesPage from './pages/FavoritesPage.jsx';
 import HomePage from './pages/HomePage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
+import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
 import OrderDetailPage from './pages/OrderDetailPage.jsx';
 import OrdersPage from './pages/OrdersPage.jsx';
@@ -20,9 +21,10 @@ import ProductDetailPage from './pages/ProductDetailPage.jsx';
 import ProductListPage from './pages/ProductListPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import StoreSystemPage from './pages/StoreSystemPage.jsx';
+import FaqPage from './pages/FaqPage.jsx';
 import VouchersPage from './pages/VouchersPage.jsx';
 
-const authPaths = ['/login', '/register'];
+const authPaths = ['/login', '/register', '/forgot-password'];
 
 function LoadingScreen() {
   return (
@@ -46,6 +48,12 @@ function PublicRoute({ children }) {
   return children;
 }
 
+function AuthPage({ path }) {
+  if (path === '/login') return <LoginPage />;
+  if (path === '/forgot-password') return <ForgotPasswordPage />;
+  return <RegisterPage />;
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -55,6 +63,7 @@ function AppRoutes() {
         <Route path="/products" element={<ProductListPage />} />
         <Route path="/products/:id" element={<ProductDetailPage />} />
         <Route path="/vouchers" element={<VouchersPage />} />
+        <Route path="/faq" element={<FaqPage />} />
         <Route
           path="/cart"
           element={
@@ -117,7 +126,7 @@ function AppRoutes() {
             path={path}
             element={
               <PublicRoute>
-                {path === '/login' ? <LoginPage /> : <RegisterPage />}
+                <AuthPage path={path} />
               </PublicRoute>
             }
           />

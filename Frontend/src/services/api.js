@@ -412,6 +412,20 @@ export const authApi = {
     matKhau: data.password,
   }),
 
+  async forgotPassword(email) {
+    const response = await api.post('/auth/forgot-password', { email });
+    return responseData(response);
+  },
+
+  async resetPassword(data) {
+    const response = await api.post('/auth/reset-password', {
+      email: data.email,
+      token: data.token,
+      matKhauMoi: data.password,
+    });
+    return responseData(response);
+  },
+
   logout() {
     clearAuthStorage();
   },
@@ -647,11 +661,12 @@ export const orderApi = {
   async createOrder(data) {
     const response = await api.post('/orders', {
       maShowroom: data.showroomId ?? data.MaShowroom ?? null,
+      maDiaChiNhanHang: data.shippingAddressId ?? data.maDiaChiNhanHang ?? null,
       hoTenNhanHang: data.shippingFullName,
       soDienThoaiNhanHang: data.shippingPhoneNumber,
       emailNhanHang: data.shippingEmail,
       diaChiNhanHang: [data.shippingAddressLine, data.shippingWard, data.shippingDistrict, data.shippingProvince].filter(Boolean).join(', '),
-      phiVanChuyen: data.shippingFee ?? 0,
+      shippingProvince: data.shippingProvince,
       maVoucherCode: data.voucherCode,
       ghiChu: data.note,
       phuongThucNhanHang: data.receivingMethod,
@@ -662,6 +677,16 @@ export const orderApi = {
       soPhutGiuCho: data.holdMinutes ?? 15,
     });
     return normalizeOrder(responseData(response));
+  },
+
+  async getShippingQuote(data) {
+    const response = await api.post('/orders/shipping-quote', {
+      phuongThucNhanHang: data.receivingMethod,
+      shippingProvince: data.shippingProvince,
+      maVoucherCode: data.voucherCode,
+      orderType: data.orderType,
+    });
+    return responseData(response);
   },
 
   async cancelOrder(id, reason) {
@@ -779,6 +804,18 @@ export const userApi = {
     return responseData(response);
   },
 
+  async getAddresses() {
+    try {
+      const response = await api.get('/users/me/addresses');
+      const data = responseData(response);
+      return data?.items || data?.Items || [];
+    } catch (error) {
+      if (error?.response?.status !== 404) throw error;
+      const fallback = await userApi.getAddress();
+      return fallback && Object.keys(fallback).length ? [fallback] : [];
+    }
+  },
+
   async updateAddress(data) {
     const response = await api.put('/users/me/address', {
       hoTenNhanHang: data.fullName,
@@ -790,6 +827,54 @@ export const userApi = {
       ghiChu: data.note,
       laMacDinh: true,
     });
+    return responseData(response);
+  },
+
+  async createAddress(data) {
+    try {
+      const response = await api.post('/users/me/addresses', {
+        hoTenNhanHang: data.fullName,
+        soDienThoaiNhanHang: data.phoneNumber,
+        diaChiNhanHang: data.addressLine,
+        ward: data.ward,
+        district: data.district,
+        province: data.province,
+        ghiChu: data.note,
+        laMacDinh: Boolean(data.isDefault),
+      });
+      return responseData(response);
+    } catch (error) {
+      if (error?.response?.status !== 404) throw error;
+      return userApi.updateAddress(data);
+    }
+  },
+
+  async updateAddressById(id, data) {
+    try {
+      const response = await api.put(`/users/me/addresses/${id}`, {
+        hoTenNhanHang: data.fullName,
+        soDienThoaiNhanHang: data.phoneNumber,
+        diaChiNhanHang: data.addressLine,
+        ward: data.ward,
+        district: data.district,
+        province: data.province,
+        ghiChu: data.note,
+        laMacDinh: Boolean(data.isDefault),
+      });
+      return responseData(response);
+    } catch (error) {
+      if (error?.response?.status !== 404) throw error;
+      return userApi.updateAddress(data);
+    }
+  },
+
+  async setDefaultAddress(id) {
+    const response = await api.put(`/users/me/addresses/${id}/default`);
+    return responseData(response);
+  },
+
+  async deleteAddress(id) {
+    const response = await api.delete(`/users/me/addresses/${id}`);
     return responseData(response);
   },
 

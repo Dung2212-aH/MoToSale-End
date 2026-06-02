@@ -141,6 +141,7 @@ export function normalizeCategory(raw) {
     slug: valueOf(raw, 'slug'),
     parentCategoryId: valueOf(raw, 'parentCategoryId', 'ParentCategoryId', 'maDanhMucCha', 'MaDanhMucCha'),
     description: valueOf(raw, 'description', 'Description', 'moTa', 'MoTa'),
+    image: normalizeImageUrl(valueOf(raw, 'image', 'Image', 'imageUrl', 'ImageUrl', 'hinhAnhUrl', 'HinhAnhUrl', 'anhDaiDienUrl', 'AnhDaiDienUrl') || ''),
     sortOrder: valueOf(raw, 'sortOrder', 'SortOrder', 'thuTuHienThi', 'ThuTuHienThi') || 0,
     isActive: valueOf(raw, 'isActive', 'IsActive', 'dangHoatDong', 'DangHoatDong') !== false,
   };

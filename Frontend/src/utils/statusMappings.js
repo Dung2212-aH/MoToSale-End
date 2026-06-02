@@ -1,5 +1,5 @@
 export const ORDER_STATUS_MAP = {
-  AwaitingPayment: 'Chờ thanh toán / xác nhận',
+  AwaitingPayment: 'Chờ thanh toán',
   Confirmed: 'Đã xác nhận',
   Processing: 'Đang chuẩn bị hàng',
   Shipping: 'Đang giao',
@@ -11,15 +11,9 @@ export const ORDER_STATUS_MAP = {
 };
 
 export const SHIPPING_STATUS_MAP = {
-  NotShipped: 'Chưa giao',
-  Preparing: 'Đang chuẩn bị giao',
+  Preparing: 'Đang chuẩn bị hàng',
   Shipping: 'Đang giao',
   Delivered: 'Đã giao',
-  PickupReady: 'Sẵn sàng nhận tại showroom',
-  PickedUp: 'Đã nhận tại showroom',
-  Cancelled: 'Đã hủy giao hàng',
-  AwaitingPickup: 'Chờ lấy hàng',
-  InTransit: 'Đang giao',
 };
 
 export const PAYMENT_STATUS_MAP = {
@@ -66,15 +60,9 @@ const ORDER_STATUS_COLOR_MAP = {
 };
 
 const SHIPPING_STATUS_COLOR_MAP = {
-  NotShipped: 'bg-zinc-100 text-zinc-600',
   Preparing: 'bg-amber-100 text-amber-700',
   Shipping: 'bg-blue-100 text-blue-700',
   Delivered: 'bg-green-100 text-green-700',
-  PickupReady: 'bg-sky-100 text-sky-700',
-  PickedUp: 'bg-green-100 text-green-700',
-  Cancelled: 'bg-red-100 text-red-700',
-  AwaitingPickup: 'bg-zinc-100 text-zinc-600',
-  InTransit: 'bg-blue-100 text-blue-700',
 };
 
 const PAYMENT_STATUS_COLOR_MAP = {

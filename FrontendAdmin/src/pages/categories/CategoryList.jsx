@@ -18,6 +18,8 @@ const emptyForm = {
   tenDanhMuc: '',
   slug: '',
   moTa: '',
+  anhDaiDienUrl: '',
+  anhDaiDienFile: null,
   danhMucChaId: '',
   thuTu: 0,
   dangHoatDong: true,
@@ -26,6 +28,7 @@ const emptyForm = {
 const getCategoryId = (category) => category.id || category.maDanhMuc;
 const getParentId = (category) => category.danhMucChaId || category.maDanhMucCha || category.parentId || null;
 const getCategoryName = (category) => category.tenDanhMuc || category.name || '';
+const getCategoryImage = (category) => category.anhDaiDienUrl || category.imageUrl || category.image || '';
 
 const CategoryList = () => {
   const { isAdmin } = useAuth();
@@ -152,6 +155,8 @@ const CategoryList = () => {
       tenDanhMuc: getCategoryName(item),
       slug: item.slug || '',
       moTa: item.moTa || item.description || '',
+      anhDaiDienUrl: getCategoryImage(item),
+      anhDaiDienFile: null,
       danhMucChaId: getParentId(item) || '',
       thuTu: item.thuTu || item.thuTuHienThi || item.sortOrder || 0,
       dangHoatDong: item.dangHoatDong !== undefined ? item.dangHoatDong : true,
@@ -168,6 +173,11 @@ const CategoryList = () => {
       }
       return updated;
     });
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0] || null;
+    setForm((prev) => ({ ...prev, anhDaiDienFile: file }));
   };
 
   const handleSubmit = async (e) => {
@@ -191,14 +201,23 @@ const CategoryList = () => {
         tenDanhMuc: form.tenDanhMuc.trim(),
         slug: form.slug.trim(),
         moTa: form.moTa,
+        anhDaiDienUrl: form.anhDaiDienUrl || null,
         danhMucChaId: form.danhMucChaId ? Number(form.danhMucChaId) : null,
         thuTu: Number(form.thuTu) || 0,
         dangHoatDong: form.dangHoatDong,
       };
+      let savedId = editItem ? getCategoryId(editItem) : null;
       if (editItem) {
         await categoryService.update(getCategoryId(editItem), payload);
       } else {
-        await categoryService.create(payload);
+        const response = await categoryService.create(payload);
+        savedId = response.data?.id || response.data?.maDanhMuc;
+      }
+
+      if (form.anhDaiDienFile && savedId) {
+        const imageData = new FormData();
+        imageData.append('file', form.anhDaiDienFile);
+        await categoryService.uploadImage(savedId, imageData);
       }
       setShowModal(false);
       fetchCategories();
@@ -297,6 +316,7 @@ const CategoryList = () => {
                     <thead>
                       <tr>
                         <th className="table-col-code">ID</th>
+                        <th className="table-col-image">Anh</th>
                         <th className="table-col-text">Tên danh mục</th>
                         <th className="table-col-code">Slug</th>
                         <th className="table-col-status">Cấp</th>
@@ -315,6 +335,13 @@ const CategoryList = () => {
                         return (
                           <tr key={id}>
                             <td className="table-col-code">{id}</td>
+                            <td className="table-col-image">
+                              {getCategoryImage(category) ? (
+                                <img src={getCategoryImage(category)} alt={getCategoryName(category)} className="rounded border" style={{ width: 64, height: 42, objectFit: 'cover' }} />
+                              ) : (
+                                <span className="text-muted small">Chua co</span>
+                              )}
+                            </td>
                             <td className="table-col-text">
                               <div className="d-flex align-items-center" style={{ paddingLeft: `${level * 24}px` }}>
                                 {hasChildren ? (
@@ -389,6 +416,23 @@ const CategoryList = () => {
                   <div className="form-group">
                     <label>Mô tả</label>
                     <textarea className="form-control" name="moTa" value={form.moTa} onChange={handleChange} rows="3" />
+                  </div>
+                  <div className="form-group">
+                    <label>Anh danh muc noi bat</label>
+                    <input type="file" className="form-control" accept="image/*" onChange={handleImageChange} />
+                    <small className="form-text text-muted">
+                      Anh nay se hien thi o khoi Danh muc noi bat tren frontend.
+                    </small>
+                    {(form.anhDaiDienFile || form.anhDaiDienUrl) && (
+                      <div className="mt-2">
+                        <img
+                          src={form.anhDaiDienFile ? URL.createObjectURL(form.anhDaiDienFile) : form.anhDaiDienUrl}
+                          alt="Preview"
+                          className="rounded border"
+                          style={{ width: 180, height: 110, objectFit: 'cover' }}
+                        />
+                      </div>
+                    )}
                   </div>
                   <div className="form-group">
                     <label>Danh mục cha</label>

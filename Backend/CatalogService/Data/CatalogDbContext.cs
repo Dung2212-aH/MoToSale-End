@@ -75,6 +75,7 @@ public class CatalogDbContext : DbContext
             e.Property(e => e.TenDanhMuc).HasMaxLength(150).IsRequired();
             e.Property(e => e.Slug).HasMaxLength(180).IsRequired();
             e.Property(e => e.MoTa).HasMaxLength(500);
+            e.Property(e => e.AnhDaiDienUrl).HasMaxLength(500);
             e.Property(e => e.ThuTuHienThi).IsRequired();
             e.Property(e => e.DangHoatDong).IsRequired();
             e.Property(e => e.NgayTao).HasColumnType("datetime2(0)");

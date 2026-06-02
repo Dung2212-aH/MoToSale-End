@@ -87,7 +87,6 @@ function VouchersPage() {
               <FiGift className="mr-3 inline-block text-[#f0a327]" />
               Kho Voucher
             </h1>
-            <p className="mt-2 text-sm text-zinc-500">Nhận voucher và sử dụng khi thanh toán để được giảm giá</p>
           </div>
 
           {/* My saved vouchers */}

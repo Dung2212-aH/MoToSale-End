@@ -18,7 +18,6 @@ public class ProductDetailDto
     public decimal GiaBan { get; set; }
     public int? TyLeGiam { get; set; }
     public int SoLuongTon { get; set; }
-    public string? AnhChinhUrl { get; set; }
     public bool DangHoatDong { get; set; }
     public double DiemTrungBinh { get; set; }
     public int TongDanhGia { get; set; }

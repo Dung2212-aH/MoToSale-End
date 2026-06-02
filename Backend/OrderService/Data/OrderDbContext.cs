@@ -10,6 +10,7 @@ public class OrderDbContext : DbContext
     }
 
     public DbSet<User> Users { get; set; }
+    public DbSet<UserAddress> UserAddresses { get; set; }
     public DbSet<Product> Products { get; set; }
     public DbSet<ProductVariant> ProductVariants { get; set; }
     public DbSet<Cart> Carts { get; set; }
@@ -28,6 +29,7 @@ public class OrderDbContext : DbContext
         base.OnModelCreating(modelBuilder);
 
         ConfigureUsers(modelBuilder);
+        ConfigureUserAddresses(modelBuilder);
         ConfigureProducts(modelBuilder);
         ConfigureProductVariants(modelBuilder);
         ConfigureCarts(modelBuilder);
@@ -81,11 +83,33 @@ public class OrderDbContext : DbContext
         });
     }
 
+    private static void ConfigureUserAddresses(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<UserAddress>(e =>
+        {
+            e.ToTable("NGUOIDUNG_DIACHI");
+            e.HasKey(x => x.MaDiaChi);
+            e.Property(x => x.MaDiaChi).ValueGeneratedOnAdd();
+            e.Property(x => x.HoTenNhanHang).HasMaxLength(150).IsRequired();
+            e.Property(x => x.SoDienThoaiNhanHang).HasMaxLength(20).IsRequired();
+            e.Property(x => x.DiaChiNhanHang).HasMaxLength(255).IsRequired();
+            e.Property(x => x.PhuongXa).HasMaxLength(100);
+            e.Property(x => x.QuanHuyen).HasMaxLength(100);
+            e.Property(x => x.TinhThanh).HasMaxLength(100).IsRequired();
+            e.Property(x => x.GhiChu).HasMaxLength(255);
+            e.Property(x => x.NgayTao).HasColumnType("datetime2(0)");
+            e.Property(x => x.NgayCapNhat).HasColumnType("datetime2(0)");
+        });
+    }
+
     private static void ConfigureProducts(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Product>(e =>
         {
-            e.ToTable("SANPHAM");
+            e.ToTable("SANPHAM", table =>
+            {
+                table.HasTrigger("trg_SANPHAM_Validate_HangXe_DongXe");
+            });
             e.HasKey(x => x.MaSanPham);
             e.Property(x => x.MaSanPham).ValueGeneratedOnAdd();
             e.Ignore(x => x.MaShowroom);
@@ -109,7 +133,10 @@ public class OrderDbContext : DbContext
     {
         modelBuilder.Entity<ProductVariant>(e =>
         {
-            e.ToTable("BIENSANPHAM");
+            e.ToTable("BIENSANPHAM", table =>
+            {
+                table.HasTrigger("trg_BIENSANPHAM_Sync_SoLuongTon_SANPHAM");
+            });
             e.HasKey(x => x.MaBienSanPham);
             e.Property(x => x.MaBienSanPham).ValueGeneratedOnAdd();
             e.Property(x => x.TenBienThe).HasMaxLength(180).IsRequired();
@@ -178,7 +205,6 @@ public class OrderDbContext : DbContext
         {
             e.ToTable("DONHANG");
             e.HasKey(x => x.MaDonHang);
-            e.Ignore(x => x.MaShowroom);
             e.Property(x => x.MaDonHang).ValueGeneratedOnAdd();
             e.Property(x => x.MaDonHangKinhDoanh).HasMaxLength(50).IsRequired();
             e.Property(x => x.HoTenNhanHang).HasMaxLength(150).IsRequired();

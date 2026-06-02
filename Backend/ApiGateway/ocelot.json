@@ -117,7 +117,7 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5002 }],
       "UpstreamPathTemplate": "/api/categories/{everything}",
-      "UpstreamHttpMethod": [ "GET", "PUT", "DELETE", "OPTIONS" ]
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "OPTIONS" ]
     },
     {
       "DownstreamPathTemplate": "/api/reviews",

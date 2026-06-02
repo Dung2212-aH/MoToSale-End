@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FiAlertCircle } from 'react-icons/fi';
+import { FiAlertCircle, FiAward, FiSettings, FiShield, FiTool, FiZap } from 'react-icons/fi';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Autoplay, Pagination } from 'swiper/modules';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import 'swiper/css';
+import 'swiper/css/navigation';
+import 'swiper/css/pagination';
 import { categoryApi, orderApi, productApi } from '../services/api.js';
-import { brandAssets, homeCategoryReferences, serviceHighlights } from '../assets/siteData.js';
+import { brandAssets, homeCategoryReferences, homeHeroSlides, serviceHighlights } from '../assets/siteData.js';
 import CategoryMenu from '../components/CategoryMenu.jsx';
 import ErrorState from '../components/ErrorState.jsx';
 import LoadingState from '../components/LoadingState.jsx';
@@ -190,6 +195,7 @@ function HomePage() {
     return (nextProducts.length ? nextProducts : products.slice(0, 4)).slice(0, 4);
   }, [products]);
   const activeServiceItem = serviceHighlights[activeService] || serviceHighlights[0];
+  const serviceIcons = [FiTool, FiShield, FiZap, FiSettings];
 
   return (
     <>
@@ -212,10 +218,28 @@ function HomePage() {
         </div>
       )}
 
-      <section id="trang-chu" className="scroll-mt-32 bg-[#101010]">
-        <Link to="/products">
-          <img src={brandAssets.slider} alt="EURO Moto" className="h-auto max-h-[560px] w-full object-cover" />
-        </Link>
+      <section id="trang-chu" className="home-hero-slider scroll-mt-40 bg-white">
+        <div className="w-full overflow-hidden bg-black">
+          <Swiper
+            modules={[Autoplay, Pagination]}
+            slidesPerView={1}
+            loop={homeHeroSlides.length > 1}
+            speed={700}
+            autoplay={{
+              delay: 3500,
+              disableOnInteraction: false,
+            }}
+            pagination={{ clickable: true }}
+          >
+            {homeHeroSlides.map((slide) => (
+              <SwiperSlide key={slide.id}>
+                <Link to={slide.to} aria-label={slide.alt} className="block aspect-[1792/877] w-full">
+                  <img src={slide.image} alt={slide.alt} className="h-full w-full object-contain" />
+                </Link>
+              </SwiperSlide>
+            ))}
+          </Swiper>
+        </div>
       </section>
 
       <section id="danh-muc-noi-bat" className="scroll-mt-32 px-4 py-10 sm:py-12">
@@ -229,7 +253,7 @@ function HomePage() {
         <div className="mx-auto flex w-full max-w-[1200px] flex-col items-center gap-4">
           <div className="flex items-center justify-center gap-3">
             <SectionTitle title="Deal nổi bật" center className="mb-0" />
-            <img src={brandAssets.hotIcon} alt="Hot deal" className="h-7 w-7 object-contain" />
+            <FiAward className="h-7 w-7 text-[#d71920]" aria-hidden="true" />
           </div>
           <div className="inline-flex min-h-11 items-center gap-3 rounded-full bg-gradient-to-r from-[#d71920] to-[#171717] px-5 text-xs font-extrabold uppercase tracking-[0.12em] text-white">
             <span>Hot deal</span>
@@ -279,25 +303,31 @@ function HomePage() {
             </p>
 
             <div className="grid gap-3">
-              {serviceHighlights.map((service, index) => (
-                <button
-                  key={service.id}
-                  type="button"
-                  className={`grid w-full grid-cols-[52px_1fr] items-center gap-4 rounded-2xl border px-4 py-4 text-left transition ${index === activeService
-                    ? 'border-white/35 bg-[rgba(215,25,32,0.22)]'
-                    : 'border-white/10 bg-white/5 hover:border-white/25 hover:bg-white/10'
-                    }`}
-                  onClick={() => setActiveService(index)}
-                >
-                  <img src={service.icon} alt={service.title} loading="lazy" className="h-11 w-11 object-contain" />
-                  <span className="text-sm font-extrabold uppercase tracking-[0.08em] text-white">{service.title}</span>
-                </button>
-              ))}
+              {serviceHighlights.map((service, index) => {
+                const ServiceIcon = serviceIcons[index] || FiTool;
+
+                return (
+                  <button
+                    key={service.id}
+                    type="button"
+                    className={`grid w-full grid-cols-[52px_1fr] items-center gap-4 rounded-2xl border px-4 py-4 text-left transition ${index === activeService
+                      ? 'border-white/35 bg-[rgba(215,25,32,0.22)]'
+                      : 'border-white/10 bg-white/5 hover:border-white/25 hover:bg-white/10'
+                      }`}
+                    onClick={() => setActiveService(index)}
+                  >
+                    <span className="grid h-11 w-11 place-items-center rounded-xl bg-white/10 text-white">
+                      <ServiceIcon className="h-6 w-6" aria-hidden="true" />
+                    </span>
+                    <span className="text-sm font-extrabold uppercase tracking-[0.08em] text-white">{service.title}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-3xl shadow-[0_16px_36px_rgba(0,0,0,0.2)]">
-            <img src={activeServiceItem.image} alt={activeServiceItem.title} className="h-full min-h-[380px] w-full object-cover" />
+          <div className="relative aspect-[1792/877] self-center overflow-hidden rounded-3xl bg-black shadow-[0_16px_36px_rgba(0,0,0,0.2)]">
+            <img src={activeServiceItem.image} alt={activeServiceItem.title} className="h-full w-full object-contain object-center" />
             <div className="absolute inset-x-5 bottom-5 rounded-2xl bg-gradient-to-b from-black/10 to-black/80 p-5 text-white">
               <h3 className="mb-2 text-[26px] font-black">{activeServiceItem.title}</h3>
               <p className="text-[15px] leading-7 text-white/85">{activeServiceItem.description}</p>

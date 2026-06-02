@@ -7,6 +7,9 @@ public class CreateOrderFromCartRequest
     [Range(1, int.MaxValue)]
     public int? MaShowroom { get; set; }
 
+    [Range(1, int.MaxValue)]
+    public int? MaDiaChiNhanHang { get; set; }
+
     [Required]
     [MaxLength(150)]
     public string HoTenNhanHang { get; set; } = string.Empty;
@@ -22,6 +25,9 @@ public class CreateOrderFromCartRequest
     [Required]
     [MaxLength(255)]
     public string DiaChiNhanHang { get; set; } = string.Empty;
+
+    [MaxLength(100)]
+    public string? ShippingProvince { get; set; }
 
     [Range(0, 999999999)]
     public decimal PhiVanChuyen { get; set; }

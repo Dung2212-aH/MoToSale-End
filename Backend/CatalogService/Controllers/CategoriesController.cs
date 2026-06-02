@@ -14,12 +14,14 @@ public class CategoriesController : ControllerBase
     private readonly ICatalogService _catalogService;
     private readonly CatalogDbContext _dbContext;
     private readonly IAuditLogService _auditLog;
+    private readonly IImageStorageService _imageStorage;
 
-    public CategoriesController(ICatalogService catalogService, CatalogDbContext dbContext, IAuditLogService auditLog)
+    public CategoriesController(ICatalogService catalogService, CatalogDbContext dbContext, IAuditLogService auditLog, IImageStorageService imageStorage)
     {
         _catalogService = catalogService;
         _dbContext = dbContext;
         _auditLog = auditLog;
+        _imageStorage = imageStorage;
     }
 
     [HttpGet]
@@ -41,6 +43,8 @@ public class CategoriesController : ControllerBase
                 tenDanhMuc = c.TenDanhMuc,
                 slug = c.Slug,
                 moTa = c.MoTa,
+                anhDaiDienUrl = c.AnhDaiDienUrl,
+                imageUrl = c.AnhDaiDienUrl,
                 danhMucChaId = c.MaDanhMucCha,
                 maDanhMucCha = c.MaDanhMucCha,
                 thuTu = c.ThuTuHienThi,
@@ -75,6 +79,7 @@ public class CategoriesController : ControllerBase
             TenDanhMuc = request.TenDanhMuc.Trim(),
             Slug = slug,
             MoTa = TrimToNull(request.MoTa),
+            AnhDaiDienUrl = TrimToNull(request.AnhDaiDienUrl),
             MaDanhMucCha = request.DanhMucChaId,
             ThuTuHienThi = request.ThuTu ?? request.ThuTuHienThi ?? 0,
             DangHoatDong = request.DangHoatDong ?? request.IsActive ?? true,
@@ -89,6 +94,7 @@ public class CategoriesController : ControllerBase
             category.MaDanhMuc,
             category.TenDanhMuc,
             category.Slug,
+            category.AnhDaiDienUrl,
             category.MaDanhMucCha,
             category.ThuTuHienThi,
             category.DangHoatDong
@@ -111,6 +117,7 @@ public class CategoriesController : ControllerBase
             category.TenDanhMuc,
             category.Slug,
             category.MoTa,
+            category.AnhDaiDienUrl,
             category.MaDanhMucCha,
             category.ThuTuHienThi,
             category.DangHoatDong
@@ -140,6 +147,10 @@ public class CategoriesController : ControllerBase
         category.TenDanhMuc = request.TenDanhMuc.Trim();
         category.Slug = slug;
         category.MoTa = TrimToNull(request.MoTa);
+        if (request.AnhDaiDienUrl != null)
+        {
+            category.AnhDaiDienUrl = TrimToNull(request.AnhDaiDienUrl);
+        }
         category.MaDanhMucCha = request.DanhMucChaId;
         category.ThuTuHienThi = request.ThuTu ?? request.ThuTuHienThi ?? category.ThuTuHienThi;
         category.DangHoatDong = request.DangHoatDong ?? request.IsActive ?? category.DangHoatDong;
@@ -151,11 +162,42 @@ public class CategoriesController : ControllerBase
             category.TenDanhMuc,
             category.Slug,
             category.MoTa,
+            category.AnhDaiDienUrl,
             category.MaDanhMucCha,
             category.ThuTuHienThi,
             category.DangHoatDong
         });
         return Ok(new { id = category.MaDanhMuc });
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPost("{id:int}/image")]
+    public async Task<IActionResult> UploadCategoryImage(int id, [FromForm] IFormFile? file)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest(new { message = "Vui long chon anh danh muc." });
+        }
+
+        var category = await _dbContext.Categories.FirstOrDefaultAsync(c => c.MaDanhMuc == id);
+        if (category is null)
+        {
+            return NotFound(new { message = "Khong tim thay danh muc." });
+        }
+
+        var oldValue = new { category.AnhDaiDienUrl };
+        category.AnhDaiDienUrl = await _imageStorage.SaveImageAsync(file, "categories", HttpContext.RequestAborted);
+        category.NgayCapNhat = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "Category", category.MaDanhMuc.ToString(), "UpdateImage", oldValue, new { category.AnhDaiDienUrl });
+
+        return Ok(new
+        {
+            id = category.MaDanhMuc,
+            anhDaiDienUrl = category.AnhDaiDienUrl,
+            imageUrl = category.AnhDaiDienUrl
+        });
     }
 
     [Authorize(Roles = "Admin")]
@@ -250,6 +292,7 @@ public class CategoryRequest
     public string TenDanhMuc { get; set; } = string.Empty;
     public string? Slug { get; set; }
     public string? MoTa { get; set; }
+    public string? AnhDaiDienUrl { get; set; }
     public int? DanhMucChaId { get; set; }
     public int? MaDanhMucCha { get => DanhMucChaId; set => DanhMucChaId = value; }
     public int? ThuTu { get; set; }

@@ -1,4 +1,6 @@
 using System.Data;
+using System.Globalization;
+using System.Text;
 using OrderService.DTOs.Cart;
 using OrderService.DTOs.Common;
 using OrderService.DTOs.Orders;
@@ -18,8 +20,11 @@ public class OrderService : IOrderService
     private const string ConfirmedOrderStatus = "Confirmed";
     private const string CancelledOrderStatus = "Cancelled";
     private const string UnpaidStatus = "Unpaid";
+    private const string PaidPaymentStatus = "Paid";
     private const string CancelledPaymentStatus = "Cancelled";
-    private const string NotShippedStatus = "NotShipped";
+    private const string PreparingShippingStatus = "Preparing";
+    private const decimal InProvinceShippingFee = 100000m;
+    private const decimal OutProvinceShippingFee = 300000m;
 
     private static readonly HashSet<string> AllowedReceiveMethods = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -183,6 +188,27 @@ public class OrderService : IOrderService
         return EmptyCart(maNguoiDung);
     }
 
+    public async Task<ShippingQuoteResponse> GetShippingQuoteAsync(int maNguoiDung, ShippingQuoteRequest request)
+    {
+        await EnsureActiveUserAsync(maNguoiDung);
+        var cart = await _orderRepository.GetActiveCartByUserIdAsync(maNguoiDung)
+            ?? throw new BusinessException("Gio hang dang trong.");
+
+        if (!cart.Items.Any())
+        {
+            throw new BusinessException("Gio hang dang trong.");
+        }
+
+        var method = NormalizeAllowedValue(request.PhuongThucNhanHang, AllowedReceiveMethods);
+        return await BuildShippingQuoteAsync(
+            maNguoiDung,
+            cart.MaGioHang,
+            method,
+            request.ShippingProvince,
+            request.MaVoucherCode,
+            strictVoucher: false);
+    }
+
     public async Task<OrderDto> CreateOrderFromCartAsync(int maNguoiDung, CreateOrderFromCartRequest request)
     {
         await EnsureActiveUserAsync(maNguoiDung);
@@ -203,9 +229,24 @@ public class OrderService : IOrderService
         await RefreshAndValidateCartItemsAsync(cart);
 
         var subtotal = cart.Items.Sum(i => i.DonGia * i.SoLuong);
-        var voucherDiscount = await GetVoucherDiscountAsync(maNguoiDung, cart.MaGioHang, request.MaVoucherCode, request.PhiVanChuyen);
-        var discount = Math.Min(voucherDiscount, subtotal + request.PhiVanChuyen);
-        var total = subtotal + request.PhiVanChuyen - discount;
+        var receiveMethod = NormalizeAllowedValue(request.PhuongThucNhanHang, AllowedReceiveMethods);
+        var selectedAddress = await GetSelectedDeliveryAddressAsync(maNguoiDung, receiveMethod, request);
+        var shippingQuote = await BuildShippingQuoteAsync(
+            maNguoiDung,
+            cart.MaGioHang,
+            receiveMethod,
+            selectedAddress?.TinhThanh ?? request.ShippingProvince,
+            request.MaVoucherCode,
+            strictVoucher: true);
+        var voucherDiscount = await GetVoucherDiscountResultAsync(
+            maNguoiDung,
+            cart.MaGioHang,
+            request.MaVoucherCode,
+            shippingQuote.OriginalShippingFee,
+            strict: true);
+        var itemDiscount = voucherDiscount.IsFreeShipping ? 0 : voucherDiscount.Amount;
+        var discount = Math.Min(itemDiscount, subtotal);
+        var total = subtotal + shippingQuote.ShippingFee - discount;
         var deposit = GetDepositAmount(request.LoaiDonHang, request.TienDatCoc, total);
         var remaining = GetRemainingAmount(request.LoaiDonHang, deposit, total);
 
@@ -214,13 +255,13 @@ public class OrderService : IOrderService
             MaDonHangKinhDoanh = GenerateOrderCode(),
             MaNguoiDung = maNguoiDung,
             MaShowroom = request.MaShowroom,
-            HoTenNhanHang = request.HoTenNhanHang.Trim(),
-            SoDienThoaiNhanHang = request.SoDienThoaiNhanHang.Trim(),
+            HoTenNhanHang = selectedAddress?.HoTenNhanHang.Trim() ?? request.HoTenNhanHang.Trim(),
+            SoDienThoaiNhanHang = selectedAddress?.SoDienThoaiNhanHang.Trim() ?? request.SoDienThoaiNhanHang.Trim(),
             EmailNhanHang = string.IsNullOrWhiteSpace(request.EmailNhanHang) ? null : request.EmailNhanHang.Trim().ToLowerInvariant(),
-            DiaChiNhanHang = request.DiaChiNhanHang.Trim(),
+            DiaChiNhanHang = selectedAddress is null ? request.DiaChiNhanHang.Trim() : FormatShippingAddress(selectedAddress),
             TongTienHang = subtotal,
             TienGiam = discount,
-            PhiVanChuyen = request.PhiVanChuyen,
+            PhiVanChuyen = shippingQuote.ShippingFee,
             TongThanhToan = total,
             TrangThaiDonHang = AwaitingPaymentStatus,
             TrangThaiThanhToan = total == 0 ? "Paid" : UnpaidStatus,
@@ -228,8 +269,8 @@ public class OrderService : IOrderService
             NgayTao = now,
             NgayCapNhat = now,
             MaGioHang = cart.MaGioHang,
-            PhuongThucNhanHang = NormalizeAllowedValue(request.PhuongThucNhanHang, AllowedReceiveMethods),
-            TrangThaiVanChuyen = NotShippedStatus,
+            PhuongThucNhanHang = receiveMethod,
+            TrangThaiVanChuyen = PreparingShippingStatus,
             LoaiDonHang = NormalizeAllowedValue(request.LoaiDonHang, AllowedOrderTypes),
             TienDatCoc = deposit,
             SoTienConLai = remaining,
@@ -258,14 +299,16 @@ public class OrderService : IOrderService
             });
         }
 
+        await CompleteCheckoutPaymentAsync(order, now);
+
         cart.TrangThai = CheckedOutCartStatus;
         cart.NgayCapNhat = now;
 
         await _orderRepository.SaveChangesAsync();
 
-        if (!string.IsNullOrWhiteSpace(request.MaVoucherCode) && discount > 0)
+        if (!string.IsNullOrWhiteSpace(request.MaVoucherCode) && voucherDiscount.Amount > 0)
         {
-            await _orderRepository.RecordVoucherUseAsync(maNguoiDung, order.MaDonHang, request.MaVoucherCode.Trim(), discount);
+            await _orderRepository.RecordVoucherUseAsync(maNguoiDung, order.MaDonHang, request.MaVoucherCode.Trim(), voucherDiscount.Amount);
         }
 
         await transaction.CommitAsync();
@@ -274,6 +317,53 @@ public class OrderService : IOrderService
             ?? throw new NotFoundException("Khong tim thay don hang vua tao.");
 
         return MapOrder(createdOrder);
+    }
+
+    private async Task CompleteCheckoutPaymentAsync(Order order, DateTime now)
+    {
+        foreach (var group in order.InventoryHolds.Where(h => h.MaBienSanPham.HasValue).GroupBy(h => h.MaBienSanPham!.Value))
+        {
+            var variant = await _orderRepository.GetVariantAsync(group.Key)
+                ?? throw new BusinessException("Bien the san pham trong don hang khong ton tai.");
+            var requiredQuantity = group.Sum(h => h.SoLuong);
+            var stock = variant.SoLuongTon ?? 0;
+
+            if (stock < requiredQuantity)
+            {
+                throw new BusinessException("So luong ton kho bien the khong du de xac nhan don hang.");
+            }
+
+            variant.SoLuongTon = stock - requiredQuantity;
+            variant.NgayCapNhat = now;
+        }
+
+        foreach (var group in order.InventoryHolds.Where(h => !h.MaBienSanPham.HasValue).GroupBy(h => h.MaSanPham))
+        {
+            var product = await _orderRepository.GetProductAsync(group.Key)
+                ?? throw new BusinessException("San pham trong don hang khong ton tai.");
+            var requiredQuantity = group.Sum(h => h.SoLuong);
+
+            if (product.SoLuongTon < requiredQuantity)
+            {
+                throw new BusinessException("So luong ton kho san pham khong du de xac nhan don hang.");
+            }
+
+            product.SoLuongTon -= requiredQuantity;
+            product.NgayCapNhat = now;
+        }
+
+        foreach (var hold in order.InventoryHolds)
+        {
+            hold.TrangThai = ConfirmedOrderStatus;
+            hold.NgayCapNhat = now;
+            hold.GhiChu = AppendNote(hold.GhiChu, "Da thanh toan checkout va tru ton kho");
+        }
+
+        order.TrangThaiDonHang = ConfirmedOrderStatus;
+        order.TrangThaiThanhToan = PaidPaymentStatus;
+        order.SoTienConLai = 0;
+        order.NgayThanhToanThanhCong = now;
+        order.NgayCapNhat = now;
     }
 
     public async Task<PagedResultDto<OrderSummaryDto>> GetOrdersAsync(OrderSearchDto search, int currentUserId, bool canViewAll)
@@ -324,7 +414,6 @@ public class OrderService : IOrderService
         {
             order.TrangThaiThanhToan = CancelledPaymentStatus;
         }
-        order.TrangThaiVanChuyen = "Cancelled";
         order.NgayHuyDon = now;
         order.LyDoHuyDon = TrimToNull(request.LyDoHuyDon) ?? "Khach hang huy don";
         order.NgayCapNhat = now;
@@ -422,22 +511,168 @@ public class OrderService : IOrderService
         }
     }
 
-    private async Task<decimal> GetVoucherDiscountAsync(int maNguoiDung, int maGioHang, string? maVoucherCode, decimal phiVanChuyen)
+    private async Task<ShippingQuoteResponse> BuildShippingQuoteAsync(
+        int maNguoiDung,
+        int maGioHang,
+        string receiveMethod,
+        string? province,
+        string? voucherCode,
+        bool strictVoucher)
+    {
+        if (receiveMethod.Equals("Pickup", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ShippingQuoteResponse
+            {
+                ShippingFee = 0,
+                OriginalShippingFee = 0,
+                DiscountAmount = 0,
+                IsFreeShipping = true,
+                FreeReason = "Pickup"
+            };
+        }
+
+        var baseQuote = await GetBaseShippingQuoteAsync(province);
+        var voucherDiscount = await GetVoucherDiscountResultAsync(
+            maNguoiDung,
+            maGioHang,
+            voucherCode,
+            baseQuote.OriginalShippingFee,
+            strictVoucher);
+        var shippingDiscount = voucherDiscount.IsFreeShipping
+            ? Math.Min(voucherDiscount.Amount, baseQuote.OriginalShippingFee)
+            : 0;
+
+        baseQuote.DiscountAmount = shippingDiscount;
+        baseQuote.ShippingFee = Math.Max(0, baseQuote.OriginalShippingFee - shippingDiscount);
+        baseQuote.IsFreeShipping = baseQuote.ShippingFee == 0 && baseQuote.OriginalShippingFee > 0;
+        baseQuote.FreeReason = shippingDiscount > 0 ? "FreeShippingVoucher" : null;
+        return baseQuote;
+    }
+
+    private async Task<ShippingQuoteResponse> GetBaseShippingQuoteAsync(string? province)
+    {
+        var hasStoreInProvince = await HasActiveStoreInProvinceAsync(province);
+        var fee = hasStoreInProvince ? InProvinceShippingFee : OutProvinceShippingFee;
+
+        return new ShippingQuoteResponse
+        {
+            ShippingFee = fee,
+            OriginalShippingFee = fee,
+            CarrierCode = hasStoreInProvince ? "IN_PROVINCE" : "OUT_PROVINCE",
+            CarrierName = hasStoreInProvince ? "Phí vận chuyển nội tỉnh" : "Phí vận chuyển khác tỉnh"
+        };
+    }
+
+    private async Task<bool> HasActiveStoreInProvinceAsync(string? province)
+    {
+        var destinationAliases = GetProvinceAliases(province);
+        if (destinationAliases.Count == 0)
+        {
+            return false;
+        }
+
+        var storeLocations = await _orderRepository.GetActiveStoreLocationTextsAsync();
+        return storeLocations
+            .Select(NormalizeProvinceText)
+            .Any(location => destinationAliases.Any(location.Contains));
+    }
+
+    private static HashSet<string> GetProvinceAliases(string? province)
+    {
+        var key = NormalizeProvinceText(province);
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var aliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { key };
+        if (key is "hochiminh" or "tphcm" or "hcm" or "saigon")
+        {
+            aliases.UnionWith(new[] { "hochiminh", "tphcm", "hcm", "saigon" });
+        }
+        else if (key is "hanoi")
+        {
+            aliases.UnionWith(new[] { "hanoi" });
+        }
+        else if (key is "danang")
+        {
+            aliases.UnionWith(new[] { "danang" });
+        }
+        else if (key is "cantho")
+        {
+            aliases.UnionWith(new[] { "cantho" });
+        }
+
+        return aliases;
+    }
+
+    private static string NormalizeProvinceText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var formD = value.Trim().Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder(formD.Length);
+        foreach (var ch in formD)
+        {
+            var category = CharUnicodeInfo.GetUnicodeCategory(ch);
+            if (category == UnicodeCategory.NonSpacingMark)
+            {
+                continue;
+            }
+
+            if (char.IsLetterOrDigit(ch))
+            {
+                builder.Append(char.ToLowerInvariant(ch == 'đ' || ch == 'Đ' ? 'd' : ch));
+            }
+        }
+
+        var normalized = builder.ToString();
+        foreach (var prefix in new[] { "thanhpho", "tinh", "tp" })
+        {
+            if (normalized.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                normalized = normalized[prefix.Length..];
+            }
+        }
+
+        return normalized;
+    }
+
+    private async Task<VoucherDiscountResult> GetVoucherDiscountResultAsync(int maNguoiDung, int maGioHang, string? maVoucherCode, decimal phiVanChuyen, bool strict)
     {
         if (string.IsNullOrWhiteSpace(maVoucherCode))
         {
-            return 0;
+            return VoucherDiscountResult.Empty;
         }
 
-        var voucher = await _orderRepository.ValidateVoucherAsync(maNguoiDung, maGioHang, maVoucherCode.Trim(), phiVanChuyen)
+        var code = maVoucherCode.Trim();
+        if (!await _orderRepository.UserHasSavedVoucherAsync(maNguoiDung, code))
+        {
+            if (strict)
+            {
+                throw new BusinessException("Ban chua nhan voucher nay.");
+            }
+
+            return VoucherDiscountResult.Empty;
+        }
+
+        var voucher = await _orderRepository.ValidateVoucherAsync(maNguoiDung, maGioHang, code, phiVanChuyen)
             ?? throw new BusinessException("Khong kiem tra duoc voucher.");
 
         if (!voucher.HopLe)
         {
-            throw new BusinessException(voucher.LyDoKhongHopLe ?? "Voucher khong hop le.");
+            if (strict)
+            {
+                throw new BusinessException(voucher.LyDoKhongHopLe ?? "Voucher khong hop le.");
+            }
+
+            return VoucherDiscountResult.Empty;
         }
 
-        return voucher.SoTienGiam;
+        return new VoucherDiscountResult(voucher.SoTienGiam, string.Equals(voucher.LoaiGiamGia, "FreeShipping", StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task<Order> GetOrderForUserAsync(int maDonHang, int currentUserId, bool canViewAll)
@@ -501,6 +736,31 @@ public class OrderService : IOrderService
         {
             throw new BusinessException("Loai don hang khong hop le.");
         }
+    }
+
+    private async Task<UserAddress?> GetSelectedDeliveryAddressAsync(
+        int maNguoiDung,
+        string receiveMethod,
+        CreateOrderFromCartRequest request)
+    {
+        if (!receiveMethod.Equals("Delivery", StringComparison.OrdinalIgnoreCase) || !request.MaDiaChiNhanHang.HasValue)
+        {
+            return null;
+        }
+
+        return await _orderRepository.GetUserAddressAsync(maNguoiDung, request.MaDiaChiNhanHang.Value)
+            ?? throw new BusinessException("Dia chi nhan hang khong hop le.");
+    }
+
+    private static string FormatShippingAddress(UserAddress address)
+    {
+        return string.Join(", ", new[]
+        {
+            address.DiaChiNhanHang,
+            address.PhuongXa,
+            address.QuanHuyen,
+            address.TinhThanh
+        }.Where(part => !string.IsNullOrWhiteSpace(part)).Select(part => part!.Trim()));
     }
 
     private static decimal GetDepositAmount(string orderType, decimal requestedDeposit, decimal total)
@@ -574,8 +834,7 @@ public class OrderService : IOrderService
             SKU = item.Variant?.SKU,
             SoLuong = item.SoLuong,
             DonGia = item.DonGia,
-            ThanhTien = item.DonGia * item.SoLuong,
-            AnhChinhUrl = item.Product?.AnhChinhUrl
+            ThanhTien = item.DonGia * item.SoLuong
         };
     }
 
@@ -598,6 +857,7 @@ public class OrderService : IOrderService
             HoTenNhanHang = order.HoTenNhanHang,
             EmailNhanHang = order.EmailNhanHang,
             SoDienThoaiNhanHang = order.SoDienThoaiNhanHang,
+            PhiVanChuyen = order.PhiVanChuyen,
             TongThanhToan = order.TongThanhToan,
             TrangThaiDonHang = order.TrangThaiDonHang,
             TrangThaiThanhToan = order.TrangThaiThanhToan,
@@ -729,5 +989,10 @@ public class OrderService : IOrderService
     private static string AppendNote(string? current, string note)
     {
         return string.IsNullOrWhiteSpace(current) ? note : $"{current} | {note}";
+    }
+
+    private sealed record VoucherDiscountResult(decimal Amount, bool IsFreeShipping)
+    {
+        public static VoucherDiscountResult Empty { get; } = new(0, false);
     }
 }

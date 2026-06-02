@@ -474,6 +474,18 @@ public class VouchersController : ControllerBase
                 return BadRequest(new { valid = false, message = "Gio hang dang trong." });
             }
 
+            var hasSavedVoucher = await _dbContext.VoucherUsers
+                .AsNoTracking()
+                .AnyAsync(vu =>
+                    vu.MaNguoiDung == userId &&
+                    vu.MaVoucherCodeSnapshot == request.Code &&
+                    vu.TrangThai == "Saved");
+
+            if (!hasSavedVoucher)
+            {
+                return BadRequest(new { valid = false, message = "Ban chua nhan voucher nay." });
+            }
+
             var results = await _dbContext.VoucherValidationResults
                 .FromSqlInterpolated(
                     $"EXEC dbo.sp_Voucher_KiemTraTruocKhiTaoDon @MaNguoiDung={userId}, @MaGioHang={cart.MaGioHang}, @MaVoucherCode={request.Code}, @PhiVanChuyen={request.ShippingFee}")

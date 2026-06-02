@@ -9,6 +9,7 @@ public interface IOrderRepository
 {
     Task<IDbContextTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted);
     Task<User?> GetUserAsync(int maNguoiDung);
+    Task<UserAddress?> GetUserAddressAsync(int maNguoiDung, int maDiaChi);
     Task<Product?> GetProductAsync(int maSanPham);
     Task<ProductVariant?> GetVariantAsync(int maBienSanPham);
     Task<bool> ProductHasVariantsAsync(int maSanPham);
@@ -25,6 +26,8 @@ public interface IOrderRepository
     Task<List<Order>> GetOrdersAsync(OrderSearchDto search, int? maNguoiDung);
     Task<int> CountOrdersAsync(OrderSearchDto search, int? maNguoiDung);
     Task<VoucherValidationResult?> ValidateVoucherAsync(int maNguoiDung, int maGioHang, string maVoucherCode, decimal phiVanChuyen);
+    Task<bool> UserHasSavedVoucherAsync(int maNguoiDung, string maVoucherCode);
+    Task<List<string>> GetActiveStoreLocationTextsAsync();
     Task RecordVoucherUseAsync(int maNguoiDung, int maDonHang, string maVoucherCode, decimal soTienGiam);
     Task CancelVoucherUseAsync(int maDonHang);
     Task SaveChangesAsync();

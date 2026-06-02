@@ -470,6 +470,25 @@ public class UsersController : ControllerBase
         return Ok(address is null ? new { } : ToAddress(address));
     }
 
+    [HttpGet("me/addresses")]
+    public async Task<IActionResult> GetMyAddresses()
+    {
+        var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+        {
+            return Unauthorized();
+        }
+
+        var addresses = await _dbContext.UserAddresses
+            .AsNoTracking()
+            .Where(a => a.MaNguoiDung == userId.Value)
+            .OrderByDescending(a => a.LaMacDinh)
+            .ThenByDescending(a => a.NgayCapNhat)
+            .ToListAsync();
+
+        return Ok(new { items = addresses.Select(ToAddress).ToList() });
+    }
+
     [HttpPut("me/address")]
     public async Task<IActionResult> UpsertDefaultAddress(UpdateAddressRequest request)
     {
@@ -488,6 +507,9 @@ public class UsersController : ControllerBase
 
         if (address is null)
         {
+            await ClearDefaultAddressAsync(userId.Value);
+            await _dbContext.SaveChangesAsync();
+
             address = new UserAddress
             {
                 MaNguoiDung = userId.Value,
@@ -506,8 +528,152 @@ public class UsersController : ControllerBase
         address.LaMacDinh = true;
         address.NgayCapNhat = now;
 
+        if (address.MaDiaChi > 0)
+        {
+            await ClearDefaultAddressAsync(userId.Value, address.MaDiaChi);
+        }
         await _dbContext.SaveChangesAsync();
         return Ok(ToAddress(address));
+    }
+
+    [HttpPost("me/addresses")]
+    public async Task<IActionResult> CreateAddress(UpdateAddressRequest request)
+    {
+        var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+        {
+            return Unauthorized();
+        }
+
+        var now = DateTime.UtcNow;
+        var shouldBeDefault = await ShouldAddressBeDefaultAsync(userId.Value, request);
+        var address = new UserAddress
+        {
+            MaNguoiDung = userId.Value,
+            HoTenNhanHang = request.HoTenNhanHang.Trim(),
+            SoDienThoaiNhanHang = request.SoDienThoaiNhanHang.Trim(),
+            DiaChiNhanHang = request.DiaChiNhanHang.Trim(),
+            PhuongXa = TrimToNull(request.Ward),
+            QuanHuyen = TrimToNull(request.District),
+            TinhThanh = request.Province.Trim(),
+            GhiChu = TrimToNull(request.GhiChu),
+            LaMacDinh = shouldBeDefault,
+            NgayTao = now,
+            NgayCapNhat = now
+        };
+
+        if (shouldBeDefault)
+        {
+            await ClearDefaultAddressAsync(userId.Value);
+            await _dbContext.SaveChangesAsync();
+        }
+
+        _dbContext.UserAddresses.Add(address);
+        await _dbContext.SaveChangesAsync();
+        return CreatedAtAction(nameof(GetMyAddresses), ToAddress(address));
+    }
+
+    [HttpPut("me/addresses/{id:int}")]
+    public async Task<IActionResult> UpdateAddress(int id, UpdateAddressRequest request)
+    {
+        var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+        {
+            return Unauthorized();
+        }
+
+        var address = await _dbContext.UserAddresses
+            .FirstOrDefaultAsync(a => a.MaDiaChi == id && a.MaNguoiDung == userId.Value);
+
+        if (address is null)
+        {
+            return NotFound(new { message = "Khong tim thay dia chi nhan hang." });
+        }
+
+        var makeDefault = request.LaMacDinh == true || request.IsDefault == true;
+        if (makeDefault)
+        {
+            await ClearDefaultAddressAsync(userId.Value, id);
+            await _dbContext.SaveChangesAsync();
+        }
+
+        address.HoTenNhanHang = request.HoTenNhanHang.Trim();
+        address.SoDienThoaiNhanHang = request.SoDienThoaiNhanHang.Trim();
+        address.DiaChiNhanHang = request.DiaChiNhanHang.Trim();
+        address.PhuongXa = TrimToNull(request.Ward);
+        address.QuanHuyen = TrimToNull(request.District);
+        address.TinhThanh = request.Province.Trim();
+        address.GhiChu = TrimToNull(request.GhiChu);
+        address.LaMacDinh = makeDefault || address.LaMacDinh;
+        address.NgayCapNhat = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync();
+        return Ok(ToAddress(address));
+    }
+
+    [HttpPut("me/addresses/{id:int}/default")]
+    public async Task<IActionResult> SetDefaultAddress(int id)
+    {
+        var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+        {
+            return Unauthorized();
+        }
+
+        var address = await _dbContext.UserAddresses
+            .FirstOrDefaultAsync(a => a.MaDiaChi == id && a.MaNguoiDung == userId.Value);
+
+        if (address is null)
+        {
+            return NotFound(new { message = "Khong tim thay dia chi nhan hang." });
+        }
+
+        await ClearDefaultAddressAsync(userId.Value, id);
+        await _dbContext.SaveChangesAsync();
+        address.LaMacDinh = true;
+        address.NgayCapNhat = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync();
+
+        return Ok(ToAddress(address));
+    }
+
+    [HttpDelete("me/addresses/{id:int}")]
+    public async Task<IActionResult> DeleteAddress(int id)
+    {
+        var userId = GetCurrentUserId();
+        if (!userId.HasValue)
+        {
+            return Unauthorized();
+        }
+
+        var address = await _dbContext.UserAddresses
+            .FirstOrDefaultAsync(a => a.MaDiaChi == id && a.MaNguoiDung == userId.Value);
+
+        if (address is null)
+        {
+            return NotFound(new { message = "Khong tim thay dia chi nhan hang." });
+        }
+
+        var wasDefault = address.LaMacDinh;
+        _dbContext.UserAddresses.Remove(address);
+        await _dbContext.SaveChangesAsync();
+
+        if (wasDefault)
+        {
+            var nextDefault = await _dbContext.UserAddresses
+                .Where(a => a.MaNguoiDung == userId.Value)
+                .OrderByDescending(a => a.NgayCapNhat)
+                .FirstOrDefaultAsync();
+
+            if (nextDefault is not null)
+            {
+                nextDefault.LaMacDinh = true;
+                nextDefault.NgayCapNhat = DateTime.UtcNow;
+                await _dbContext.SaveChangesAsync();
+            }
+        }
+
+        return NoContent();
     }
 
     private async Task<User?> GetCurrentUserAsync()
@@ -574,6 +740,29 @@ public class UsersController : ControllerBase
     private static string? TrimToNull(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private async Task<bool> ShouldAddressBeDefaultAsync(int userId, UpdateAddressRequest request)
+    {
+        if (request.LaMacDinh == true || request.IsDefault == true)
+        {
+            return true;
+        }
+
+        return !await _dbContext.UserAddresses.AnyAsync(a => a.MaNguoiDung == userId);
+    }
+
+    private async Task ClearDefaultAddressAsync(int userId, int? exceptAddressId = null)
+    {
+        var defaultAddresses = await _dbContext.UserAddresses
+            .Where(a => a.MaNguoiDung == userId && a.LaMacDinh && (!exceptAddressId.HasValue || a.MaDiaChi != exceptAddressId.Value))
+            .ToListAsync();
+
+        foreach (var item in defaultAddresses)
+        {
+            item.LaMacDinh = false;
+            item.NgayCapNhat = DateTime.UtcNow;
+        }
     }
 
     private async Task<object> BuildAdminUserResponseAsync(int id)
@@ -728,6 +917,10 @@ public class UpdateAddressRequest
 
     [MaxLength(255)]
     public string? GhiChu { get; set; }
+
+    public bool? LaMacDinh { get; set; }
+
+    public bool? IsDefault { get; set; }
 }
 
 public class CustomerCareNoteRequest

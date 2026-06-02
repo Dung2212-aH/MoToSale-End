@@ -26,6 +26,13 @@ public class OrderRepository : IOrderRepository
         return await _dbContext.Users.FirstOrDefaultAsync(u => u.MaNguoiDung == maNguoiDung);
     }
 
+    public async Task<UserAddress?> GetUserAddressAsync(int maNguoiDung, int maDiaChi)
+    {
+        return await _dbContext.UserAddresses
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.MaNguoiDung == maNguoiDung && a.MaDiaChi == maDiaChi);
+    }
+
     public async Task<Product?> GetProductAsync(int maSanPham)
     {
         return await _dbContext.Products.FirstOrDefaultAsync(p => p.MaSanPham == maSanPham);
@@ -203,6 +210,45 @@ public class OrderRepository : IOrderRepository
             .ToListAsync();
 
         return results.FirstOrDefault();
+    }
+
+    public async Task<bool> UserHasSavedVoucherAsync(int maNguoiDung, string maVoucherCode)
+    {
+        return await _dbContext.VoucherUsers
+            .AsNoTracking()
+            .AnyAsync(vu =>
+                vu.MaNguoiDung == maNguoiDung &&
+                vu.MaVoucherCodeSnapshot == maVoucherCode &&
+                vu.TrangThai == "Saved");
+    }
+
+    public async Task<List<string>> GetActiveStoreLocationTextsAsync()
+    {
+        return await _dbContext.Database.SqlQueryRaw<string>(
+            """
+            DECLARE @Locations TABLE (LocationText NVARCHAR(700) NOT NULL);
+
+            IF OBJECT_ID(N'dbo.SHOWROOM', N'U') IS NOT NULL
+            BEGIN
+                INSERT INTO @Locations (LocationText)
+                SELECT CONCAT(TenShowroom, N' ', DiaChi)
+                FROM dbo.SHOWROOM
+                WHERE DangHoatDong = 1;
+            END;
+
+            IF OBJECT_ID(N'dbo.CUAHANG_KHO', N'U') IS NOT NULL
+            BEGIN
+                INSERT INTO @Locations (LocationText)
+                SELECT CONCAT(TenKho, N' ', DiaChi)
+                FROM dbo.CUAHANG_KHO
+                WHERE DangHoatDong = 1
+                  AND LoaiKho IN ('Showroom', 'Store');
+            END;
+
+            SELECT LocationText AS [Value]
+            FROM @Locations;
+            """)
+            .ToListAsync();
     }
 
     public async Task RecordVoucherUseAsync(int maNguoiDung, int maDonHang, string maVoucherCode, decimal soTienGiam)

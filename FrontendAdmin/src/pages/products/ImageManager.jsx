@@ -271,7 +271,9 @@ const ImageManager = ({ productId, onClose }) => {
                             alt={img.altText || ''}
                             className="card-img-top"
                             style={{ height: 120, objectFit: 'cover' }}
-                            onError={(e) => { e.target.src = 'https://via.placeholder.com/200x120?text=No+Image'; }}
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
                           />
                           <div className="card-body p-2">
                             {img.laAnhChinh && (

@@ -76,7 +76,7 @@ function UserAvatar({ name }) {
   const idx = (name || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % colors.length;
 
   return (
-    <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${colors[idx]}`}>
+    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${colors[idx]}`}>
       {letter}
     </div>
   );

@@ -25,7 +25,13 @@ const OperationsSettings = () => {
   const { isAdmin } = useAuth();
   const [warehouses, setWarehouses] = useState([]);
   const [settings, setSettings] = useState([]);
-  const [warehouseForm, setWarehouseForm] = useState({ tenKho: '', loaiKho: 'StoreWarehouse', diaChi: '', hotline: '', dangHoatDong: true });
+  const [warehouseForm, setWarehouseForm] = useState({
+    tenKho: '',
+    loaiKho: 'StoreWarehouse',
+    diaChi: '',
+    hotline: '',
+    dangHoatDong: true,
+  });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -41,6 +47,7 @@ const OperationsSettings = () => {
         operationsService.getSettings(),
       ]);
       setWarehouses(warehousesRes.data.items || []);
+
       const fromApi = settingsRes.data.items || [];
       const map = new Map(fromApi.map((item) => [item.key ?? item.Key, item]));
       setSettings(DEFAULT_SETTINGS.map(([key, label]) => ({
@@ -65,6 +72,7 @@ const OperationsSettings = () => {
       alert('Tên kho/showroom là bắt buộc.');
       return;
     }
+
     setSaving(true);
     try {
       await operationsService.saveWarehouse(warehouseForm);
@@ -155,6 +163,9 @@ const OperationsSettings = () => {
           <div className="card">
             <div className="card-header"><h3 className="card-title">Cấu hình hệ thống</h3></div>
             <div className="card-body">
+              <div className="alert alert-info">
+                Phí vận chuyển hiện được tính tự động theo nội tỉnh/ngoại tỉnh dựa trên địa chỉ showroom/kho đang hoạt động.
+              </div>
               <div className="row">
                 {settings.map((item, index) => (
                   <div className="col-md-6" key={item.key}>

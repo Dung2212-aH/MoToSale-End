@@ -15,6 +15,6 @@ public class ProductListItemDto
     public decimal GiaBan { get; set; }
     public int? TyLeGiam { get; set; }
     public int SoLuongTon { get; set; }
-    public string? AnhChinhUrl { get; set; }
     public string TrangThaiSanPham { get; set; } = string.Empty;
+    public string? AnhChinhUrl { get; set; }
 }

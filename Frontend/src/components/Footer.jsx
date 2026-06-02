@@ -8,7 +8,14 @@ function Footer() {
       <div className="mx-auto grid w-full max-w-[1200px] gap-10 px-4 py-12 md:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1.4fr]">
         <div>
           <Link className="inline-block" to="/">
-            <img src={brandAssets.footerLogo} alt="EURO Moto" className="w-[210px]" />
+            {brandAssets.footerLogo ? (
+              <img src={brandAssets.footerLogo} alt="EURO Moto" className="w-[210px]" />
+            ) : (
+              <span className="inline-flex items-center gap-3 text-[30px] font-black tracking-tight text-white">
+                <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#d71920]">€</span>
+                <span>Moto</span>
+              </span>
+            )}
           </Link>
 
           <p className="mt-4 text-sm leading-7 text-zinc-300">

@@ -59,32 +59,20 @@ export const PAYMENT_STATUS_OPTIONS = [
 ];
 
 export const SHIPPING_STATUS = {
-  NotShipped: { label: 'Chưa giao', color: 'secondary' },
-  Preparing: { label: 'Đang chuẩn bị giao', color: 'warning' },
+  Preparing: { label: 'Đang chuẩn bị hàng', color: 'warning' },
   Shipping: { label: 'Đang giao', color: 'info' },
   Delivered: { label: 'Đã giao', color: 'success' },
-  PickupReady: { label: 'Sẵn sàng nhận tại showroom', color: 'primary' },
-  PickedUp: { label: 'Đã nhận tại showroom', color: 'success' },
-  Cancelled: { label: 'Đã hủy giao hàng', color: 'danger' },
 };
 
 export const SHIPPING_STATUS_OPTIONS = [
-  { value: 'NotShipped', label: 'Chưa giao' },
-  { value: 'Preparing', label: 'Đang chuẩn bị giao' },
+  { value: 'Preparing', label: 'Đang chuẩn bị hàng' },
   { value: 'Shipping', label: 'Đang giao' },
   { value: 'Delivered', label: 'Đã giao' },
-  { value: 'PickupReady', label: 'Sẵn sàng nhận tại showroom' },
-  { value: 'PickedUp', label: 'Đã nhận tại showroom' },
-  { value: 'Cancelled', label: 'Đã hủy giao hàng' },
 ];
 
-export const DELIVERY_SHIPPING_STATUS_OPTIONS = SHIPPING_STATUS_OPTIONS.filter((item) =>
-  ['NotShipped', 'Preparing', 'Shipping', 'Delivered'].includes(item.value)
-);
+export const DELIVERY_SHIPPING_STATUS_OPTIONS = SHIPPING_STATUS_OPTIONS;
 
-export const PICKUP_SHIPPING_STATUS_OPTIONS = SHIPPING_STATUS_OPTIONS.filter((item) =>
-  ['NotShipped', 'PickupReady', 'PickedUp'].includes(item.value)
-);
+export const PICKUP_SHIPPING_STATUS_OPTIONS = SHIPPING_STATUS_OPTIONS;
 
 export const getPaymentStatusMeta = (status) => (
   PAYMENT_STATUS[status] || { label: status || 'Khác', color: 'secondary' }

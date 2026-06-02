@@ -45,6 +45,27 @@ public class AuthController : ControllerBase
         }
     }
 
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request)
+    {
+        var response = await _authService.ForgotPasswordAsync(request);
+        return Ok(response);
+    }
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword(ResetPasswordRequest request)
+    {
+        try
+        {
+            await _authService.ResetPasswordAsync(request);
+            return Ok(new { message = "Đã đặt lại mật khẩu." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     [Authorize]
     [HttpGet("me")]
     public IActionResult Me()

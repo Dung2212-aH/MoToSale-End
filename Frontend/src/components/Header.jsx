@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   FiChevronDown,
   FiFileText,
@@ -12,11 +12,11 @@ import {
 } from 'react-icons/fi';
 import { RiDiscountPercentLine } from 'react-icons/ri';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { brandAssets, navItems, productBrandGroups, socialLinks } from '../assets/siteData.js';
+import { brandAssets, navItems, socialLinks } from '../assets/siteData.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { useCart } from '../contexts/CartContext.jsx';
 import { useFavorite } from '../contexts/FavoriteContext.jsx';
-import { voucherApi } from '../services/api.js';
+import { productApi, voucherApi } from '../services/api.js';
 
 function getDisplayName(user) {
   return user?.name || user?.username || user?.email || 'Tài khoản';
@@ -31,9 +31,20 @@ function navItemBaseClass(isActive = false) {
   ].join(' ');
 }
 
+function valueOf(source, ...keys) {
+  for (const key of keys) {
+    if (source?.[key] !== undefined && source?.[key] !== null) {
+      return source[key];
+    }
+  }
+
+  return undefined;
+}
+
 function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [productMenuOpen, setProductMenuOpen] = useState(false);
+  const [productFilters, setProductFilters] = useState({ brands: [], carModels: [] });
   const [voucherCount, setVoucherCount] = useState(0);
   const { user: currentUser, isAuthenticated } = useAuth();
   const { count: cartCount } = useCart();
@@ -53,6 +64,52 @@ function Header() {
     setProductMenuOpen(false);
   }, [location.pathname, location.search, location.hash]);
 
+  useEffect(() => {
+    let mounted = true;
+
+    productApi.getFilters()
+      .then((filters) => {
+        if (mounted) {
+          setProductFilters({
+            brands: filters?.brands || [],
+            carModels: filters?.carModels || [],
+          });
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setProductFilters({ brands: [], carModels: [] });
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const productBrandGroups = useMemo(() => {
+    const carModels = productFilters.carModels || [];
+
+    return (productFilters.brands || [])
+      .map((brand) => {
+        const brandId = valueOf(brand, 'id', 'Id', 'maHangXe', 'MaHangXe');
+        const brandName = valueOf(brand, 'name', 'Name', 'tenHang', 'TenHang') || '';
+
+        return {
+          id: brandId,
+          name: brandName,
+          items: carModels
+            .filter((model) => String(valueOf(model, 'brandId', 'BrandId', 'maHangXe', 'MaHangXe')) === String(brandId))
+            .map((model) => ({
+              id: valueOf(model, 'id', 'Id', 'maDongXe', 'MaDongXe'),
+              name: valueOf(model, 'name', 'Name', 'tenDongXe', 'TenDongXe') || '',
+            }))
+            .filter((model) => model.id && model.name),
+        };
+      })
+      .filter((group) => group.id && group.name);
+  }, [productFilters]);
+
   function handleNavClick(item, event) {
     setMenuOpen(false);
     setProductMenuOpen(false);
@@ -67,7 +124,14 @@ function Header() {
     <header className="sticky top-0 z-20 bg-white shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
       <div className="mx-auto grid w-full max-w-[1200px] grid-cols-1 gap-2 px-4 pt-2 xl:grid-cols-[260px_1fr] xl:gap-5">
         <Link className="flex items-center justify-center py-2 xl:justify-start xl:py-3" to="/">
-          <img src={brandAssets.logo} alt="EURO Moto" className="h-auto w-[190px] max-w-full xl:w-[238px]" />
+          {brandAssets.logo ? (
+            <img src={brandAssets.logo} alt="EURO Moto" className="h-auto w-[190px] max-w-full object-contain xl:w-[238px]" />
+          ) : (
+            <span className="inline-flex items-center gap-3 text-[34px] font-black tracking-tight text-[#d71920]">
+              <span className="grid h-16 w-16 place-items-center rounded-2xl bg-[#d71920] text-white">€</span>
+              <span>Moto</span>
+            </span>
+          )}
         </Link>
 
         <div className="grid">
@@ -153,26 +217,35 @@ function Header() {
                           <FiChevronDown className={`h-3.5 w-3.5 translate-y-[1px] transition duration-300 ${productMenuOpen ? 'rotate-180' : ''}`} />
                         </button>
 
-                        <div className={`absolute left-0 top-full z-30 pt-3 transition duration-300 ${productMenuOpen ? 'visible translate-y-0 opacity-100' : 'invisible translate-y-3 opacity-0'}`}>
-                          <div className="w-[1040px] max-w-[calc(100vw-120px)] overflow-hidden rounded-[22px] border border-zinc-200 bg-white px-6 py-5 shadow-[0_24px_60px_rgba(0,0,0,0.16)]">
-                            <div className="grid grid-cols-3 gap-12">
+                        <div className={`fixed left-1/2 top-[132px] z-30 -translate-x-1/2 pt-3 transition duration-300 ${productMenuOpen ? 'visible translate-y-0 opacity-100' : 'invisible translate-y-3 opacity-0'}`}>
+                          <div className="w-[1120px] max-w-[calc(100vw-64px)] overflow-hidden rounded-[22px] border border-zinc-200 bg-white px-6 py-5 shadow-[0_24px_60px_rgba(0,0,0,0.16)]">
+                            <div className="grid max-h-[70vh] grid-cols-4 gap-x-8 gap-y-7 overflow-y-auto pr-1">
                               {productBrandGroups.map((group) => (
-                                <div key={group.brandSlug}>
-                                  <div className="mb-4 text-[20px] font-bold text-[#e33232]">{group.brandLabel}</div>
-                                  <div className="grid gap-3">
+                                <div key={group.id} className="min-w-0">
+                                  <Link
+                                    to={`/products?brandId=${encodeURIComponent(group.id)}`}
+                                    onClick={() => setProductMenuOpen(false)}
+                                    className="mb-3 block truncate text-[18px] font-bold text-[#e33232] transition hover:text-[#b81218]"
+                                  >
+                                    {group.name}
+                                  </Link>
+                                  <div className="grid gap-2">
                                     {group.items.map((groupItem) => (
                                       <Link
-                                        key={`${group.brandSlug}-${groupItem.categorySlug || groupItem.productType}`}
-                                        to={`/products?brandSlug=${encodeURIComponent(group.brandSlug)}&categorySlug=${encodeURIComponent(groupItem.categorySlug || groupItem.productType)}`}
+                                        key={`${group.id}-${groupItem.id}`}
+                                        to={`/products?brandId=${encodeURIComponent(group.id)}&carModelId=${encodeURIComponent(groupItem.id)}`}
                                         onClick={() => setProductMenuOpen(false)}
-                                        className="inline-flex w-fit text-[17px] font-medium text-zinc-800 transition duration-200 hover:translate-x-1 hover:text-[#d71920]"
+                                        className="block truncate rounded-lg px-2 py-1.5 text-[15px] font-medium text-zinc-700 transition duration-200 hover:bg-[#fff6e6] hover:text-[#d71920]"
                                       >
-                                        {groupItem.label}
+                                        {groupItem.name}
                                       </Link>
                                     ))}
                                   </div>
                                 </div>
                               ))}
+                              {!productBrandGroups.length && (
+                                <div className="col-span-4 px-2 py-4 text-sm font-semibold text-zinc-500">Chưa tải được danh sách hãng xe</div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -245,15 +318,22 @@ function Header() {
                   {item.label === 'Sản phẩm' && (
                     <div className="grid gap-3 pl-3">
                       {productBrandGroups.map((group) => (
-                        <div key={group.brandSlug} className="grid gap-1">
-                          <div className="px-3 text-sm font-bold text-[#d71920]">{group.brandLabel}</div>
+                        <div key={group.id} className="grid gap-1">
+                          <Link
+                            to={`/products?brandId=${encodeURIComponent(group.id)}`}
+                            onClick={() => setMenuOpen(false)}
+                            className="px-3 text-sm font-bold text-[#d71920]"
+                          >
+                            {group.name}
+                          </Link>
                           {group.items.map((dropdownItem) => (
                             <Link
-                              key={`${group.brandSlug}-${dropdownItem.categorySlug || dropdownItem.productType}`}
-                              to={`/products?brandSlug=${encodeURIComponent(group.brandSlug)}&categorySlug=${encodeURIComponent(dropdownItem.categorySlug || dropdownItem.productType)}`}
+                              key={`${group.id}-${dropdownItem.id}`}
+                              to={`/products?brandId=${encodeURIComponent(group.id)}&carModelId=${encodeURIComponent(dropdownItem.id)}`}
+                              onClick={() => setMenuOpen(false)}
                               className="flex min-h-10 items-center rounded-xl px-3 text-sm font-medium text-zinc-600 transition hover:bg-[#fff6e6] hover:text-[#d71920]"
                             >
-                              {dropdownItem.label}
+                              {dropdownItem.name}
                             </Link>
                           ))}
                         </div>

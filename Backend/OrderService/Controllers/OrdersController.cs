@@ -37,19 +37,22 @@ public class OrdersController : ControllerBase
 
     private static readonly HashSet<string> AllowedAdminShippingStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
-        "NotShipped",
         "Preparing",
         "Shipping",
-        "Delivered",
-        "PickupReady",
-        "PickedUp",
-        "Cancelled"
+        "Delivered"
     };
 
     private static readonly HashSet<string> LockedOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
         "Completed",
         "Cancelled"
+    };
+
+    private static readonly HashSet<string> InitialPaymentOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Pending",
+        "Checkout",
+        "AwaitingPayment"
     };
 
     private static readonly HashSet<string> CancelBlockedStatuses = new(StringComparer.OrdinalIgnoreCase)
@@ -123,6 +126,19 @@ public class OrdersController : ControllerBase
         {
             var order = await _orderService.CreateOrderFromCartAsync(this.GetCurrentUserId(), request);
             return CreatedAtAction(nameof(GetOrderById), new { id = order.MaDonHang }, order);
+        }
+        catch (Exception ex)
+        {
+            return this.ToErrorResult(ex);
+        }
+    }
+
+    [HttpPost("shipping-quote")]
+    public async Task<IActionResult> GetShippingQuote(ShippingQuoteRequest request)
+    {
+        try
+        {
+            return Ok(await _orderService.GetShippingQuoteAsync(this.GetCurrentUserId(), request));
         }
         catch (Exception ex)
         {
@@ -261,6 +277,17 @@ public class OrdersController : ControllerBase
                 order.NgayThanhToanThanhCong = now;
             }
 
+            if (normalizedPaymentStatus.Equals("Paid", StringComparison.OrdinalIgnoreCase) &&
+                normalizedStatus is null &&
+                InitialPaymentOrderStatuses.Contains(order.TrangThaiDonHang))
+            {
+                var confirmError = await TryConfirmOrderAndDeductStockAsync(order, now);
+                if (confirmError is not null)
+                {
+                    return BadRequest(new { message = confirmError });
+                }
+            }
+
             var paymentNote = request.GhiChuThanhToan ?? request.PaymentNote;
             if (!string.IsNullOrWhiteSpace(paymentNote))
             {
@@ -311,6 +338,75 @@ public class OrdersController : ControllerBase
             : "Chuyen trang thai don hang khong hop le.";
     }
 
+    private async Task<string?> TryConfirmOrderAndDeductStockAsync(OrderService.Entities.Order order, DateTime now)
+    {
+        var activeHolds = order.InventoryHolds
+            .Where(h => h.TrangThai == "Active" && h.HetHanLuc > now)
+            .ToList();
+
+        if (activeHolds.Count == 0)
+        {
+            return "Don hang khong con giu cho ton kho hieu luc. Vui long checkout lai hoac cap nhat ton kho thu cong truoc khi xac nhan.";
+        }
+
+        var variantUpdates = new List<(OrderService.Entities.ProductVariant Variant, int RequiredQuantity)>();
+        var productUpdates = new List<(OrderService.Entities.Product Product, int RequiredQuantity)>();
+
+        foreach (var group in activeHolds.Where(h => h.MaBienSanPham.HasValue).GroupBy(h => h.MaBienSanPham!.Value))
+        {
+            var variant = await _dbContext.ProductVariants.FirstOrDefaultAsync(v => v.MaBienSanPham == group.Key);
+            if (variant is null)
+            {
+                return "Bien the san pham trong don hang khong ton tai.";
+            }
+
+            var requiredQuantity = group.Sum(h => h.SoLuong);
+            var stock = variant.SoLuongTon ?? 0;
+            if (stock < requiredQuantity)
+            {
+                return "So luong ton kho bien the khong du de xac nhan don hang.";
+            }
+
+            variantUpdates.Add((variant, requiredQuantity));
+        }
+
+        foreach (var group in activeHolds.Where(h => !h.MaBienSanPham.HasValue).GroupBy(h => h.MaSanPham))
+        {
+            var product = await _dbContext.Products.FirstOrDefaultAsync(p => p.MaSanPham == group.Key);
+            if (product is null || product.SoLuongTon < group.Sum(h => h.SoLuong))
+            {
+                return product is null
+                    ? "San pham trong don hang khong ton tai."
+                    : "So luong ton kho san pham khong du de xac nhan don hang.";
+            }
+
+            productUpdates.Add((product, group.Sum(h => h.SoLuong)));
+        }
+
+        foreach (var (variant, requiredQuantity) in variantUpdates)
+        {
+            variant.SoLuongTon = (variant.SoLuongTon ?? 0) - requiredQuantity;
+            variant.NgayCapNhat = now;
+        }
+
+        foreach (var (product, requiredQuantity) in productUpdates)
+        {
+            product.SoLuongTon -= requiredQuantity;
+            product.NgayCapNhat = now;
+        }
+
+        foreach (var hold in activeHolds)
+        {
+            hold.TrangThai = "Confirmed";
+            hold.NgayCapNhat = now;
+            hold.GhiChu = AppendNote(hold.GhiChu, "Da xac nhan thanh toan va tru ton kho");
+        }
+
+        order.TrangThaiDonHang = "Confirmed";
+        order.NgayCapNhat = now;
+        return null;
+    }
+
     private static void ApplyShippingSyncForOrderStatus(OrderService.Entities.Order order, string nextStatus)
     {
         if (nextStatus.Equals("Processing", StringComparison.OrdinalIgnoreCase))
@@ -342,10 +438,6 @@ public class OrdersController : ControllerBase
         {
             order.TrangThaiVanChuyen = "Delivered";
         }
-        else if (order.TrangThaiDonHang.Equals("Cancelled", StringComparison.OrdinalIgnoreCase))
-        {
-            order.TrangThaiVanChuyen = "Cancelled";
-        }
     }
 
     private async Task ApplyOrderCancellationAsync(OrderService.Entities.Order order, string reason, DateTime now)
@@ -356,8 +448,6 @@ public class OrdersController : ControllerBase
         {
             order.TrangThaiThanhToan = "Cancelled";
         }
-        order.TrangThaiVanChuyen = "Cancelled";
-
         foreach (var hold in order.InventoryHolds.Where(h => h.TrangThai is "Active" or "Confirmed"))
         {
             if (hold.TrangThai.Equals("Confirmed", StringComparison.OrdinalIgnoreCase))
@@ -486,7 +576,7 @@ public class OrdersController : ControllerBase
             });
         }
 
-        if (!string.Equals(order.TrangThaiVanChuyen, "NotShipped", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(order.TrangThaiVanChuyen, "Preparing", StringComparison.OrdinalIgnoreCase))
         {
             _dbContext.OrderHistories.Add(new OrderHistory
             {

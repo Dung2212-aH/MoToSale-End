@@ -1,7 +1,10 @@
 using AuthService.DTOs;
+using AuthService.Data;
 using AuthService.Entities;
 using AuthService.Repositories;
 using AuthService.Security;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
 
 namespace AuthService.Services;
 
@@ -14,17 +17,23 @@ public class AuthService : IAuthService
     private readonly IRoleRepository _roleRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
+    private readonly AuthDbContext _dbContext;
+    private readonly IConfiguration _configuration;
 
     public AuthService(
         IUserRepository userRepository,
         IRoleRepository roleRepository,
         IPasswordHasher passwordHasher,
-        IJwtTokenGenerator jwtTokenGenerator)
+        IJwtTokenGenerator jwtTokenGenerator,
+        AuthDbContext dbContext,
+        IConfiguration configuration)
     {
         _userRepository = userRepository;
         _roleRepository = roleRepository;
         _passwordHasher = passwordHasher;
         _jwtTokenGenerator = jwtTokenGenerator;
+        _dbContext = dbContext;
+        _configuration = configuration;
     }
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
@@ -83,6 +92,68 @@ public class AuthService : IAuthService
         return CreateAuthResponse(user, GetRoleNames(user));
     }
 
+    public async Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordRequest request)
+    {
+        var email = request.Email.Trim().ToLowerInvariant();
+        var message = "Nếu email tồn tại, hệ thống đã tạo liên kết đặt lại mật khẩu.";
+        var user = await _userRepository.GetByEmailAsync(email);
+
+        if (user is null || user.TrangThai != ActiveStatus)
+        {
+            return new ForgotPasswordResponse { Message = message };
+        }
+
+        var token = CreateToken();
+        var now = DateTime.UtcNow;
+
+        _dbContext.PasswordResetTokens.Add(new PasswordResetToken
+        {
+            UserId = user.Id,
+            TokenHash = HashToken(token),
+            ExpiresAt = now.AddMinutes(30),
+            CreatedAt = now
+        });
+
+        await _dbContext.SaveChangesAsync();
+
+        return new ForgotPasswordResponse
+        {
+            Message = message,
+            ResetToken = token,
+            ResetUrl = BuildResetUrl(email, token)
+        };
+    }
+
+    public async Task ResetPasswordAsync(ResetPasswordRequest request)
+    {
+        var email = request.Email.Trim().ToLowerInvariant();
+        var tokenHash = HashToken(request.Token.Trim());
+        var now = DateTime.UtcNow;
+
+        var resetToken = await _dbContext.PasswordResetTokens
+            .Include(t => t.User)
+            .FirstOrDefaultAsync(t =>
+                t.TokenHash == tokenHash &&
+                t.User.Email == email &&
+                t.UsedAt == null &&
+                t.ExpiresAt > now);
+
+        if (resetToken is null)
+        {
+            throw new InvalidOperationException("Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.");
+        }
+
+        resetToken.User.MatKhau = _passwordHasher.Hash(request.MatKhauMoi);
+        resetToken.User.NgayCapNhat = now;
+        resetToken.UsedAt = now;
+
+        await _dbContext.PasswordResetTokens
+            .Where(t => t.UserId == resetToken.UserId && t.UsedAt == null && t.Id != resetToken.Id)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(t => t.UsedAt, now));
+
+        await _dbContext.SaveChangesAsync();
+    }
+
     private static List<string> GetRoleNames(User user)
     {
         return user.UserRoles
@@ -108,5 +179,25 @@ public class AuthService : IAuthService
                 Roles = roles
             }
         };
+    }
+
+    private string BuildResetUrl(string email, string token)
+    {
+        var baseUrl = _configuration["Frontend:BaseUrl"]?.TrimEnd('/') ?? "http://localhost:5173";
+        return $"{baseUrl}/forgot-password?email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(token)}";
+    }
+
+    private static string CreateToken()
+    {
+        return Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+    }
+
+    private static string HashToken(string token)
+    {
+        var bytes = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token));
+        return Convert.ToHexString(bytes);
     }
 }

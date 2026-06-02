@@ -76,9 +76,12 @@ public class CatalogService : ICatalogService
         var page = search.Page <= 0 ? 1 : search.Page;
         var pageSize = ProductSearchDto.NormalizePageSize(search.PageSize);
 
+        var productIds = products.Select(p => p.MaSanPham).ToList();
+        var imageMap = await _productImageRepository.GetPrimaryImageUrlsAsync(productIds);
+
         return new PagedResultDto<ProductListItemDto>
         {
-            Items = products.Select(MapProductListItem).ToList(),
+            Items = products.Select(p => MapProductListItem(p, imageMap)).ToList(),
             Page = page,
             PageSize = pageSize,
             TotalItems = totalItems
@@ -111,15 +114,16 @@ public class CatalogService : ICatalogService
             GiaBan = GetSalePrice(product),
             TyLeGiam = GetDiscountPercent(product),
             SoLuongTon = product.SoLuongTon,
-            AnhChinhUrl = product.AnhChinhUrl,
             DangHoatDong = product.DangHoatDong,
             BienThe = variants.Select(MapProductVariant).ToList(),
             Anh = images.Select(MapProductImage).ToList()
         };
     }
 
-    private static ProductListItemDto MapProductListItem(Product product)
+    private static ProductListItemDto MapProductListItem(Product product, Dictionary<int, string> imageMap)
     {
+        imageMap.TryGetValue(product.MaSanPham, out var anhChinhUrl);
+
         return new ProductListItemDto
         {
             MaSanPham = product.MaSanPham,
@@ -135,8 +139,8 @@ public class CatalogService : ICatalogService
             GiaBan = GetSalePrice(product),
             TyLeGiam = GetDiscountPercent(product),
             SoLuongTon = product.SoLuongTon,
-            AnhChinhUrl = product.AnhChinhUrl,
-            TrangThaiSanPham = product.TrangThaiSanPham
+            TrangThaiSanPham = product.TrangThaiSanPham,
+            AnhChinhUrl = anhChinhUrl
         };
     }
 
@@ -149,6 +153,7 @@ public class CatalogService : ICatalogService
             TenDanhMuc = category.TenDanhMuc,
             Slug = category.Slug,
             MoTa = category.MoTa,
+            AnhDaiDienUrl = category.AnhDaiDienUrl,
             ThuTuHienThi = category.ThuTuHienThi,
             DangHoatDong = category.DangHoatDong
         };

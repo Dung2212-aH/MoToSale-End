@@ -18,8 +18,7 @@ function Badge({ label, colorClass }) {
   return <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${colorClass}`}>{label}</span>;
 }
 
-const DELIVERY_SHIPPING_STEPS = ['NotShipped', 'Preparing', 'Shipping', 'Delivered'];
-const PICKUP_SHIPPING_STEPS = ['NotShipped', 'PickupReady', 'PickedUp'];
+const SHIPPING_STEPS = ['Preparing', 'Shipping', 'Delivered'];
 
 function getOrderPaymentDisplay(order) {
   if (order.paymentMethod) return getPaymentMethodLabel(order.paymentMethod);
@@ -106,7 +105,7 @@ function OrderDetailPage() {
   if (!order) return null;
 
   const canCancel = order.orderStatus === 'AwaitingPayment';
-  const shippingSteps = order.receivingMethod === 'Pickup' ? PICKUP_SHIPPING_STEPS : DELIVERY_SHIPPING_STEPS;
+  const shippingSteps = SHIPPING_STEPS;
   const currentShipIdx = shippingSteps.indexOf(order.shippingStatus);
 
   return (

@@ -17,6 +17,10 @@ export function normalizeImageUrl(url) {
   if (url.startsWith('//')) {
     return `https:${url}`;
   }
+  if (url.startsWith('/uploads/')) {
+    const assetBaseUrl = import.meta.env.VITE_API_ASSET_BASE_URL || '';
+    return `${assetBaseUrl}${url}`;
+  }
   return url;
 }
 

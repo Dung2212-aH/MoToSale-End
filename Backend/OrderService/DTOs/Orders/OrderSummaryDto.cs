@@ -8,6 +8,7 @@ public class OrderSummaryDto
     public string HoTenNhanHang { get; set; } = string.Empty;
     public string? EmailNhanHang { get; set; }
     public string SoDienThoaiNhanHang { get; set; } = string.Empty;
+    public decimal PhiVanChuyen { get; set; }
     public decimal TongThanhToan { get; set; }
     public string TrangThaiDonHang { get; set; } = string.Empty;
     public string TrangThaiThanhToan { get; set; } = string.Empty;

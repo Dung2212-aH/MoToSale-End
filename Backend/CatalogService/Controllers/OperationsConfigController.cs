@@ -31,6 +31,7 @@ public class OperationsConfigController : ControllerBase
             ORDER BY DangHoatDong DESC, MaKho
             """
         ).ToListAsync();
+
         return Ok(new { items = rows });
     }
 
@@ -71,6 +72,7 @@ public class OperationsConfigController : ControllerBase
         var rows = await _db.Database.SqlQueryRaw<SettingRow>(
             "SELECT [Key], [Value], MoTa, NgayCapNhat FROM dbo.HETHONG_CAUHINH ORDER BY [Key]"
         ).ToListAsync();
+
         return Ok(new { items = rows });
     }
 
@@ -81,7 +83,11 @@ public class OperationsConfigController : ControllerBase
         await EnsureTablesAsync();
         foreach (var item in request.Items)
         {
-            if (string.IsNullOrWhiteSpace(item.Key)) continue;
+            if (string.IsNullOrWhiteSpace(item.Key))
+            {
+                continue;
+            }
+
             await UpsertSettingAsync(item.Key.Trim(), item.Value, item.MoTa);
         }
 

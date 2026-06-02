@@ -92,6 +92,7 @@ function ProductListPage() {
       categoryId: searchParams.get('categoryId') || '',
       categorySlug: searchParams.get('categorySlug') || '',
       vehicleTypeCategoryId: searchParams.get('vehicleTypeCategoryId') || '',
+      carModelId: searchParams.get('carModelId') || '',
       compatibleCarModelId: searchParams.get('compatibleCarModelId') || '',
       productType: searchParams.get('productType') || '',
       brandId: searchParams.get('brandId') || '',
@@ -229,10 +230,12 @@ function ProductListPage() {
   const products = productsData?.items || [];
   const activeCategory = filters?.categories?.find((category) => String(category.id) === String(resolvedCategoryId));
   const activeVehicleType = filters?.categories?.find((category) => String(category.id) === String(queryValues.vehicleTypeCategoryId));
+  const activeCarModel = filters?.carModels?.find((item) => String(item.id || item.Id || item.maDongXe || item.MaDongXe) === String(queryValues.carModelId));
   const activeCompatibleType = filters?.partCompatibleTypes?.find((item) => String(item.id) === String(queryValues.compatibleCarModelId));
   const activeBrand = filters?.brands?.find((brand) => String(brand.id) === String(resolvedBrandId));
   const pageTitle =
     activeVehicleType?.name ||
+    (activeCarModel ? [activeBrand?.name || activeCarModel.brandName, activeCarModel.name || activeCarModel.tenDongXe || activeCarModel.TenDongXe].filter(Boolean).join(' - ') : '') ||
     (activeCompatibleType ? `Phụ tùng cho ${[activeCompatibleType.brandName, activeCompatibleType.name].filter(Boolean).join(' - ')}` : '') ||
     activeCategory?.name ||
     queryValues.productType ||
@@ -251,6 +254,7 @@ function ProductListPage() {
               ...queryValues,
               categoryId: resolvedCategoryId || queryValues.categoryId,
               vehicleTypeCategoryId: queryValues.vehicleTypeCategoryId,
+              carModelId: queryValues.carModelId,
               compatibleCarModelId: queryValues.compatibleCarModelId,
               brandId: resolvedBrandId || queryValues.brandId,
             }}

@@ -11,6 +11,7 @@ public class AuthDbContext : DbContext
     public DbSet<UserAddress> UserAddresses { get; set; }
     public DbSet<Role> Roles { get; set; }
     public DbSet<UserRole> UserRoles { get; set; }
+    public DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -20,6 +21,7 @@ public class AuthDbContext : DbContext
         ConfigureUserAddresses(modelBuilder);
         ConfigureRoles(modelBuilder);
         ConfigureUserRoles(modelBuilder);
+        ConfigurePasswordResetTokens(modelBuilder);
     }
 
     private void ConfigureUserAddresses(ModelBuilder modelBuilder)
@@ -93,6 +95,29 @@ public class AuthDbContext : DbContext
             e.HasOne(e => e.Role)
                 .WithMany(e => e.UserRoles)
                 .HasForeignKey(e => e.RoleId);
+        });
+    }
+
+    private void ConfigurePasswordResetTokens(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<PasswordResetToken>(e =>
+        {
+            e.ToTable("MATKHAU_DATLAI");
+            e.HasKey(e => e.Id);
+            e.Property(e => e.Id).HasColumnName("MaToken").ValueGeneratedOnAdd();
+            e.Property(e => e.UserId).HasColumnName("MaNguoiDung");
+            e.Property(e => e.TokenHash).HasMaxLength(128).IsUnicode(false).IsRequired();
+            e.Property(e => e.ExpiresAt).HasColumnName("HetHanLuc").HasColumnType("datetime2(0)");
+            e.Property(e => e.UsedAt).HasColumnName("DaDungLuc").HasColumnType("datetime2(0)");
+            e.Property(e => e.CreatedAt).HasColumnName("NgayTao").HasColumnType("datetime2(0)");
+
+            e.HasIndex(e => e.TokenHash).IsUnique();
+            e.HasIndex(e => new { e.UserId, e.ExpiresAt });
+
+            e.HasOne(e => e.User)
+                .WithMany(e => e.PasswordResetTokens)
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

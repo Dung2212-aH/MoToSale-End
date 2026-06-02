@@ -1,0 +1,24 @@
+
+> frontend-user-react@1.0.0 dev
+> vite --host 127.0.0.1 --port 5173
+
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m499[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m5173[22m/[39m
+[2m2:10:54 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/pages/HomePage.jsx, /@fs/D:\ShowRoomDB\Frontend\src\components\Footer.jsx, /@fs/D:\ShowRoomDB\Frontend\src\components\Header.jsx[22m
+[2m2:12:09 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/pages/HomePage.jsx, /@fs/D:\ShowRoomDB\Frontend\src\components\Footer.jsx, /@fs/D:\ShowRoomDB\Frontend\src\components\Header.jsx[22m
+[2m2:12:35 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/pages/HomePage.jsx, /@fs/D:\ShowRoomDB\Frontend\src\components\Footer.jsx, /@fs/D:\ShowRoomDB\Frontend\src\components\Header.jsx[22m
+[2m2:16:56 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/D:\ShowRoomDB\Frontend\src\components\Header.jsx, /src/index.css[22m
+[2m2:17:03 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/D:\ShowRoomDB\Frontend\src\components\Header.jsx, /src/index.css[22m
+[2m2:17:14 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/D:\ShowRoomDB\Frontend\src\components\Header.jsx, /src/index.css[22m
+[2m2:17:42 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/D:\ShowRoomDB\Frontend\src\components\Header.jsx, /src/index.css[22m
+[2m2:17:57 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/D:\ShowRoomDB\Frontend\src\components\Header.jsx, /src/index.css[22m
+[2m2:18:01 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProductListPage.jsx, /src/index.css[22m
+[2m2:18:25 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProductListPage.jsx, /src/index.css[22m
+[2m2:18:31 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProductListPage.jsx, /src/index.css[22m
+[2m2:18:38 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProductListPage.jsx, /src/index.css[22m
+[2m2:18:46 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/D:\ShowRoomDB\Frontend\src\components\ProductFilters.jsx, /src/index.css[22m
+[2m2:19:03 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/D:\ShowRoomDB\Frontend\src\components\Header.jsx, /src/index.css[22m
+[2m2:19:43 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/D:\ShowRoomDB\Frontend\src\components\ProductFilters.jsx, /src/index.css[22m
+[2m2:25:42 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/@fs/D:\ShowRoomDB\Frontend\src\components\Header.jsx, /src/index.css[22m

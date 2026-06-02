@@ -5,27 +5,64 @@ import {
   FaPinterestP,
   FaInstagram
 } from "react-icons/fa";
-
-export const CDN = 'https://bizweb.dktcdn.net/100/519/812';
+import banner1 from "./banners/banner1.png";
+import banner2 from "./banners/banner2.png";
+import banner3 from "./banners/banner3.png";
+import banner4 from "./banners/banner4.png";
+import banner5 from "./banners/banner5.png";
+import maintenanceService from "./services/maintenance.png";
+import logoEuroMoto from "./logo.png";
 
 export const brandAssets = {
-  logo: `${CDN}/themes/954445/assets/logo.png?1758009468922`,
-  footerLogo: `${CDN}/themes/954445/assets/logo-ft.png?1758009468922`,
-  slider: `${CDN}/themes/954445/assets/slider_1.jpg?1758009468922`,
-  bannerOne: `${CDN}/themes/954445/assets/banner_three_1.jpg?1758009468922`,
-  bannerTwo: `${CDN}/themes/954445/assets/banner_three_2.jpg?1758009468922`,
-  productBanner: `${CDN}/themes/954445/assets/image_product_3.png?1758009468922`,
-  hotIcon: `${CDN}/themes/954445/assets/hot_icon.png?1758009468922`,
-  collectionBannerOne: `${CDN}/themes/954445/assets/banner_col_1.png?1758009468922`,
-  collectionBannerTwo: `${CDN}/themes/954445/assets/banner_col_2.png?1758009468922`,
+  logo: logoEuroMoto,
+  footerLogo: logoEuroMoto,
+  slider: banner1,
+  bannerOne: banner4,
+  bannerTwo: banner5,
+  productBanner: banner2,
+  collectionBannerOne: banner3,
+  collectionBannerTwo: banner5,
 };
+
+export const homeHeroSlides = [
+  {
+    id: 'banner-1',
+    image: banner1,
+    alt: 'EURO Moto',
+    to: '/products',
+  },
+  {
+    id: 'banner-2',
+    image: banner2,
+    alt: 'EURO Moto',
+    to: '/products',
+  },
+  {
+    id: 'banner-4',
+    image: banner4,
+    alt: 'EURO Moto',
+    to: '/products',
+  },
+  {
+    id: 'banner-3',
+    image: banner3,
+    alt: 'EURO Moto',
+    to: '/products',
+  },
+  {
+    id: 'banner-5',
+    image: banner5,
+    alt: 'EURO Moto',
+    to: '/products',
+  },
+];
 
 export const homeCategoryReferences = [
   {
     id: 'featured-scooter',
     name: 'Xe tay ga',
     slug: 'xe-tay-ga',
-    image: `${CDN}/collections/xe-tay-ga.jpg?v=1727746181450`,
+    image: '',
     to: '/products?categorySlug=xe-tay-ga',
     match: ['xe tay ga', 'tay ga', 'scooter'],
   },
@@ -33,7 +70,7 @@ export const homeCategoryReferences = [
     id: 'featured-manual',
     name: 'Xe số',
     slug: 'xe-so',
-    image: `${CDN}/collections/xe-so.jpg?v=1727746174140`,
+    image: '',
     to: '/products?categorySlug=xe-so',
     match: ['xe so', 'xe số', 'so', 'underbone'],
   },
@@ -41,7 +78,7 @@ export const homeCategoryReferences = [
     id: 'featured-sport',
     name: 'Xe côn tay',
     slug: 'xe-con-tay',
-    image: `${CDN}/collections/xe-con-tay.jpg?v=1727746225237`,
+    image: '',
     to: '/products?categorySlug=xe-con-tay',
     match: ['xe con tay', 'xe côn tay', 'con tay', 'sport'],
   },
@@ -49,7 +86,7 @@ export const homeCategoryReferences = [
     id: 'featured-pkl',
     name: 'Xe phân khối lớn',
     slug: 'xe-phan-khoi-lon',
-    image: `${CDN}/collections/xe-pkl.jpg?v=1727746209677`,
+    image: '',
     to: '/products?categorySlug=xe-phan-khoi-lon',
     match: ['xe phan khoi lon', 'xe phân khối lớn', 'phan khoi lon', 'pkl'],
   },
@@ -60,29 +97,25 @@ export const serviceHighlights = [
     id: 'bao-duong',
     title: 'Bảo dưỡng xe',
     description: 'Bảo dưỡng định kỳ, thay dầu, kiểm tra máy và hệ thống phanh để xe luôn vận hành ổn định.',
-    icon: `${CDN}/themes/954445/assets/icon_dv_1.png?1758009468922`,
-    image: `${CDN}/themes/954445/assets/image_dv_1.png?1758009468922`,
+    image: maintenanceService,
   },
   {
     id: 'phu-tung',
     title: 'Phụ tùng chính hãng',
     description: 'Cung cấp linh kiện và phụ tùng đúng tiêu chuẩn chính hãng cho các dòng xe phổ biến.',
-    icon: `${CDN}/themes/954445/assets/icon_dv_2.png?1758009468922`,
-    image: `${CDN}/themes/954445/assets/image_dv_2.png?1758009468922`,
+    image: banner3,
   },
   {
     id: 'luu-dong',
     title: 'Sửa chữa lưu động',
     description: 'Hỗ trợ xử lý sự cố nhanh, tư vấn tại chỗ và sắp xếp kỹ thuật viên khi khách hàng cần gấp.',
-    icon: `${CDN}/themes/954445/assets/icon_dv_3.png?1758009468922`,
-    image: `${CDN}/themes/954445/assets/image_dv_3.png?1758009468922`,
+    image: banner4,
   },
   {
     id: 've-sinh',
     title: 'Vệ sinh buồng đốt',
     description: 'Làm sạch hệ thống buồng đốt, kim phun và họng máy để cải thiện hiệu suất và tiết kiệm nhiên liệu.',
-    icon: `${CDN}/themes/954445/assets/icon_dv_4.png?1758009468922`,
-    image: `${CDN}/themes/954445/assets/image_dv_4.png?1758009468922`,
+    image: banner5,
   },
 ];
 
@@ -91,7 +124,7 @@ export const navItems = [
   { label: 'Sản phẩm', to: '/products', hasCaret: true },
   { label: 'Liên hệ', to: '/' },
   { label: 'Hệ thống cửa hàng', to: '/he-thong-cua-hang' },
-  { label: 'Câu hỏi thường gặp', to: '/' },
+  { label: 'Câu hỏi thường gặp', to: '/faq' },
 ];
 
 export const socialLinks = [
