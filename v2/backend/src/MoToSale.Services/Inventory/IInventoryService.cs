@@ -6,7 +6,7 @@ namespace MoToSale.Services.Inventory;
 public interface IInventoryService
 {
     Task<InventoryListResult> GetInventoryAsync(InventorySearchRequest request);
-    Task<List<StockMovementDto>> GetMovementsAsync(int? skuId, int? storeId);
+    Task<List<StockMovementDto>> GetMovementsAsync(int? skuId);
     Task<PagingResponse<StockDocumentDto>> SearchDocumentsAsync(PagingRequest request, string? status, int? type);
     Task<StockDocumentDetail?> GetDocumentAsync(int id);
     Task<int> CreateDocumentAsync(CreateStockDocumentRequest request, int? userId);
@@ -17,7 +17,7 @@ public interface IInventoryService
     Task UpdateThresholdAsync(UpdateThresholdRequest request);
     Task<List<HoldDto>> GetHoldsAsync();
     Task<int> SyncAsync();
-    Task<List<InventoryItemDto>> ExportAsync(int? storeId);
+    Task<List<InventoryItemDto>> ExportAsync();
 }
 
 public class InventoryException : Exception

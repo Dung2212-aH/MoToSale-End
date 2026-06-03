@@ -5,7 +5,6 @@ namespace MoToSale.Entities.Inventory;
 /// <summary>Tồn kho theo (cửa hàng × SKU). Available = OnHand - Reserved (tính, không lưu).</summary>
 public class InventoryItem : BaseEntity
 {
-    public int StoreId { get; set; }
     public int SkuId { get; set; }
     public int OnHand { get; set; }
     public int Reserved { get; set; }

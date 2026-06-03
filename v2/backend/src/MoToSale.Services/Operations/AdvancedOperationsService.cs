@@ -5,6 +5,7 @@ using MoToSale.Common;
 using MoToSale.DTO.Operations;
 using MoToSale.Entities.Inventory;
 using MoToSale.Entities.Operations;
+using MoToSale.Entities.Ordering;
 using MoToSale.Repository;
 
 namespace MoToSale.Services.Operations;
@@ -39,14 +40,11 @@ public class AdvancedOperationsService : IAdvancedOperationsService
             ?? throw new AdvancedOperationsException("Không tìm thấy đơn hàng.");
         if (order.OrderStatus is not (OrderStatus.Delivered or OrderStatus.Completed))
             throw new AdvancedOperationsException("Chỉ đơn đã giao hoặc hoàn thành mới được trả hàng.");
-        if (!await _db.Stores.AnyAsync(x => x.Id == r.StoreId)) throw new AdvancedOperationsException("Không tìm thấy kho nhận hàng trả.");
-
         var now = DateTime.UtcNow;
         var salesReturn = new SalesReturn
         {
             Code = $"RT{now:yyyyMMddHHmmssfff}",
             OrderId = order.Id,
-            StoreId = r.StoreId,
             Reason = r.Reason.Trim(),
             Note = r.Note,
             ReturnStatus = "Draft",
@@ -79,6 +77,31 @@ public class AdvancedOperationsService : IAdvancedOperationsService
         return salesReturn.Id;
     }
 
+    public async Task UpdateReturnAsync(int id, UpdateSalesReturnRequest r, int? userId)
+    {
+        ValidateReturnRequest(r.Reason, r.Lines);
+        await using var transaction = await BeginSerializableTransactionAsync();
+        var row = await _db.SalesReturns.Include(x => x.Lines).FirstOrDefaultAsync(x => x.Id == id)
+            ?? throw new AdvancedOperationsException("Không tìm thấy phiếu trả hàng.");
+        if (row.ReturnStatus != "Draft")
+            throw new AdvancedOperationsException("Chỉ phiếu chờ duyệt mới được sửa.");
+
+        var order = await LoadReturnableOrderAsync(r.OrderId);
+        var now = DateTime.UtcNow;
+        var lines = await BuildReturnLinesAsync(order, r.Lines, now, row.Id);
+
+        _db.SalesReturnLines.RemoveRange(row.Lines);
+        row.Lines.Clear();
+        foreach (var line in lines) row.Lines.Add(line);
+
+        row.OrderId = order.Id;
+        row.Reason = r.Reason.Trim();
+        row.Note = r.Note;
+        row.UpdatedDate = now;
+        await _db.SaveChangesAsync();
+        if (transaction is not null) await transaction.CommitAsync();
+    }
+
     public async Task ApproveReturnAsync(int id, ApproveSalesReturnRequest r, int? userId)
     {
         await using var transaction = await BeginSerializableTransactionAsync();
@@ -100,17 +123,17 @@ public class AdvancedOperationsService : IAdvancedOperationsService
         var now = DateTime.UtcNow;
         foreach (var line in row.Lines.Where(x => x.ItemCondition == "Resellable"))
         {
-            var item = await _db.InventoryItems.FirstOrDefaultAsync(x => x.StoreId == row.StoreId && x.SkuId == line.SkuId);
+            var item = await _db.InventoryItems.FirstOrDefaultAsync(x => x.SkuId == line.SkuId);
             if (item is null)
             {
-                item = new InventoryItem { StoreId = row.StoreId, SkuId = line.SkuId, CreatedDate = now };
+                item = new InventoryItem { SkuId = line.SkuId, CreatedDate = now };
                 _db.InventoryItems.Add(item);
             }
             item.OnHand += line.Qty;
             item.UpdatedDate = now;
             _db.StockMovements.Add(new StockMovement
             {
-                StoreId = row.StoreId, SkuId = line.SkuId, Type = (int)StockMovementType.Receipt,
+                SkuId = line.SkuId, Type = (int)StockMovementType.Receipt,
                 QtyDelta = line.Qty, BalanceAfter = item.OnHand, RefType = "SalesReturn", RefId = row.Id,
                 Reason = $"Approved return {row.Code}", PerformedBy = userId, OccurredAt = now, CreatedDate = now,
             });
@@ -123,12 +146,21 @@ public class AdvancedOperationsService : IAdvancedOperationsService
         row.UpdatedDate = now;
         if (r.RefundAmount > 0)
         {
+            var refundMethod = string.IsNullOrWhiteSpace(r.RefundMethod) ? "Cash" : r.RefundMethod;
             _db.Refunds.Add(new Refund
             {
                 Code = $"RF{now:yyyyMMddHHmmssfff}", OrderId = row.OrderId, SalesReturnId = row.Id,
-                Amount = r.RefundAmount, Method = string.IsNullOrWhiteSpace(r.RefundMethod) ? "Cash" : r.RefundMethod,
+                Amount = r.RefundAmount, Method = refundMethod,
                 Reason = row.Reason, TransactionRef = r.TransactionRef, RecordedBy = userId,
                 RefundedAt = now, CreatedDate = now,
+            });
+
+            // Ghi chi quỹ: dòng tiền ra cho khoản hoàn tiền (đồng bộ sổ quỹ với phiếu hoàn).
+            _db.CashTransactions.Add(new CashTransaction
+            {
+                Code = $"CT{now:yyyyMMddHHmmssfff}", TransactionType = "Payment", Category = "Refund",
+                Amount = r.RefundAmount, Method = refundMethod, ReferenceType = "SalesReturn", ReferenceId = row.Id,
+                Note = $"Hoàn tiền trả hàng {row.Code}", RecordedBy = userId, OccurredAt = now, CreatedDate = now,
             });
         }
         await _db.SaveChangesAsync();
@@ -189,9 +221,8 @@ public class AdvancedOperationsService : IAdvancedOperationsService
         if (staffUserId.HasValue) q = q.Where(x => x.StaffUserId == staffUserId.Value);
         return await (from x in q
                       join u in _db.Users.AsNoTracking() on x.StaffUserId equals u.Id
-                      join s in _db.Stores.AsNoTracking() on x.StoreId equals s.Id
                       orderby x.StartsAt
-                      select new StaffShiftDto(x.Id, x.StaffUserId, u.FullName, x.StoreId, s.Name, x.StartsAt, x.EndsAt, x.ShiftStatus, x.Note))
+                      select new StaffShiftDto(x.Id, x.StaffUserId, u.FullName, x.StartsAt, x.EndsAt, x.ShiftStatus, x.Note))
             .ToListAsync();
     }
 
@@ -199,9 +230,8 @@ public class AdvancedOperationsService : IAdvancedOperationsService
     {
         ValidateShift(r.StartsAt, r.EndsAt);
         if (!await IsStaffAsync(r.StaffUserId)) throw new AdvancedOperationsException("Chỉ tài khoản nhân viên mới được phân ca.");
-        if (!await _db.Stores.AnyAsync(x => x.Id == r.StoreId)) throw new AdvancedOperationsException("Không tìm thấy cửa hàng.");
         if (await HasOverlapAsync(r.StaffUserId, r.StartsAt, r.EndsAt, null)) throw new AdvancedOperationsException("Ca làm việc bị trùng thời gian với ca đã có.");
-        var row = new StaffShift { StaffUserId = r.StaffUserId, StoreId = r.StoreId, StartsAt = r.StartsAt, EndsAt = r.EndsAt, Note = r.Note, AssignedBy = userId, CreatedDate = DateTime.UtcNow };
+        var row = new StaffShift { StaffUserId = r.StaffUserId, StartsAt = r.StartsAt, EndsAt = r.EndsAt, Note = r.Note, AssignedBy = userId, CreatedDate = DateTime.UtcNow };
         _db.StaffShifts.Add(row);
         await _db.SaveChangesAsync();
         return row.Id;
@@ -211,9 +241,8 @@ public class AdvancedOperationsService : IAdvancedOperationsService
     {
         ValidateShift(r.StartsAt, r.EndsAt);
         var row = await _db.StaffShifts.FindAsync(id) ?? throw new AdvancedOperationsException("Không tìm thấy ca làm việc.");
-        if (!await _db.Stores.AnyAsync(x => x.Id == r.StoreId)) throw new AdvancedOperationsException("Không tìm thấy cửa hàng.");
         if (await HasOverlapAsync(row.StaffUserId, r.StartsAt, r.EndsAt, id)) throw new AdvancedOperationsException("Ca làm việc bị trùng thời gian với ca đã có.");
-        row.StoreId = r.StoreId; row.StartsAt = r.StartsAt; row.EndsAt = r.EndsAt;
+        row.StartsAt = r.StartsAt; row.EndsAt = r.EndsAt;
         row.ShiftStatus = r.ShiftStatus is "Completed" or "Cancelled" ? r.ShiftStatus : "Scheduled";
         row.Note = r.Note; row.UpdatedDate = DateTime.UtcNow;
         await _db.SaveChangesAsync();
@@ -225,6 +254,58 @@ public class AdvancedOperationsService : IAdvancedOperationsService
         row.ShiftStatus = "Cancelled";
         row.UpdatedDate = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+    }
+
+    private static void ValidateReturnRequest(string reason, List<CreateSalesReturnLineRequest>? lines)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new AdvancedOperationsException("Lý do trả hàng là bắt buộc.");
+        if (lines is null || lines.Count == 0)
+            throw new AdvancedOperationsException("Phiếu trả hàng phải có ít nhất một sản phẩm.");
+        if (lines.GroupBy(x => x.OrderLineId).Any(x => x.Count() > 1))
+            throw new AdvancedOperationsException("Một sản phẩm chỉ được xuất hiện một lần trong phiếu trả hàng.");
+    }
+
+    private async Task<Order> LoadReturnableOrderAsync(int orderId)
+    {
+        var order = await _db.Orders.Include(x => x.Lines).FirstOrDefaultAsync(x => x.Id == orderId)
+            ?? throw new AdvancedOperationsException("Không tìm thấy đơn hàng.");
+        if (order.OrderStatus is not (OrderStatus.Delivered or OrderStatus.Completed))
+            throw new AdvancedOperationsException("Chỉ đơn đã giao hoặc hoàn thành mới được trả hàng.");
+        return order;
+    }
+
+    private async Task<List<SalesReturnLine>> BuildReturnLinesAsync(
+        Order order,
+        IEnumerable<CreateSalesReturnLineRequest> requestLines,
+        DateTime now,
+        int? currentReturnId)
+    {
+        var lines = new List<SalesReturnLine>();
+        foreach (var line in requestLines)
+        {
+            var orderLine = order.Lines.FirstOrDefault(x => x.Id == line.OrderLineId)
+                ?? throw new AdvancedOperationsException("Không tìm thấy sản phẩm trong đơn hàng.");
+            var returned = await _db.SalesReturnLines
+                .Where(x => x.OrderLineId == line.OrderLineId
+                    && (!currentReturnId.HasValue || x.SalesReturnId != currentReturnId.Value)
+                    && x.SalesReturn.ReturnStatus != "Rejected")
+                .SumAsync(x => (int?)x.Qty) ?? 0;
+            if (line.Qty <= 0 || returned + line.Qty > orderLine.Qty)
+                throw new AdvancedOperationsException($"Số lượng trả của {orderLine.ProductNameSnapshot} vượt quá số lượng còn có thể trả.");
+
+            lines.Add(new SalesReturnLine
+            {
+                OrderLineId = orderLine.Id,
+                SkuId = orderLine.SkuId,
+                Qty = line.Qty,
+                UnitPrice = orderLine.UnitPrice,
+                LineTotal = orderLine.UnitPrice * line.Qty,
+                ItemCondition = line.ItemCondition is "Damaged" or "Warranty" ? line.ItemCondition : "Resellable",
+                CreatedDate = now,
+            });
+        }
+        return lines;
     }
 
     private Task<bool> HasOverlapAsync(int staffId, DateTime startsAt, DateTime endsAt, int? exceptId) =>
@@ -243,7 +324,7 @@ public class AdvancedOperationsService : IAdvancedOperationsService
             var orderLine = _db.OrderLines.AsNoTracking().First(o => o.Id == l.OrderLineId);
             return new SalesReturnLineDto(l.Id, l.OrderLineId, l.SkuId, orderLine.ProductNameSnapshot, orderLine.SkuCodeSnapshot, l.Qty, l.UnitPrice, l.LineTotal, l.ItemCondition);
         }).ToList();
-        return new SalesReturnDto(x.Id, x.Code, x.OrderId, order.Code, x.StoreId, x.ReturnStatus, x.Reason, x.Note, x.RefundAmount, CalculateRefundableAmount(order, x.Lines.Select(l => (l.OrderLineId, l.Qty))), x.CreatedDate, x.ApprovedAt, lines);
+        return new SalesReturnDto(x.Id, x.Code, x.OrderId, order.Code, x.ReturnStatus, x.Reason, x.Note, x.RefundAmount, CalculateRefundableAmount(order, x.Lines.Select(l => (l.OrderLineId, l.Qty))), x.CreatedDate, x.ApprovedAt, lines);
     }
 
     private Task<bool> IsStaffAsync(int userId) =>

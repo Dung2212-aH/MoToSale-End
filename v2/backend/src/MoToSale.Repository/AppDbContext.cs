@@ -46,8 +46,6 @@ public class AppDbContext : DbContext
     public DbSet<ProductImage> ProductImages => Set<ProductImage>();
     public DbSet<ProductRelatedItem> ProductRelatedItems => Set<ProductRelatedItem>();
     public DbSet<PartCompatibility> PartCompatibilities => Set<PartCompatibility>();
-    public DbSet<Store> Stores => Set<Store>();
-
     public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
     public DbSet<StockDocument> StockDocuments => Set<StockDocument>();
@@ -206,6 +204,7 @@ public class AppDbContext : DbContext
         {
             e.ToTable("Manufacturers");
             e.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            e.Property(x => x.LogoUrl).HasMaxLength(500);
             e.Property(x => x.Description).HasMaxLength(500);
             e.HasIndex(x => x.Name).IsUnique();
         });
@@ -289,21 +288,6 @@ public class AppDbContext : DbContext
             e.ToTable(t => t.HasCheckConstraint("CK_PartCompatibilities_Years", "[YearFrom] IS NULL OR [YearTo] IS NULL OR [YearFrom] <= [YearTo]"));
         });
 
-        b.Entity<Store>(e =>
-        {
-            e.ToTable("Stores");
-            e.Property(x => x.Code).HasMaxLength(40).IsRequired();
-            e.Property(x => x.Name).HasMaxLength(180).IsRequired();
-            e.Property(x => x.Slug).HasMaxLength(220);
-            e.Property(x => x.AddressLine).HasMaxLength(255).IsRequired();
-            e.Property(x => x.Province).HasMaxLength(100);
-            e.Property(x => x.District).HasMaxLength(100);
-            e.Property(x => x.Ward).HasMaxLength(100);
-            e.Property(x => x.Phone).HasMaxLength(20);
-            e.Property(x => x.Email).HasMaxLength(255);
-            e.Property(x => x.OpeningHours).HasMaxLength(255);
-            e.HasIndex(x => x.Code).IsUnique();
-        });
     }
 
     private static void ConfigureInventory(ModelBuilder b)
@@ -312,8 +296,7 @@ public class AppDbContext : DbContext
         {
             e.ToTable("InventoryItems");
             e.Ignore(x => x.Available);
-            e.HasIndex(x => new { x.StoreId, x.SkuId }).IsUnique();
-            e.HasOne<Store>().WithMany().HasForeignKey(x => x.StoreId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => x.SkuId).IsUnique();
             e.HasOne<Sku>().WithMany().HasForeignKey(x => x.SkuId).OnDelete(DeleteBehavior.Restrict);
             e.ToTable(t => t.HasCheckConstraint("CK_InventoryItems_Quantities", "[OnHand] >= 0 AND [Reserved] >= 0 AND [Reserved] <= [OnHand] AND [ReorderPoint] >= 0"));
         });
@@ -324,8 +307,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.RefType).HasMaxLength(40);
             e.Property(x => x.Reason).HasMaxLength(500);
             e.Property(x => x.OccurredAt).HasColumnType("datetime2(0)");
-            e.HasIndex(x => new { x.StoreId, x.SkuId, x.OccurredAt });
-            e.HasOne<Store>().WithMany().HasForeignKey(x => x.StoreId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.SkuId, x.OccurredAt });
             e.HasOne<Sku>().WithMany().HasForeignKey(x => x.SkuId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<User>().WithMany().HasForeignKey(x => x.PerformedBy).OnDelete(DeleteBehavior.Restrict);
             e.ToTable(t => t.HasCheckConstraint("CK_StockMovements_Quantities", "[QtyDelta] <> 0 AND [BalanceAfter] >= 0"));
@@ -340,11 +322,8 @@ public class AppDbContext : DbContext
             e.Property(x => x.ApprovedAt).HasColumnType("datetime2(0)");
             e.HasIndex(x => x.Code).IsUnique();
             e.HasMany(x => x.Lines).WithOne(l => l.StockDocument).HasForeignKey(l => l.StockDocumentId);
-            e.HasOne<Store>().WithMany().HasForeignKey(x => x.StoreId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<Store>().WithMany().HasForeignKey(x => x.ToStoreId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<User>().WithMany().HasForeignKey(x => x.ApprovedBy).OnDelete(DeleteBehavior.Restrict);
-            e.ToTable(t => t.HasCheckConstraint("CK_StockDocuments_Stores", "[ToStoreId] IS NULL OR [ToStoreId] <> [StoreId]"));
         });
 
         b.Entity<StockDocumentLine>(e =>
@@ -365,7 +344,6 @@ public class AppDbContext : DbContext
             e.HasOne<Order>().WithMany().HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<OrderLine>().WithMany().HasForeignKey(x => x.OrderLineId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Sku>().WithMany().HasForeignKey(x => x.SkuId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<Store>().WithMany().HasForeignKey(x => x.StoreId).OnDelete(DeleteBehavior.Restrict);
             e.ToTable(t => t.HasCheckConstraint("CK_Reservations_Qty", "[Qty] > 0"));
         });
     }
@@ -429,8 +407,6 @@ public class AppDbContext : DbContext
         {
             e.ToTable("Allocations");
             e.Property(x => x.AllocationStatus).HasMaxLength(20).IsUnicode(false);
-            e.HasIndex(x => x.StoreId);
-            e.HasOne<Store>().WithMany().HasForeignKey(x => x.StoreId).OnDelete(DeleteBehavior.Restrict);
             e.ToTable(t => t.HasCheckConstraint("CK_Allocations_Qty", "[Qty] > 0"));
         });
 
@@ -627,7 +603,6 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.OrderId);
             e.HasMany(x => x.Lines).WithOne(x => x.SalesReturn).HasForeignKey(x => x.SalesReturnId);
             e.HasOne<Order>().WithMany().HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<Store>().WithMany().HasForeignKey(x => x.StoreId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<User>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<User>().WithMany().HasForeignKey(x => x.ApprovedBy).OnDelete(DeleteBehavior.Restrict);
             e.ToTable(t => t.HasCheckConstraint("CK_SalesReturns_RefundAmount", "[RefundAmount] >= 0"));
@@ -672,7 +647,6 @@ public class AppDbContext : DbContext
             e.HasIndex(x => new { x.StaffUserId, x.StartsAt });
             e.HasOne<User>().WithMany().HasForeignKey(x => x.StaffUserId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<User>().WithMany().HasForeignKey(x => x.AssignedBy).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<Store>().WithMany().HasForeignKey(x => x.StoreId).OnDelete(DeleteBehavior.Restrict);
             e.ToTable(t => t.HasCheckConstraint("CK_StaffShifts_Time", "[StartsAt] < [EndsAt]"));
         });
     }
@@ -690,7 +664,7 @@ public class AppDbContext : DbContext
             e.ToTable("PurchaseOrders"); e.Property(x => x.Code).HasMaxLength(40).IsRequired(); e.Property(x => x.PurchaseStatus).HasMaxLength(24).IsUnicode(false).IsRequired();
             e.Property(x => x.TotalAmount).HasPrecision(18, 2); e.Property(x => x.PaidAmount).HasPrecision(18, 2); e.Property(x => x.Note).HasMaxLength(1000);
             e.HasIndex(x => x.Code).IsUnique(); e.HasOne(x => x.Supplier).WithMany().HasForeignKey(x => x.SupplierId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<Store>().WithMany().HasForeignKey(x => x.StoreId).OnDelete(DeleteBehavior.Restrict); e.HasMany(x => x.Lines).WithOne(x => x.PurchaseOrder).HasForeignKey(x => x.PurchaseOrderId);
+            e.HasMany(x => x.Lines).WithOne(x => x.PurchaseOrder).HasForeignKey(x => x.PurchaseOrderId);
             e.ToTable(t => t.HasCheckConstraint("CK_PurchaseOrders_Amounts", "[TotalAmount] >= 0 AND [PaidAmount] >= 0 AND [PaidAmount] <= [TotalAmount]"));
         });
         b.Entity<PurchaseOrderLine>(e =>
@@ -701,7 +675,7 @@ public class AppDbContext : DbContext
         b.Entity<GoodsReceipt>(e =>
         {
             e.ToTable("GoodsReceipts"); e.Property(x => x.Code).HasMaxLength(40).IsRequired(); e.Property(x => x.Note).HasMaxLength(1000); e.HasIndex(x => x.Code).IsUnique();
-            e.HasOne<PurchaseOrder>().WithMany().HasForeignKey(x => x.PurchaseOrderId).OnDelete(DeleteBehavior.Restrict); e.HasOne<Store>().WithMany().HasForeignKey(x => x.StoreId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<PurchaseOrder>().WithMany().HasForeignKey(x => x.PurchaseOrderId).OnDelete(DeleteBehavior.Restrict);
             e.HasMany(x => x.Lines).WithOne(x => x.GoodsReceipt).HasForeignKey(x => x.GoodsReceiptId);
         });
         b.Entity<GoodsReceiptLine>(e =>
@@ -719,7 +693,7 @@ public class AppDbContext : DbContext
         {
             e.ToTable("RepairOrders"); e.Property(x => x.Code).HasMaxLength(40).IsRequired(); e.Property(x => x.VehicleDescription).HasMaxLength(255).IsRequired(); e.Property(x => x.ReportedIssue).HasMaxLength(1000).IsRequired();
             e.Property(x => x.RepairStatus).HasMaxLength(20).IsUnicode(false).IsRequired(); e.Property(x => x.LaborCost).HasPrecision(18, 2); e.Property(x => x.PartsCost).HasPrecision(18, 2); e.Property(x => x.Note).HasMaxLength(1000); e.HasIndex(x => x.Code).IsUnique();
-            e.HasOne<User>().WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict); e.HasOne<Store>().WithMany().HasForeignKey(x => x.StoreId).OnDelete(DeleteBehavior.Restrict); e.HasOne<Warranty>().WithMany().HasForeignKey(x => x.WarrantyId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict); e.HasOne<Warranty>().WithMany().HasForeignKey(x => x.WarrantyId).OnDelete(DeleteBehavior.Restrict);
             e.HasMany(x => x.Lines).WithOne(x => x.RepairOrder).HasForeignKey(x => x.RepairOrderId); e.ToTable(t => t.HasCheckConstraint("CK_RepairOrders_Amounts", "[LaborCost] >= 0 AND [PartsCost] >= 0"));
         });
         b.Entity<RepairOrderLine>(e =>
@@ -740,7 +714,7 @@ public class AppDbContext : DbContext
         b.Entity<StaffAttendance>(e =>
         {
             e.ToTable("StaffAttendances"); e.Property(x => x.Note).HasMaxLength(500); e.HasOne<User>().WithMany().HasForeignKey(x => x.StaffUserId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne<Store>().WithMany().HasForeignKey(x => x.StoreId).OnDelete(DeleteBehavior.Restrict); e.HasIndex(x => new { x.StaffUserId, x.CheckInAt });
+            e.HasIndex(x => new { x.StaffUserId, x.CheckInAt });
         });
     }
 

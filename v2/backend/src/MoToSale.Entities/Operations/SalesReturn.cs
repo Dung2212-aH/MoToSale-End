@@ -6,7 +6,6 @@ public class SalesReturn : BaseEntity
 {
     public string Code { get; set; } = string.Empty;
     public int OrderId { get; set; }
-    public int StoreId { get; set; }
     public string ReturnStatus { get; set; } = "Draft";
     public string Reason { get; set; } = string.Empty;
     public string? Note { get; set; }

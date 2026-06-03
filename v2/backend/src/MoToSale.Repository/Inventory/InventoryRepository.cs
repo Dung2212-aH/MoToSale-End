@@ -11,15 +11,15 @@ public class InventoryRepository : Repository<InventoryItem>, IInventoryReposito
 {
     public InventoryRepository(AppDbContext context) : base(context) { }
 
-    public Task<InventoryItem?> GetItemAsync(int storeId, int skuId) =>
-        Set.FirstOrDefaultAsync(i => i.StoreId == storeId && i.SkuId == skuId);
+    public Task<InventoryItem?> GetItemAsync(int skuId) =>
+        Set.FirstOrDefaultAsync(i => i.SkuId == skuId);
 
-    public async Task<InventoryItem> GetOrCreateItemAsync(int storeId, int skuId)
+    public async Task<InventoryItem> GetOrCreateItemAsync(int skuId)
     {
-        var item = await GetItemAsync(storeId, skuId);
+        var item = await GetItemAsync(skuId);
         if (item is null)
         {
-            item = new InventoryItem { StoreId = storeId, SkuId = skuId, OnHand = 0, Reserved = 0, CreatedDate = DateTime.UtcNow };
+            item = new InventoryItem { SkuId = skuId, OnHand = 0, Reserved = 0, CreatedDate = DateTime.UtcNow };
             Set.Add(item);
         }
         return item;
@@ -30,14 +30,6 @@ public class InventoryRepository : Repository<InventoryItem>, IInventoryReposito
     public async Task<int> GetOnHandTotalAsync(int skuId) =>
         await Set.Where(i => i.SkuId == skuId).SumAsync(i => (int?)i.OnHand) ?? 0;
 
-    public async Task<List<MoToSale.DTO.Ordering.StoreStockDto>> GetStoreStockAsync(int skuId) =>
-        await (from i in Set.AsNoTracking()
-               join st in Context.Stores.AsNoTracking() on i.StoreId equals st.Id
-               where i.SkuId == skuId && i.OnHand - i.Reserved > 0
-               orderby i.OnHand - i.Reserved descending
-               select new MoToSale.DTO.Ordering.StoreStockDto(i.StoreId, st.Name, i.OnHand - i.Reserved))
-              .ToListAsync();
-
     public Task<int> GetTotalAvailableAsync(int skuId) =>
         Set.Where(i => i.SkuId == skuId).SumAsync(i => i.OnHand - i.Reserved);
 
@@ -47,10 +39,8 @@ public class InventoryRepository : Repository<InventoryItem>, IInventoryReposito
             from i in Set.AsNoTracking()
             join s in Context.Skus.AsNoTracking() on i.SkuId equals s.Id
             join p in Context.Products.AsNoTracking() on s.ProductId equals p.Id
-            join st in Context.Stores.AsNoTracking() on i.StoreId equals st.Id
-            select new { i, s, p, st };
+            select new { i, s, p };
 
-        if (r.StoreId.HasValue) query = query.Where(x => x.i.StoreId == r.StoreId);
         if (r.LowStockOnly == true) query = query.Where(x => x.i.OnHand - x.i.Reserved <= x.i.ReorderPoint);
         if (r.HasHold == true) query = query.Where(x => x.i.Reserved > 0);
         query = r.StockStatus switch
@@ -70,25 +60,23 @@ public class InventoryRepository : Repository<InventoryItem>, IInventoryReposito
             "reserved" => desc ? query.OrderByDescending(x => x.i.Reserved) : query.OrderBy(x => x.i.Reserved),
             "available" => desc ? query.OrderByDescending(x => x.i.OnHand - x.i.Reserved) : query.OrderBy(x => x.i.OnHand - x.i.Reserved),
             "product" => desc ? query.OrderByDescending(x => x.p.Name) : query.OrderBy(x => x.p.Name),
-            _ => query.OrderBy(x => x.st.Name).ThenBy(x => x.p.Name),
+            _ => query.OrderBy(x => x.p.Name).ThenBy(x => x.s.SkuCode),
         };
 
         var total = await query.CountAsync();
         var rows = await query
             .Skip((r.Page - 1) * r.PageSize).Take(r.PageSize)
             .Select(x => new InventoryItemDto(
-                x.i.StoreId, x.st.Name, x.i.SkuId, x.s.SkuCode, x.p.Name,
+                x.i.SkuId, x.s.SkuCode, x.p.Name,
                 x.i.OnHand, x.i.Reserved, x.i.OnHand - x.i.Reserved, x.i.ReorderPoint, x.i.UpdatedDate ?? x.i.CreatedDate))
             .ToListAsync();
 
         return new PagingResponse<InventoryItemDto> { Items = rows, Page = r.Page, PageSize = r.PageSize, TotalItems = total };
     }
 
-    public async Task<InventorySummary> GetSummaryAsync(int? storeId)
+    public async Task<InventorySummary> GetSummaryAsync()
     {
-        var q = Set.AsNoTracking().AsQueryable();
-        if (storeId.HasValue) q = q.Where(i => i.StoreId == storeId);
-        var rows = await q.Select(i => new { i.OnHand, i.Reserved, i.ReorderPoint }).ToListAsync();
+        var rows = await Set.AsNoTracking().Select(i => new { i.OnHand, i.Reserved, i.ReorderPoint }).ToListAsync();
         return new InventorySummary(
             rows.Count,
             rows.Count(x => x.OnHand - x.Reserved <= 0),
@@ -98,11 +86,9 @@ public class InventoryRepository : Repository<InventoryItem>, IInventoryReposito
             rows.Sum(x => x.Reserved));
     }
 
-    public async Task<DateTime?> GetLastUpdatedAtAsync(int? storeId)
+    public async Task<DateTime?> GetLastUpdatedAtAsync()
     {
-        var q = Set.AsNoTracking().AsQueryable();
-        if (storeId.HasValue) q = q.Where(i => i.StoreId == storeId);
-        return await q.MaxAsync(i => (DateTime?)(i.UpdatedDate ?? i.CreatedDate));
+        return await Set.AsNoTracking().MaxAsync(i => (DateTime?)(i.UpdatedDate ?? i.CreatedDate));
     }
 
     public async Task<Dictionary<int, int>> GetOnHandBySkusAsync(IEnumerable<int> skuIds)
@@ -118,45 +104,50 @@ public class InventoryRepository : Repository<InventoryItem>, IInventoryReposito
     {
         var items = await Set.ToListAsync();
         var balances = await Context.StockMovements
-            .GroupBy(m => new { m.StoreId, m.SkuId })
-            .Select(g => new { g.Key.StoreId, g.Key.SkuId, Sum = g.Sum(x => x.QtyDelta) })
+            .GroupBy(m => m.SkuId)
+            .Select(g => new { SkuId = g.Key, Sum = g.Sum(x => x.QtyDelta) })
             .ToListAsync();
-        var map = balances.ToDictionary(b => (b.StoreId, b.SkuId), b => b.Sum);
+        var map = balances.ToDictionary(b => b.SkuId, b => b.Sum);
+
+        // Tính lại lượng đang giữ chỗ (Active/Confirmed) theo bảng Reservation — sửa mọi sai lệch.
+        var reservedRows = await Context.Reservations
+            .Where(r => r.ReservationStatus == ReservationStatus.Active || r.ReservationStatus == ReservationStatus.Confirmed)
+            .GroupBy(r => r.SkuId)
+            .Select(g => new { SkuId = g.Key, Qty = g.Sum(x => x.Qty) })
+            .ToListAsync();
+        var reservedMap = reservedRows.ToDictionary(b => b.SkuId, b => b.Qty);
 
         var now = DateTime.UtcNow;
         var changed = 0;
         foreach (var item in items)
         {
-            var bal = map.GetValueOrDefault((item.StoreId, item.SkuId), 0);
-            if (item.OnHand != bal) { item.OnHand = bal; item.UpdatedDate = now; changed++; }
+            var bal = map.GetValueOrDefault(item.SkuId, 0);
+            var reserved = reservedMap.GetValueOrDefault(item.SkuId, 0);
+            if (item.OnHand != bal || item.Reserved != reserved) { item.OnHand = bal; item.Reserved = reserved; item.UpdatedDate = now; changed++; continue; }
         }
         await Context.SaveChangesAsync();
         return changed;
     }
 
-    public async Task<List<InventoryItem>> GetAllForExportAsync(int? storeId)
+    public async Task<List<InventoryItem>> GetAllForExportAsync()
     {
-        var q = Set.AsNoTracking().AsQueryable();
-        if (storeId.HasValue) q = q.Where(i => i.StoreId == storeId);
-        return await q.ToListAsync();
+        return await Set.AsNoTracking().ToListAsync();
     }
 
-    public async Task<List<StockMovementDto>> GetMovementsAsync(int? skuId, int? storeId, int take = 200)
+    public async Task<List<StockMovementDto>> GetMovementsAsync(int? skuId, int take = 200)
     {
         var q =
             from m in Context.StockMovements.AsNoTracking()
             join s in Context.Skus.AsNoTracking() on m.SkuId equals s.Id
             join p in Context.Products.AsNoTracking() on s.ProductId equals p.Id
-            join st in Context.Stores.AsNoTracking() on m.StoreId equals st.Id
-            select new { m, s, p, st };
+            select new { m, s, p };
 
         if (skuId.HasValue) q = q.Where(x => x.m.SkuId == skuId);
-        if (storeId.HasValue) q = q.Where(x => x.m.StoreId == storeId);
         return await q.OrderByDescending(x => x.m.OccurredAt).ThenByDescending(x => x.m.Id).Take(take)
             .Select(x => new StockMovementDto(
-                x.m.Id, x.m.StoreId, x.m.SkuId, x.m.Type, x.m.QtyDelta, x.m.BalanceAfter,
+                x.m.Id, x.m.SkuId, x.m.Type, x.m.QtyDelta, x.m.BalanceAfter,
                 x.m.RefType, x.m.RefId, x.m.Reason, x.m.OccurredAt,
-                x.st.Name, x.s.SkuCode, x.p.Code, x.p.Name, x.m.BalanceAfter - x.m.QtyDelta))
+                x.s.SkuCode, x.p.Code, x.p.Name, x.m.BalanceAfter - x.m.QtyDelta))
             .ToListAsync();
     }
 }

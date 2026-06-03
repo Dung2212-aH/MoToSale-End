@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import orderService from '../../services/orderService';
 import paymentService from '../../services/paymentService';
+import operationsService from '../../services/operationsService';
+import inventoryService from '../../services/inventoryService';
 import {
   DELIVERY_SHIPPING_STATUS_OPTIONS,
   ORDER_NEXT_STATUS,
@@ -15,6 +17,7 @@ import {
 } from '../../utils/constants';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { formatDate } from '../../utils/formatDate';
+import { printVatInvoice } from '../../utils/vatInvoice';
 
 const isLockedOrder = (status) => ['Cancelled', 'Completed'].includes(status);
 const canCancelOrder = (status) => !['Cancelled', 'Delivered', 'Completed'].includes(status);
@@ -54,6 +57,7 @@ const OrderDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [order, setOrder] = useState(null);
+  const [settings, setSettings] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -66,8 +70,14 @@ const OrderDetail = () => {
   const [paymentNote, setPaymentNote] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('Cash');
+  const [paymentType, setPaymentType] = useState('Full');
   const [shippingNote, setShippingNote] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState({ recipient: '', phone: '', email: '', address: '', note: '' });
+  const [editLines, setEditLines] = useState([]);
+  const [editSkus, setEditSkus] = useState([]);
+  const [editSkuPick, setEditSkuPick] = useState('');
 
   const fetchOrder = async () => {
     setLoading(true);
@@ -86,10 +96,39 @@ const OrderDetail = () => {
     fetchOrder();
   }, [id]);
 
+  useEffect(() => {
+    operationsService.getSettings()
+      .then((res) => {
+        const list = res.data?.items || res.data || [];
+        const map = {};
+        list.forEach((s) => { if (s?.key) map[s.key] = s.value; });
+        setSettings(map);
+      })
+      .catch(() => {});
+  }, []);
+
   const orderStatus = order?.trangThaiDonHang || order?.trangThai || order?.status || order?.orderStatus || '';
   const paymentStatus = order?.trangThaiThanhToan || order?.paymentStatus || order?.thanhToan?.trangThai || order?.payment?.status || '';
   const shippingStatus = order?.trangThaiVanChuyen || order?.shippingStatus || order?.fulfillmentStatus || '';
   const receiveMethod = order?.phuongThucNhanHang || order?.receivingMethod || 'Delivery';
+  const orderType = order?.orderType || order?.loaiDon || 'FullPayment';
+  const depositAmount = Number(order?.depositAmount ?? order?.tienCoc ?? 0);
+  const remainingAmount = Number(order?.remainingAmount ?? order?.tienConLai ?? 0);
+  const grandTotalAmount = Number(order?.grandTotal ?? order?.tongThanhToan ?? order?.tongTien ?? order?.totalAmount ?? 0);
+  const paidSoFar = Math.max(0, grandTotalAmount - remainingAmount);
+  const isFullyPaid = grandTotalAmount > 0 && remainingAmount <= 0;
+  // Loại thanh toán hợp lệ theo trạng thái: chưa thu gì → Thu đủ/Đặt cọc; đã thu một phần → Thu phần còn lại/Trả góp.
+  const paymentTypeOptions = paidSoFar > 0
+    ? [['Remaining', 'Thu phần còn lại'], ['Installment', 'Trả góp/đợt']]
+    : [['Full', 'Thanh toán đủ'], ['Deposit', 'Đặt cọc'], ['Installment', 'Trả góp/đợt']];
+
+  const openPaymentModal = () => {
+    setPaymentType(paidSoFar > 0 ? 'Remaining' : (orderType === 'Deposit' ? 'Deposit' : 'Full'));
+    setPaymentAmount(remainingAmount > 0 ? String(remainingAmount) : '');
+    setPaymentMethod('Cash');
+    setPaymentNote('');
+    setShowPaymentModal(true);
+  };
 
   const nextStatusOptions = useMemo(() => {
     const allowed = ORDER_NEXT_STATUS[orderStatus] || [];
@@ -141,7 +180,7 @@ const OrderDetail = () => {
     await runUpdate(
       () => paymentService.record({
         orderId: Number(id),
-        paymentType: 'Manual',
+        paymentType,
         amount,
         method: paymentMethod,
         note: paymentNote.trim() || undefined,
@@ -152,6 +191,59 @@ const OrderDetail = () => {
         setPaymentNote('');
       }
     );
+  };
+
+  const handleFulfill = async () => {
+    if (!window.confirm('Xác nhận giao hàng & xuất kho cho đơn này? Tồn kho sẽ bị trừ thật.')) return;
+    await runUpdate(() => orderService.fulfill(id));
+  };
+
+  const openEditModal = () => {
+    setEditForm({
+      recipient: order.shippingRecipient || order.hoTenNhanHang || '',
+      phone: order.shippingPhone || order.soDienThoai || '',
+      email: order.shippingEmail || order.email || '',
+      address: order.shippingAddress || order.diaChi || '',
+      note: order.note || order.ghiChu || '',
+    });
+    setEditLines((order.lines || order.items || []).map((l) => ({
+      skuId: l.skuId ?? l.maBienSanPham,
+      skuCode: l.skuCode || l.skuCodeSnapshot || l.sku || '',
+      productName: l.productName || l.tenSanPham || '',
+      unitPrice: Number(l.unitPrice ?? l.donGia ?? 0),
+      qty: Number(l.qty ?? l.soLuong ?? 0),
+    })));
+    setShowEditModal(true);
+    if (orderStatus === 'AwaitingPayment' && editSkus.length === 0) {
+      inventoryService.getSkus().then((res) => {
+        const d = res.data; setEditSkus(Array.isArray(d) ? d : d.items || d.data || []);
+      }).catch(() => {});
+    }
+  };
+  const editUpdateLine = (skuId, field, value) => setEditLines((p) => p.map((l) => (l.skuId === skuId ? { ...l, [field]: value } : l)));
+  const editRemoveLine = (skuId) => setEditLines((p) => p.filter((l) => l.skuId !== skuId));
+  const editAddSku = () => {
+    const s = editSkus.find((x) => String(x.id) === String(editSkuPick));
+    if (!s) return;
+    setEditLines((p) => (p.find((l) => l.skuId === s.id)
+      ? p.map((l) => (l.skuId === s.id ? { ...l, qty: l.qty + 1 } : l))
+      : [...p, { skuId: s.id, skuCode: s.skuCode, productName: s.productName, unitPrice: Number(s.salePrice ?? s.listPrice ?? 0), qty: 1 }]));
+    setEditSkuPick('');
+  };
+  const handleUpdateOrder = async () => {
+    const payload = {
+      shippingRecipient: editForm.recipient.trim() || null,
+      shippingPhone: editForm.phone.trim() || null,
+      shippingEmail: editForm.email.trim() || null,
+      shippingAddress: editForm.address.trim() || null,
+      note: editForm.note.trim() || null,
+    };
+    if (orderStatus === 'AwaitingPayment') {
+      if (editLines.length === 0) { alert('Đơn phải có ít nhất 1 sản phẩm.'); return; }
+      if (editLines.some((l) => Number(l.qty) <= 0)) { alert('Số lượng không hợp lệ.'); return; }
+      payload.lines = editLines.map((l) => ({ skuId: l.skuId, qty: Number(l.qty), unitPrice: Number(l.unitPrice) }));
+    }
+    await runUpdate(() => orderService.update(id, payload), () => setShowEditModal(false));
   };
 
   const handleUpdateShippingStatus = async () => {
@@ -302,6 +394,8 @@ const OrderDetail = () => {
     printWindow.document.close();
   };
 
+  const handlePrintVatInvoice = () => printVatInvoice(order, settings);
+
   return (
     <div className="content-wrapper">
       <div className="content-header">
@@ -312,6 +406,19 @@ const OrderDetail = () => {
           <button className="btn btn-outline-primary mb-2 ml-2" onClick={handlePrintOrder}>
             <i className="fas fa-print"></i> In phiếu đơn hàng
           </button>
+          <button className="btn btn-outline-success mb-2 ml-2" onClick={handlePrintVatInvoice}>
+            <i className="fas fa-file-invoice-dollar"></i> Hóa đơn VAT
+          </button>
+          {shippingStatus !== 'Fulfilled' && !['Cancelled'].includes(orderStatus) && (
+            <button className="btn btn-success mb-2 ml-2" onClick={handleFulfill} disabled={updating}>
+              <i className="fas fa-dolly"></i> Giao hàng & xuất kho
+            </button>
+          )}
+          {!['Completed', 'Cancelled'].includes(orderStatus) && (
+            <button className="btn btn-outline-warning mb-2 ml-2" onClick={openEditModal} disabled={updating}>
+              <i className="fas fa-pen"></i> Sửa đơn
+            </button>
+          )}
           <h1 className="m-0">Chi tiết đơn hàng</h1>
         </div>
       </div>
@@ -365,7 +472,7 @@ const OrderDetail = () => {
               badge={renderBadge(getPaymentStatusMeta(paymentStatus))}
               buttonText="Cập nhật thanh toán"
               disabled={orderStatus === 'Cancelled'}
-              onClick={() => setShowPaymentModal(true)}
+              onClick={openPaymentModal}
             />
             <StatusCard
               title="Vận chuyển"
@@ -416,6 +523,21 @@ const OrderDetail = () => {
               </table>
             </div>
           </div>
+
+          {(orderType === 'Deposit' || depositAmount > 0 || remainingAmount > 0) && (
+            <div className="card">
+              <div className="card-header"><h3 className="card-title">Cọc & công nợ</h3></div>
+              <div className="card-body">
+                <table className="table table-sm mb-0">
+                  <tbody>
+                    <tr><td><strong>Loại đơn:</strong></td><td>{orderType === 'Deposit' ? 'Đặt cọc' : 'Bán đứt'}</td></tr>
+                    {depositAmount > 0 && <tr><td><strong>Tiền cọc:</strong></td><td>{formatCurrency(depositAmount)}</td></tr>}
+                    <tr><td><strong>Còn phải thu:</strong></td><td className="font-weight-bold text-danger">{formatCurrency(remainingAmount)}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {payment && (
             <div className="card">
@@ -513,9 +635,35 @@ const OrderDetail = () => {
 
       {showPaymentModal && (
         <Modal title="Ghi nhận thanh toán thủ công" onClose={() => setShowPaymentModal(false)}>
+          {isFullyPaid ? (
+            <div className="alert alert-success py-2 mb-2">Đơn đã thanh toán đủ — không cần thu thêm.</div>
+          ) : (
+            <div className="alert alert-info py-2 mb-2">
+              <div>Tổng đơn: <strong>{formatCurrency(grandTotalAmount)}</strong></div>
+              {paidSoFar > 0 && <div>Đã thu: <strong>{formatCurrency(paidSoFar)}</strong></div>}
+              {depositAmount > 0 && <div>Tiền cọc: <strong>{formatCurrency(depositAmount)}</strong></div>}
+              <div>Còn phải thu: <strong className="text-danger">{formatCurrency(remainingAmount)}</strong></div>
+            </div>
+          )}
           <div className="form-group">
-            <label>Số tiền đã thu</label>
-            <input type="number" min="1" className="form-control" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} />
+            <label>Loại thanh toán</label>
+            <select className="form-control" value={paymentType} onChange={(e) => setPaymentType(e.target.value)} disabled={isFullyPaid}>
+              {paymentTypeOptions.map(([val, text]) => <option key={val} value={val}>{text}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Số tiền đã thu {remainingAmount > 0 && <span className="text-muted">(tối đa {formatCurrency(remainingAmount)})</span>}</label>
+            <div className="input-group">
+              <input type="number" min="1" max={remainingAmount > 0 ? remainingAmount : undefined} className="form-control" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} disabled={isFullyPaid} />
+              {remainingAmount > 0 && (
+                <div className="input-group-append">
+                  <button type="button" className="btn btn-outline-secondary" onClick={() => setPaymentAmount(String(remainingAmount))}>Còn lại</button>
+                </div>
+              )}
+            </div>
+            {remainingAmount > 0 && Number(paymentAmount) > remainingAmount && (
+              <small className="text-danger">Số tiền thu vượt quá số còn phải thu.</small>
+            )}
           </div>
           <div className="form-group">
             <label>Phương thức</label>
@@ -529,7 +677,7 @@ const OrderDetail = () => {
             <label>Ghi chú thanh toán</label>
             <textarea className="form-control" rows="3" value={paymentNote} onChange={(e) => setPaymentNote(e.target.value)} />
           </div>
-          <ModalFooter onClose={() => setShowPaymentModal(false)} onSubmit={handleUpdatePaymentStatus} disabled={updating || Number(paymentAmount) <= 0} loading={updating} submitText="Ghi nhận" />
+          <ModalFooter onClose={() => setShowPaymentModal(false)} onSubmit={handleUpdatePaymentStatus} disabled={updating || isFullyPaid || Number(paymentAmount) <= 0 || (remainingAmount > 0 && Number(paymentAmount) > remainingAmount)} loading={updating} submitText="Ghi nhận" />
         </Modal>
       )}
 
@@ -559,6 +707,57 @@ const OrderDetail = () => {
           <ModalFooter onClose={() => setShowCancelModal(false)} onSubmit={handleCancel} disabled={updating} loading={updating} submitText="Xác nhận hủy" danger />
         </Modal>
       )}
+
+      {showEditModal && (
+        <Modal title="Sửa đơn hàng" onClose={() => setShowEditModal(false)}>
+          <div className="row">
+            <div className="col-md-6 form-group"><label>Tên khách/người nhận</label>
+              <input className="form-control" value={editForm.recipient} onChange={(e) => setEditForm({ ...editForm, recipient: e.target.value })} /></div>
+            <div className="col-md-6 form-group"><label>Số điện thoại</label>
+              <input className="form-control" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} /></div>
+            <div className="col-md-6 form-group"><label>Email</label>
+              <input className="form-control" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></div>
+            <div className="col-md-6 form-group"><label>Địa chỉ</label>
+              <input className="form-control" value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} /></div>
+            <div className="col-md-12 form-group"><label>Ghi chú</label>
+              <textarea className="form-control" rows="2" value={editForm.note} onChange={(e) => setEditForm({ ...editForm, note: e.target.value })} /></div>
+          </div>
+
+          {orderStatus === 'AwaitingPayment' ? (
+            <>
+              <hr />
+              <div className="d-flex align-items-end mb-2" style={{ gap: 8 }}>
+                <div className="flex-fill">
+                  <label className="mb-1">Thêm sản phẩm</label>
+                  <select className="form-control form-control-sm" value={editSkuPick} onChange={(e) => setEditSkuPick(e.target.value)}>
+                    <option value="">-- Chọn SKU --</option>
+                    {editSkus.slice(0, 200).map((s) => <option key={s.id} value={String(s.id)}>{s.skuCode} · {s.productName}</option>)}
+                  </select>
+                </div>
+                <button type="button" className="btn btn-primary btn-sm" onClick={editAddSku} disabled={!editSkuPick}>Thêm</button>
+              </div>
+              <table className="table table-sm table-bordered">
+                <thead><tr><th>Sản phẩm</th><th style={{ width: 130 }}>Đơn giá</th><th style={{ width: 90 }}>SL</th><th style={{ width: 40 }}></th></tr></thead>
+                <tbody>
+                  {editLines.length === 0 ? <tr><td colSpan="4" className="text-center text-muted">Chưa có sản phẩm</td></tr>
+                    : editLines.map((l) => (
+                      <tr key={l.skuId}>
+                        <td>{l.productName}<div className="text-muted small">{l.skuCode}</div></td>
+                        <td><input type="number" min="0" className="form-control form-control-sm text-right" value={l.unitPrice} onChange={(e) => editUpdateLine(l.skuId, 'unitPrice', e.target.value)} /></td>
+                        <td><input type="number" min="1" className="form-control form-control-sm text-right" value={l.qty} onChange={(e) => editUpdateLine(l.skuId, 'qty', Number(e.target.value))} /></td>
+                        <td className="text-center align-middle"><button type="button" className="btn btn-xs btn-danger" onClick={() => editRemoveLine(l.skuId)}><i className="fas fa-trash"></i></button></td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+              <small className="text-muted">Tạm tính: <strong>{formatCurrency(editLines.reduce((s, l) => s + Number(l.unitPrice || 0) * Number(l.qty || 0), 0))}</strong> — tổng tiền sẽ được tính lại khi lưu.</small>
+            </>
+          ) : (
+            <div className="alert alert-info py-2 mb-0">Đơn đã xác nhận/thu tiền — chỉ sửa được thông tin khách & giao hàng, không sửa được sản phẩm. Muốn đổi sản phẩm phải hủy & tạo lại.</div>
+          )}
+          <ModalFooter onClose={() => setShowEditModal(false)} onSubmit={handleUpdateOrder} disabled={updating} loading={updating} submitText="Lưu" />
+        </Modal>
+      )}
     </div>
   );
 };
@@ -583,6 +782,23 @@ const getHistoryValueLabel = (eventType, value) => {
   if (eventType === 'PaymentStatus') return getPaymentStatusMeta(value).label;
   if (eventType === 'ShippingStatus') return getShippingStatusMeta(value).label;
   return value;
+};
+
+const EVENT_META = {
+  Created: { color: 'secondary', icon: 'fa-plus' },
+  OrderStatus: { color: 'info', icon: 'fa-clipboard-check' },
+  PaymentStatus: { color: 'success', icon: 'fa-money-bill-wave' },
+  ShippingStatus: { color: 'warning', icon: 'fa-truck' },
+};
+
+const getHistoryValueBadge = (eventType, value) => {
+  if (!value) return <span className="text-muted">—</span>;
+  let meta = null;
+  if (eventType === 'OrderStatus') meta = getOrderStatusMeta(value);
+  else if (eventType === 'PaymentStatus') meta = getPaymentStatusMeta(value);
+  else if (eventType === 'ShippingStatus') meta = getShippingStatusMeta(value);
+  if (meta) return <span className={`badge badge-${meta.color}`}>{meta.label}</span>;
+  return <span className="badge badge-light border">{value}</span>;
 };
 
 const OrderTimeline = ({ order, histories }) => {
@@ -617,43 +833,49 @@ const OrderTimeline = ({ order, histories }) => {
 
   return (
     <div className="order-timeline">
-      {items.map((item, index) => (
-        <div
-          key={`${item.id || index}-${item.loaiSuKien}`}
-          className="d-flex align-items-start mb-3"
-          style={{ gap: 14 }}
-        >
-          <div className="text-center flex-shrink-0" style={{ width: 34 }}>
-            <span
-              className="badge badge-primary rounded-circle d-inline-flex align-items-center justify-content-center"
-              style={{ width: 28, height: 28, fontSize: 13 }}
-            >
-              {index + 1}
-            </span>
-          </div>
-          <div className="flex-fill border-bottom pb-3" style={{ minWidth: 0 }}>
-            <strong className="d-block">
-              {EVENT_LABELS[item.loaiSuKien] || item.loaiSuKien || 'Sự kiện'}
-            </strong>
-            <div className="text-muted small mt-1">{formatTimelineDate(item.thoiGian)}</div>
-            {item.loaiSuKien === 'Created' ? (
-              <div className="mt-1">{item.ghiChu}</div>
-            ) : (
-              <div className="mt-1 d-flex flex-wrap align-items-center" style={{ gap: 8 }}>
-                <span className="text-muted">Từ:</span> {getHistoryValueLabel(item.loaiSuKien, item.giaTriCu)}
-                <span>→</span>
-                <span className="text-muted">Sang:</span> {getHistoryValueLabel(item.loaiSuKien, item.giaTriMoi)}
+      {items.map((item, index) => {
+        const meta = EVENT_META[item.loaiSuKien] || { color: 'secondary' };
+        const isLast = index === items.length - 1;
+        const hasFrom = item.loaiSuKien !== 'Created' && item.giaTriCu;
+        return (
+          <div key={`${item.id || index}-${item.loaiSuKien}`} className="d-flex">
+            <div className="d-flex flex-column align-items-center mr-3" style={{ width: 14 }}>
+              <span
+                className={`bg-${meta.color}`}
+                style={{ width: 13, height: 13, borderRadius: '50%', flexShrink: 0, marginTop: 4, boxShadow: '0 0 0 3px rgba(0,0,0,0.05)' }}
+              />
+              {!isLast && <span style={{ flex: 1, width: 2, background: '#e9ecef', marginTop: 4, marginBottom: 2 }} />}
+            </div>
+            <div className="flex-fill" style={{ minWidth: 0, paddingBottom: isLast ? 0 : 16 }}>
+              <div className="d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 6 }}>
+                <span className={`badge badge-${meta.color}`}>
+                  {EVENT_LABELS[item.loaiSuKien] || item.loaiSuKien || 'Sự kiện'}
+                </span>
+                <span className="text-muted small">{formatTimelineDate(item.thoiGian)}</span>
               </div>
-            )}
-            {item.ghiChu && item.loaiSuKien !== 'Created' && (
-              <div className="text-muted small mt-1">Ghi chú: {item.ghiChu}</div>
-            )}
-            {item.maNguoiThucHien && (
-              <div className="text-muted small mt-1">Người thực hiện: #{item.maNguoiThucHien}</div>
-            )}
+              {item.loaiSuKien === 'Created' ? (
+                <div className="mt-1 small text-muted">{item.ghiChu}</div>
+              ) : (
+                <div className="mt-2 d-flex flex-wrap align-items-center" style={{ gap: 8 }}>
+                  {hasFrom && (
+                    <>
+                      {getHistoryValueBadge(item.loaiSuKien, item.giaTriCu)}
+                      <span className="text-muted">→</span>
+                    </>
+                  )}
+                  {getHistoryValueBadge(item.loaiSuKien, item.giaTriMoi)}
+                </div>
+              )}
+              {item.ghiChu && item.loaiSuKien !== 'Created' && (
+                <div className="text-muted small mt-1">{item.ghiChu}</div>
+              )}
+              {item.maNguoiThucHien && (
+                <div className="text-muted small mt-1">Nhân viên #{item.maNguoiThucHien}</div>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 };

@@ -6,9 +6,31 @@ import { formatCurrency } from '../../utils/formatCurrency';
 import { formatDate } from '../../utils/formatDate';
 import { createDateStamp, exportWorkbook } from '../../utils/exportExcel';
 
+const CUSTOMER_STATUS = {
+  1: { label: 'Đang hoạt động', color: 'success' },
+  0: { label: 'Ngừng chăm sóc', color: 'warning' },
+  '-1': { label: 'Đã khóa', color: 'secondary' },
+};
+
+const emptyCustomerForm = {
+  fullName: '',
+  phoneNumber: '',
+  email: '',
+  status: 1,
+  careNote: '',
+};
+
 const getApiMessage = (err, fallback) => err?.response?.data?.message || fallback;
 const normalize = (value) => String(value || '').trim().toLowerCase();
 const asItems = (payload) => payload?.items || payload?.data || payload || [];
+
+const normalizeStatus = (value) => {
+  if (value === 'Active') return 1;
+  if (value === 'Inactive') return 0;
+  if (value === 'Deleted' || value === 'Locked') return -1;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 1;
+};
 
 const CustomerList = () => {
   const [customers, setCustomers] = useState([]);
@@ -24,6 +46,9 @@ const CustomerList = () => {
   const [crmForm, setCrmForm] = useState({ subject: '', note: '', followUpAt: '' });
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState(null);
+  const [customerForm, setCustomerForm] = useState(emptyCustomerForm);
 
   const fetchData = async () => {
     setLoading(true);
@@ -76,8 +101,69 @@ const CustomerList = () => {
 
   const customerName = (customer) => customer.hoTen || customer.fullName || customer.name || '';
   const customerPhone = (customer) => customer.soDienThoai || customer.phoneNumber || '';
-  const customerStatus = (customer) => customer.trangThai || customer.status || '';
+  const customerRawEmail = (customer) => customer.email || '';
+  const customerEmail = (customer) => {
+    const email = customerRawEmail(customer);
+    return email.endsWith('@motosale.local') ? '' : email;
+  };
+  const customerStatus = (customer) => normalizeStatus(customer.trangThai ?? customer.status);
   const customerCareNote = (customer) => customer.ghiChuChamSoc || customer.careNote || '';
+
+  const statusBadge = (value) => {
+    const info = CUSTOMER_STATUS[normalizeStatus(value)] || CUSTOMER_STATUS[1];
+    return <span className={`badge badge-${info.color}`}>{info.label}</span>;
+  };
+
+  const openCustomerAdd = () => {
+    setEditingCustomer(null);
+    setCustomerForm(emptyCustomerForm);
+    setShowCustomerModal(true);
+  };
+
+  const openCustomerEdit = (customer) => {
+    setEditingCustomer(customer);
+    setCustomerForm({
+      fullName: customerName(customer),
+      phoneNumber: customerPhone(customer),
+      email: customerEmail(customer),
+      status: customerStatus(customer),
+      careNote: customerCareNote(customer),
+    });
+    setShowCustomerModal(true);
+  };
+
+  const handleCustomerChange = (e) => {
+    const { name, value } = e.target;
+    setCustomerForm((prev) => ({ ...prev, [name]: name === 'status' ? normalizeStatus(value) : value }));
+  };
+
+  const saveCustomer = async (e) => {
+    e.preventDefault();
+    if (!customerForm.fullName.trim()) {
+      alert('Tên khách hàng là bắt buộc.');
+      return;
+    }
+    if (!customerForm.phoneNumber.trim() && !customerForm.email.trim()) {
+      alert('Khách hàng nên có ít nhất SĐT hoặc Email để chăm sóc và đối soát đơn hàng.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      if (editingCustomer) {
+        await userService.updateCustomer(editingCustomer.id, customerForm);
+      } else {
+        await userService.createCustomer(customerForm);
+      }
+      setShowCustomerModal(false);
+      setEditingCustomer(null);
+      await fetchData();
+    } catch (err) {
+      alert(getApiMessage(err, 'Lưu khách hàng thất bại.'));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const openNote = (customer) => {
     setSelected(customer);
@@ -88,7 +174,7 @@ const CustomerList = () => {
     if (!selected) return;
     setSaving(true);
     try {
-      await userService.updateCustomerCareNote(selected.id, { ghiChuChamSoc: careNote, careNote });
+      await userService.updateCustomerCareNote(selected.id, { careNote });
       setSelected(null);
       await fetchData();
     } catch (err) {
@@ -154,7 +240,7 @@ const CustomerList = () => {
             { header: 'Họ tên', key: 'name', width: 28 },
             { header: 'SĐT', key: 'phone', width: 16 },
             { header: 'Email', key: 'email', width: 28 },
-            { header: 'Trạng thái', key: 'status', width: 14 },
+            { header: 'Trạng thái', key: 'status', width: 18 },
             { header: 'Tổng đơn', key: 'orders', type: 'number', width: 12 },
             { header: 'Tổng chi tiêu', key: 'spent', type: 'currency', width: 18 },
             { header: 'Đơn hủy', key: 'cancelled', type: 'number', width: 12 },
@@ -164,8 +250,8 @@ const CustomerList = () => {
           rows: customers.map(enrichCustomer).map((customer) => ({
             name: customerName(customer),
             phone: customerPhone(customer),
-            email: customer.email,
-            status: customerStatus(customer),
+            email: customerEmail(customer),
+            status: CUSTOMER_STATUS[customerStatus(customer)]?.label || 'Không rõ',
             orders: customer.totalOrders,
             spent: customer.totalSpent,
             cancelled: customer.cancelledOrders,
@@ -188,6 +274,9 @@ const CustomerList = () => {
           <div className="row mb-2">
             <div className="col-sm-6"><h1 className="m-0">Khách hàng</h1></div>
             <div className="col-sm-6 text-right">
+              <button className="btn btn-primary mr-2" onClick={openCustomerAdd}>
+                <i className="fas fa-plus mr-1"></i>Thêm khách hàng
+              </button>
               <button className="btn btn-outline-success" onClick={exportCustomers} disabled={exporting}>
                 <i className="fas fa-file-excel mr-1"></i>{exporting ? 'Đang xuất...' : 'Xuất Excel'}
               </button>
@@ -209,7 +298,7 @@ const CustomerList = () => {
                   <select className="form-control" value={status} onChange={(e) => setStatus(e.target.value)}>
                     <option value="">Tất cả trạng thái</option>
                     <option value="1">Đang hoạt động</option>
-                    <option value="0">Ngừng hoạt động</option>
+                    <option value="0">Ngừng chăm sóc</option>
                     <option value="-1">Đã khóa</option>
                   </select>
                 </div>
@@ -222,6 +311,7 @@ const CustomerList = () => {
                     <tr>
                       <th>Khách hàng</th>
                       <th>Liên hệ</th>
+                      <th className="text-center">Trạng thái</th>
                       <th className="text-center">Tổng đơn</th>
                       <th className="text-right">Tổng chi tiêu</th>
                       <th className="text-center">Đơn hủy</th>
@@ -232,31 +322,35 @@ const CustomerList = () => {
                   </thead>
                   <tbody>
                     {loading ? (
-                      <tr><td colSpan="8" className="text-center py-4">Đang tải khách hàng...</td></tr>
+                      <tr><td colSpan="9" className="text-center py-4">Đang tải khách hàng...</td></tr>
                     ) : customers.length === 0 ? (
-                      <tr><td colSpan="8" className="text-center text-muted py-4">Chưa có khách hàng phù hợp.</td></tr>
+                      <tr><td colSpan="9" className="text-center text-muted py-4">Chưa có khách hàng phù hợp.</td></tr>
                     ) : customers.map((raw) => {
                       const customer = enrichCustomer(raw);
                       return (
                         <tr key={customer.id}>
                           <td>
                             <strong>{customerName(customer)}</strong>
-                            <div className="text-muted small">{customerStatus(customer)}</div>
+                            <div className="text-muted small">#{customer.id}</div>
                           </td>
                           <td>
                             <div>{customerPhone(customer) || '-'}</div>
-                            <div className="text-muted small">{customer.email || '-'}</div>
+                            <div className="text-muted small">{customerEmail(customer) || '-'}</div>
                           </td>
+                          <td className="text-center">{statusBadge(customerStatus(customer))}</td>
                           <td className="text-center">{customer.totalOrders}</td>
                           <td className="text-right">{formatCurrency(customer.totalSpent)}</td>
                           <td className="text-center">{customer.cancelledOrders}</td>
                           <td>{formatDate(customer.lastOrderAt)}</td>
                           <td className="text-break">{customerCareNote(customer) || '-'}</td>
-                          <td className="text-center">
+                          <td className="text-center text-nowrap">
+                            <button className="btn btn-xs btn-info mr-1" onClick={() => openCustomerEdit(customer)} title="Sửa khách hàng">
+                              <i className="fas fa-edit"></i>
+                            </button>
                             <button className="btn btn-xs btn-primary mr-1" onClick={() => openProfile(customer)} title="Hồ sơ 360">
                               <i className="fas fa-user-clock"></i>
                             </button>
-                            <button className="btn btn-xs btn-info" onClick={() => openNote(customer)} title="Ghi chú chăm sóc">
+                            <button className="btn btn-xs btn-secondary" onClick={() => openNote(customer)} title="Ghi chú chăm sóc">
                               <i className="fas fa-sticky-note"></i>
                             </button>
                           </td>
@@ -270,6 +364,63 @@ const CustomerList = () => {
           </div>
         </div>
       </section>
+
+      {showCustomerModal && (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
+          <div className="modal-dialog modal-lg">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">{editingCustomer ? 'Sửa khách hàng' : 'Thêm khách hàng'}</h5>
+                <button type="button" className="close" onClick={() => setShowCustomerModal(false)}><span>&times;</span></button>
+              </div>
+              <form onSubmit={saveCustomer}>
+                <div className="modal-body">
+                  <div className="row">
+                    <div className="col-md-6">
+                      <div className="form-group">
+                        <label>Họ tên <span className="text-danger">*</span></label>
+                        <input className="form-control" name="fullName" value={customerForm.fullName} onChange={handleCustomerChange} />
+                      </div>
+                    </div>
+                    <div className="col-md-6">
+                      <div className="form-group">
+                        <label>Trạng thái</label>
+                        <select className="form-control" name="status" value={customerForm.status} onChange={handleCustomerChange}>
+                          <option value="1">Đang hoạt động</option>
+                          <option value="0">Ngừng chăm sóc</option>
+                          <option value="-1">Đã khóa</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="row">
+                    <div className="col-md-6">
+                      <div className="form-group">
+                        <label>Số điện thoại</label>
+                        <input className="form-control" name="phoneNumber" value={customerForm.phoneNumber} onChange={handleCustomerChange} />
+                      </div>
+                    </div>
+                    <div className="col-md-6">
+                      <div className="form-group">
+                        <label>Email</label>
+                        <input type="email" className="form-control" name="email" value={customerForm.email} onChange={handleCustomerChange} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>Ghi chú chăm sóc</label>
+                    <textarea className="form-control" rows="4" name="careNote" value={customerForm.careNote} onChange={handleCustomerChange} placeholder="Nhu cầu, lịch hẹn, lưu ý chăm sóc khách hàng..." />
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowCustomerModal(false)} disabled={saving}>Đóng</button>
+                  <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Đang lưu...' : 'Lưu khách hàng'}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       {selected && (
         <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
@@ -305,10 +456,10 @@ const CustomerList = () => {
                 ) : (
                   <>
                     <div className="row">
-                      <div className="col-md-3"><div className="small-box bg-info"><div className="inner"><h3>{profile.summary.orderCount}</h3><p>Đơn hàng</p></div></div></div>
-                      <div className="col-md-3"><div className="small-box bg-success"><div className="inner"><h3>{formatCurrency(profile.summary.orderTotal)}</h3><p>Tổng mua</p></div></div></div>
-                      <div className="col-md-3"><div className="small-box bg-warning"><div className="inner"><h3>{profile.summary.warrantyCount}</h3><p>Bảo hành</p></div></div></div>
-                      <div className="col-md-3"><div className="small-box bg-primary"><div className="inner"><h3>{profile.summary.openCrmCount}</h3><p>CSKH mở</p></div></div></div>
+                      <div className="col-md-3"><div className="small-box bg-info"><div className="inner"><h3>{profile.summary?.orderCount || 0}</h3><p>Đơn hàng</p></div></div></div>
+                      <div className="col-md-3"><div className="small-box bg-success"><div className="inner"><h3>{formatCurrency(profile.summary?.orderTotal || 0)}</h3><p>Tổng mua</p></div></div></div>
+                      <div className="col-md-3"><div className="small-box bg-warning"><div className="inner"><h3>{profile.summary?.warrantyCount || 0}</h3><p>Bảo hành</p></div></div></div>
+                      <div className="col-md-3"><div className="small-box bg-primary"><div className="inner"><h3>{profile.summary?.openCrmCount || 0}</h3><p>CSKH mở</p></div></div></div>
                     </div>
 
                     <div className="card card-outline card-primary">
@@ -326,12 +477,12 @@ const CustomerList = () => {
                     <div className="row">
                       <div className="col-md-6">
                         <ProfileTable title="Đơn hàng gần đây" headers={['Mã', 'Trạng thái', 'Thanh toán', 'Tổng tiền', 'Ngày']}>
-                          {profile.orders.map((x) => <tr key={x.id}><td>{x.code}</td><td>{x.orderStatus}</td><td>{x.paymentStatus}</td><td className="text-right">{formatCurrency(x.grandTotal)}</td><td>{formatDate(x.placedAt || x.createdDate)}</td></tr>)}
+                          {(profile.orders || []).map((x) => <tr key={x.id}><td>{x.code}</td><td>{x.orderStatus}</td><td>{x.paymentStatus}</td><td className="text-right">{formatCurrency(x.grandTotal)}</td><td>{formatDate(x.placedAt || x.createdDate)}</td></tr>)}
                         </ProfileTable>
                       </div>
                       <div className="col-md-6">
                         <ProfileTable title="Timeline khách hàng" headers={['Ngày', 'Loại', 'Nội dung', 'Trạng thái']}>
-                          {profile.timeline.map((x, index) => <tr key={`${x.type}-${index}`}><td>{formatDate(x.date)}</td><td>{x.type}</td><td>{x.title}<div className="text-muted small">{x.note || ''}</div></td><td>{x.status}</td></tr>)}
+                          {(profile.timeline || []).map((x, index) => <tr key={`${x.type}-${index}`}><td>{formatDate(x.date)}</td><td>{x.type}</td><td>{x.title}<div className="text-muted small">{x.note || ''}</div></td><td>{x.status}</td></tr>)}
                         </ProfileTable>
                       </div>
                     </div>
@@ -339,12 +490,12 @@ const CustomerList = () => {
                     <div className="row">
                       <div className="col-md-6">
                         <ProfileTable title="Bảo hành" headers={['Mã', 'Sản phẩm', 'Trạng thái', 'Ngày nhận']}>
-                          {profile.warranties.map((x) => <tr key={x.id}><td>{x.code}</td><td>{x.productSnapshot}</td><td>{x.warrantyStatus}</td><td>{formatDate(x.receivedAt)}</td></tr>)}
+                          {(profile.warranties || []).map((x) => <tr key={x.id}><td>{x.code}</td><td>{x.productSnapshot}</td><td>{x.warrantyStatus}</td><td>{formatDate(x.receivedAt)}</td></tr>)}
                         </ProfileTable>
                       </div>
                       <div className="col-md-6">
                         <ProfileTable title="Sửa chữa" headers={['Mã', 'Xe', 'Lỗi', 'Trạng thái', 'Tổng phí']}>
-                          {profile.repairs.map((x) => <tr key={x.id}><td>{x.code}</td><td>{x.vehicleDescription}</td><td>{x.reportedIssue}</td><td>{x.repairStatus}</td><td className="text-right">{formatCurrency(x.total)}</td></tr>)}
+                          {(profile.repairs || []).map((x) => <tr key={x.id}><td>{x.code}</td><td>{x.vehicleDescription}</td><td>{x.reportedIssue}</td><td>{x.repairStatus}</td><td className="text-right">{formatCurrency(x.total)}</td></tr>)}
                         </ProfileTable>
                       </div>
                     </div>

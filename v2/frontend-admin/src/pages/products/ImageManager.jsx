@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import productService from '../../services/productService';
 import { useAuth } from '../../contexts/AuthContext';
 
+const imageFallback =
+  'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22200%22%20height%3D%22120%22%20viewBox%3D%220%200%20200%20120%22%3E%3Crect%20width%3D%22200%22%20height%3D%22120%22%20fill%3D%22%23f3f4f6%22/%3E%3Cpath%20d%3D%22M55%2085h90l-28-35-20%2024-13-16z%22%20fill%3D%22%239ca3af%22/%3E%3Ccircle%20cx%3D%2270%22%20cy%3D%2242%22%20r%3D%2210%22%20fill%3D%22%23d1d5db%22/%3E%3Ctext%20x%3D%22100%22%20y%3D%22105%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2Csans-serif%22%20font-size%3D%2212%22%20fill%3D%22%236b7280%22%3ENo%20Image%3C/text%3E%3C/svg%3E';
+
 const ImageManager = ({ productId, onClose }) => {
   const { isAdmin } = useAuth();
   const [images, setImages] = useState([]);
@@ -268,7 +271,7 @@ const ImageManager = ({ productId, onClose }) => {
                             alt={img.altText || ''}
                             className="card-img-top"
                             style={{ height: 120, objectFit: 'cover' }}
-                            onError={(e) => { e.target.src = 'https://via.placeholder.com/200x120?text=No+Image'; }}
+                            onError={(e) => { e.currentTarget.src = imageFallback; }}
                           />
                           <div className="card-body p-2">
                             {img.laAnhChinh && (

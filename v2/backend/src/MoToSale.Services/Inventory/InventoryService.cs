@@ -30,12 +30,12 @@ public class InventoryService : IInventoryService
     public async Task<InventoryListResult> GetInventoryAsync(InventorySearchRequest request)
     {
         var page = await _inv.SearchAsync(request);
-        var summary = await _inv.GetSummaryAsync(request.StoreId);
-        var lastSyncAt = await _inv.GetLastUpdatedAtAsync(request.StoreId);
+        var summary = await _inv.GetSummaryAsync();
+        var lastSyncAt = await _inv.GetLastUpdatedAtAsync();
         return new InventoryListResult(page.Items, page.Page, page.PageSize, page.TotalItems, page.TotalPages, summary, lastSyncAt);
     }
 
-    public Task<List<StockMovementDto>> GetMovementsAsync(int? skuId, int? storeId) => _inv.GetMovementsAsync(skuId, storeId);
+    public Task<List<StockMovementDto>> GetMovementsAsync(int? skuId) => _inv.GetMovementsAsync(skuId);
 
     public Task<PagingResponse<StockDocumentDto>> SearchDocumentsAsync(PagingRequest request, string? status, int? type) => _docs.SearchAsync(request, status, type);
 
@@ -49,10 +49,7 @@ public class InventoryService : IInventoryService
         }
 
         if (r.Type == (int)StockDocumentType.Transfer)
-        {
-            if (!r.ToStoreId.HasValue) throw new InventoryException("Phiếu chuyển kho cần cửa hàng nhận.");
-            if (r.ToStoreId == r.StoreId) throw new InventoryException("Cửa hàng nhận phải khác cửa hàng xuất.");
-        }
+            throw new InventoryException("Hệ thống chỉ có một kho, không còn nghiệp vụ chuyển kho.");
 
         if (r.Type == (int)StockDocumentType.Receipt && (string.IsNullOrWhiteSpace(r.Reason) || !ReceiptReasons.TryGetValue(r.Reason, out _)))
         {
@@ -65,8 +62,6 @@ public class InventoryService : IInventoryService
             Code = $"PK{r.Type}{now:yyyyMMddHHmmss}",
             Type = r.Type,
             DocStatus = StockDocumentStatus.Draft,
-            StoreId = r.StoreId,
-            ToStoreId = r.Type == (int)StockDocumentType.Transfer ? r.ToStoreId : null,
             Note = r.Type == (int)StockDocumentType.Receipt
                 ? $"Lý do nhập kho khác: {ReceiptReasons[r.Reason!]}. {r.Note}".Trim()
                 : r.Note,
@@ -97,22 +92,20 @@ public class InventoryService : IInventoryService
             switch ((StockDocumentType)doc.Type)
             {
                 case StockDocumentType.Receipt:
-                    await ApplyAsync(doc.StoreId, line.SkuId, StockMovementType.Receipt, +line.Qty, doc.Id, doc.Code, userId, now);
+                    await ApplyAsync(line.SkuId, StockMovementType.Receipt, +line.Qty, doc.Id, doc.Code, userId, now);
                     break;
                 case StockDocumentType.Issue:
-                    await ApplyAsync(doc.StoreId, line.SkuId, StockMovementType.Issue, -line.Qty, doc.Id, doc.Code, userId, now);
+                    await ApplyAsync(line.SkuId, StockMovementType.Issue, -line.Qty, doc.Id, doc.Code, userId, now);
                     break;
                 case StockDocumentType.Adjustment:
                 case StockDocumentType.Stocktake:
-                    var item = await _inv.GetOrCreateItemAsync(doc.StoreId, line.SkuId);
+                    var item = await _inv.GetOrCreateItemAsync(line.SkuId);
                     var delta = line.Qty - item.OnHand; // line.Qty = tồn thực tế đếm được
                     var type = delta >= 0 ? StockMovementType.AdjustIn : StockMovementType.AdjustOut;
-                    await ApplyAsync(doc.StoreId, line.SkuId, type, delta, doc.Id, doc.Code, userId, now);
+                    await ApplyAsync(line.SkuId, type, delta, doc.Id, doc.Code, userId, now);
                     break;
                 case StockDocumentType.Transfer:
-                    await ApplyAsync(doc.StoreId, line.SkuId, StockMovementType.TransferOut, -line.Qty, doc.Id, doc.Code, userId, now);
-                    await ApplyAsync(doc.ToStoreId!.Value, line.SkuId, StockMovementType.TransferIn, +line.Qty, doc.Id, doc.Code, userId, now);
-                    break;
+                    throw new InventoryException("Hệ thống chỉ có một kho, không còn nghiệp vụ chuyển kho.");
             }
         }
 
@@ -146,15 +139,15 @@ public class InventoryService : IInventoryService
         switch (r.TransactionType)
         {
             case "Import":
-                await ApplyAsync(r.StoreId, r.SkuId, StockMovementType.Receipt, +r.Qty, 0, r.Reason, userId, now);
+                await ApplyAsync(r.SkuId, StockMovementType.Receipt, +r.Qty, 0, r.Reason, userId, now);
                 break;
             case "Export":
-                await ApplyAsync(r.StoreId, r.SkuId, StockMovementType.Issue, -r.Qty, 0, r.Reason, userId, now);
+                await ApplyAsync(r.SkuId, StockMovementType.Issue, -r.Qty, 0, r.Reason, userId, now);
                 break;
             case "Adjust":
-                var item = await _inv.GetOrCreateItemAsync(r.StoreId, r.SkuId);
+                var item = await _inv.GetOrCreateItemAsync(r.SkuId);
                 var delta = r.Qty - item.OnHand; // r.Qty = tồn thực tế
-                await ApplyAsync(r.StoreId, r.SkuId, delta >= 0 ? StockMovementType.AdjustIn : StockMovementType.AdjustOut, delta, 0, r.Reason, userId, now);
+                await ApplyAsync(r.SkuId, delta >= 0 ? StockMovementType.AdjustIn : StockMovementType.AdjustOut, delta, 0, r.Reason, userId, now);
                 break;
             default:
                 throw new InventoryException("Loại điều chỉnh không hợp lệ.");
@@ -164,10 +157,9 @@ public class InventoryService : IInventoryService
 
     public async Task UpdateThresholdAsync(UpdateThresholdRequest r)
     {
-        if (r.StoreId <= 0) throw new InventoryException("Cửa hàng/kho là bắt buộc.");
         if (r.SkuId <= 0) throw new InventoryException("SKU là bắt buộc.");
         if (r.ReorderPoint < 0) throw new InventoryException("Ngưỡng phải >= 0.");
-        var item = await _inv.GetOrCreateItemAsync(r.StoreId, r.SkuId);
+        var item = await _inv.GetOrCreateItemAsync(r.SkuId);
         item.ReorderPoint = r.ReorderPoint;
         item.UpdatedDate = DateTime.UtcNow;
         await _inv.SaveChangesAsync();
@@ -177,20 +169,20 @@ public class InventoryService : IInventoryService
 
     public Task<int> SyncAsync() => _inv.SyncFromLedgerAsync();
 
-    public async Task<List<InventoryItemDto>> ExportAsync(int? storeId)
+    public async Task<List<InventoryItemDto>> ExportAsync()
     {
-        var page = await _inv.SearchAsync(new InventorySearchRequest { StoreId = storeId, Page = 1, PageSize = 100000 });
+        var page = await _inv.SearchAsync(new InventorySearchRequest { Page = 1, PageSize = 100000 });
         return page.Items.ToList();
     }
 
     /// <summary>Áp một biến động vào InventoryItem + ghi sổ cái. KHÔNG tự SaveChanges (gộp 1 lần ở caller).</summary>
-    private async Task ApplyAsync(int storeId, int skuId, StockMovementType type, int qtyDelta, int docId, string reason, int? userId, DateTime now)
+    private async Task ApplyAsync(int skuId, StockMovementType type, int qtyDelta, int docId, string reason, int? userId, DateTime now)
     {
-        var item = await _inv.GetOrCreateItemAsync(storeId, skuId);
+        var item = await _inv.GetOrCreateItemAsync(skuId);
         var balanceAfter = item.OnHand + qtyDelta;
         if (balanceAfter < 0)
         {
-            throw new InventoryException($"Tồn kho không đủ tại cửa hàng #{storeId} cho SKU #{skuId}.");
+            throw new InventoryException($"Tồn kho không đủ cho SKU #{skuId}.");
         }
 
         item.OnHand = balanceAfter;
@@ -198,7 +190,6 @@ public class InventoryService : IInventoryService
 
         _inv.AddMovement(new StockMovement
         {
-            StoreId = storeId,
             SkuId = skuId,
             Type = (int)type,
             QtyDelta = qtyDelta,

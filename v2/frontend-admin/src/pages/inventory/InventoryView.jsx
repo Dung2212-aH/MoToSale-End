@@ -32,7 +32,6 @@ const STOCK_MOVEMENT_TYPES = {
 };
 
 const getId = (item) => item.skuId ?? item.maSanPham ?? item.MaSanPham;
-const getStoreId = (item) => item.storeId ?? item.maCuaHang ?? item.MaCuaHang;
 const getVariantId = (item) => item.skuId ?? item.maBienSanPham ?? item.MaBienSanPham ?? null;
 const getProductCode = (item) => item.skuCode ?? item.maSanPhamKinhDoanh ?? item.MaSanPhamKinhDoanh ?? item.maSP ?? '';
 const getSku = (item) => item.skuCode ?? item.sku ?? item.SKU ?? '';
@@ -201,7 +200,6 @@ const InventoryView = () => {
     setSaving(true);
     try {
       await inventoryService.updateThreshold({
-        storeId: getStoreId(selectedItem),
         skuId: getVariantId(selectedItem),
         reorderPoint: value,
       });
@@ -245,7 +243,6 @@ const InventoryView = () => {
     setSaving(true);
     try {
       await inventoryService.adjustStock({
-        storeId: getStoreId(selectedItem),
         skuId: getVariantId(selectedItem),
         transactionType: adjustForm.loaiGiaoDich,
         qty: quantity,
@@ -450,7 +447,7 @@ const InventoryView = () => {
             </div>
             <div className="card-body">
               <form onSubmit={handleSearch} className="row mb-3">
-                <div className="col-md-4 mb-2">
+                <div className="col-lg-3 col-md-6 mb-2">
                   <div className="input-group">
                     <input
                       type="text"
@@ -466,7 +463,7 @@ const InventoryView = () => {
                     </div>
                   </div>
                 </div>
-                <div className="col-md-2 mb-2">
+                <div className="col-lg-2 col-md-6 mb-2">
                   <select className="form-control" value={stockStatus} onChange={(e) => { setStockStatus(e.target.value); setPage(1); }}>
                     <option value="">-- Trạng thái tồn --</option>
                     <option value="InStock">Còn hàng</option>
@@ -474,22 +471,22 @@ const InventoryView = () => {
                     <option value="OutOfStock">Hết hàng</option>
                   </select>
                 </div>
-                <div className="col-md-2 mb-2">
+                <div className="col-lg-2 col-md-6 mb-2">
                   <select className="form-control" value={sortBy} onChange={(e) => { setSortBy(e.target.value); setPage(1); }}>
                     <option value="name">Sắp xếp theo tên</option>
                     <option value="available">Tồn khả dụng</option>
-                    <option value="actualStock">Tồn thực tế</option>
+                    <option value="onHand">Tồn thực tế</option>
                     <option value="reserved">Đang giữ</option>
                     <option value="updated">Ngày cập nhật</option>
                   </select>
                 </div>
-                <div className="col-md-2 mb-2">
+                <div className="col-lg-1 col-md-6 mb-2">
                   <select className="form-control" value={sortDirection} onChange={(e) => { setSortDirection(e.target.value); setPage(1); }}>
                     <option value="asc">Tăng dần</option>
                     <option value="desc">Giảm dần</option>
                   </select>
                 </div>
-                <div className="col-md-2 mb-2">
+                <div className="col-lg-2 col-md-6 mb-2">
                   <button type="button" className="btn btn-outline-secondary btn-block" onClick={handleResetFilters}>
                     <i className="fas fa-times"></i> Xóa lọc
                   </button>
@@ -687,8 +684,8 @@ const InventoryView = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {holds.map((hold) => (
-                          <tr key={hold.maGiuCho ?? hold.MaGiuCho}>
+                        {holds.map((hold, index) => (
+                          <tr key={hold.maGiuCho ?? hold.MaGiuCho ?? hold.id ?? hold.Id ?? `${hold.orderId ?? hold.OrderId ?? 'order'}-${hold.skuId ?? hold.SkuId ?? 'sku'}-${index}`}>
                             <td className="table-col-code">{hold.maDonHangKinhDoanh ?? hold.MaDonHangKinhDoanh ?? hold.maDonHang ?? hold.MaDonHang}</td>
                             <td className="table-col-number">{hold.soLuong ?? hold.SoLuong}</td>
                             <td className="table-col-status">{hold.trangThai ?? hold.TrangThai}</td>

@@ -14,7 +14,6 @@ public interface ICatalogService
     Task<List<CategoryDto>> GetCategoriesAsync();
     Task<List<BrandDto>> GetBrandsAsync();
     Task<List<VehicleModelDto>> GetVehicleModelsAsync(int? brandId);
-    Task<List<StoreDto>> GetStoresAsync();
     Task<List<SkuLookupDto>> GetSkusAsync();
 
     // Hãng xe
@@ -37,6 +36,7 @@ public interface ICatalogService
     Task<List<ManufacturerDto>> GetManufacturersAsync();
     Task<int> CreateManufacturerAsync(SaveManufacturerRequest request);
     Task UpdateManufacturerAsync(int id, SaveManufacturerRequest request);
+    Task SetManufacturerLogoAsync(int id, string url);
     Task DeleteManufacturerAsync(int id);
 
     // Tương thích phụ tùng

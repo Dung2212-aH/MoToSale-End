@@ -64,6 +64,9 @@ const ReportsPage = () => {
   const totalOrders = data.orders.length;
   const revenueOrderCount = data.stats.revenueOrderCount || 0;
   const avgOrderValue = revenueOrderCount > 0 ? totalRevenue / revenueOrderCount : 0;
+  const cogs = data.stats.cogs || 0;
+  const grossProfit = data.stats.grossProfit || 0;
+  const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 
   const handleExportExcel = async () => {
     try {
@@ -108,6 +111,9 @@ const ReportsPage = () => {
               { label: 'Tổng đơn hàng', value: totalOrders },
               { label: 'Số đơn có doanh thu', value: revenueOrderCount },
               { label: 'Giá trị đơn trung bình', value: formatCurrency(avgOrderValue) },
+              { label: 'Giá vốn ước tính', value: formatCurrency(cogs) },
+              { label: 'Lãi gộp ước tính', value: formatCurrency(grossProfit) },
+              { label: 'Biên lợi nhuận gộp', value: `${grossMargin.toFixed(1)}%` },
             ],
           },
           {
@@ -134,6 +140,8 @@ const ReportsPage = () => {
               { header: 'Tên sản phẩm', key: 'name', width: 36 },
               { header: 'Số lượng bán', key: 'sold', type: 'number', width: 16 },
               { header: 'Doanh thu', key: 'revenue', type: 'currency', width: 18 },
+              { header: 'Giá vốn', key: 'cost', type: 'currency', width: 18 },
+              { header: 'Lãi gộp', key: 'profit', type: 'currency', width: 18 },
             ],
             rows: data.topProducts.map((product, index) => ({ index: index + 1, ...product })),
           },
@@ -204,7 +212,6 @@ const ReportsPage = () => {
           {
             name: 'CanhBaoTonKho',
             columns: [
-              { header: 'Kho', key: 'storeName', width: 24 },
               { header: 'SKU', key: 'skuCode', width: 18 },
               { header: 'Sản phẩm', key: 'productName', width: 34 },
               { header: 'Tồn thực', key: 'onHand', type: 'number', width: 12 },
@@ -325,6 +332,33 @@ const ReportsPage = () => {
                     </div>
                   </div>
                 </div>
+                <div className="col-lg-4 col-md-6">
+                  <div className="info-box">
+                    <span className="info-box-icon bg-secondary"><i className="fas fa-coins"></i></span>
+                    <div className="info-box-content">
+                      <span className="info-box-text">Giá vốn ước tính</span>
+                      <span className="info-box-number">{formatCurrency(cogs)}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="col-lg-4 col-md-6">
+                  <div className="info-box">
+                    <span className="info-box-icon bg-primary"><i className="fas fa-hand-holding-usd"></i></span>
+                    <div className="info-box-content">
+                      <span className="info-box-text">Lãi gộp ước tính</span>
+                      <span className="info-box-number">{formatCurrency(grossProfit)}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="col-lg-4 col-md-6">
+                  <div className="info-box">
+                    <span className="info-box-icon bg-danger"><i className="fas fa-percentage"></i></span>
+                    <div className="info-box-content">
+                      <span className="info-box-text">Biên lợi nhuận gộp</span>
+                      <span className="info-box-number">{grossMargin.toFixed(1)}%</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Revenue Chart */}
@@ -403,12 +437,14 @@ const ReportsPage = () => {
                         <th className="table-col-text">Sản phẩm</th>
                         <th className="table-col-number">Số lượng bán</th>
                         <th className="table-col-money">Doanh thu ước tính</th>
+                        <th className="table-col-money">Giá vốn ước tính</th>
+                        <th className="table-col-money">Lãi gộp ước tính</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.topProducts.length === 0 ? (
                         <tr>
-                          <td colSpan="4" className="text-center text-muted py-4">
+                          <td colSpan="6" className="text-center text-muted py-4">
                             Không có dữ liệu.
                           </td>
                         </tr>
@@ -419,6 +455,8 @@ const ReportsPage = () => {
                             <td className="table-col-text">{product.name}</td>
                             <td className="table-col-number">{product.sold}</td>
                             <td className="table-col-money">{formatCurrency(product.revenue)}</td>
+                            <td className="table-col-money">{formatCurrency(product.cost || 0)}</td>
+                            <td className={`table-col-money ${(product.profit || 0) < 0 ? 'text-danger' : 'text-success'}`}>{formatCurrency(product.profit || 0)}</td>
                           </tr>
                         ))
                       )}
@@ -450,8 +488,8 @@ const ReportsPage = () => {
                 </ReportTable>
               </>}
 
-              {activeTab === 'inventory' && <ReportTable title="Cảnh báo tồn kho" description="Danh sách SKU hết hàng hoặc sắp hết hàng theo ngưỡng cảnh báo." headers={['Kho', 'SKU', 'Sản phẩm', 'Tồn thực', 'Đang giữ', 'Khả dụng', 'Ngưỡng', 'Cảnh báo']}>
-                {(data.inventoryWarnings || []).map((row) => <tr key={`${row.storeId}-${row.skuId}`}><td>{row.storeName}</td><td>{row.skuCode}</td><td>{row.productName}</td><td className="text-right">{row.onHand}</td><td className="text-right">{row.reserved}</td><td className="text-right">{row.available}</td><td className="text-right">{row.reorderPoint}</td><td className="text-center"><span className={`badge badge-${row.available <= 0 ? 'danger' : 'warning'}`}>{row.warningStatus}</span></td></tr>)}
+              {activeTab === 'inventory' && <ReportTable title="Cảnh báo tồn kho" description="Danh sách SKU hết hàng hoặc sắp hết hàng theo ngưỡng cảnh báo." headers={['SKU', 'Sản phẩm', 'Tồn thực', 'Đang giữ', 'Khả dụng', 'Ngưỡng', 'Cảnh báo']}>
+                {(data.inventoryWarnings || []).map((row) => <tr key={row.skuId}><td>{row.skuCode}</td><td>{row.productName}</td><td className="text-right">{row.onHand}</td><td className="text-right">{row.reserved}</td><td className="text-right">{row.available}</td><td className="text-right">{row.reorderPoint}</td><td className="text-center"><span className={`badge badge-${row.available <= 0 ? 'danger' : 'warning'}`}>{row.warningStatus}</span></td></tr>)}
               </ReportTable>}
             </>
           )}

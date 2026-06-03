@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import productService from '../../services/productService';
 import categoryService from '../../services/categoryService';
 import brandService from '../../services/brandService';
+import manufacturerService from '../../services/manufacturerService';
 import { PRODUCT_STATUS } from '../../utils/constants';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { createDateStamp, exportWorkbook } from '../../utils/exportExcel';
@@ -29,6 +30,7 @@ const PAGE_CONFIG = {
     codeHeader: 'Mã xe',
     showBrand: true,
     showVariants: true,
+    showManufacturer: false,
     rootNames: ['xe máy', 'xe may'],
   },
   PhuTung: {
@@ -43,6 +45,7 @@ const PAGE_CONFIG = {
     codeHeader: 'Mã phụ tùng',
     showBrand: false,
     showVariants: false,
+    showManufacturer: true,
     rootNames: ['phụ tùng', 'phu tung', 'phụ kiện', 'phu kien'],
   },
 };
@@ -75,6 +78,7 @@ const ProductList = ({ productType = 'XeMay' }) => {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
+  const [manufacturers, setManufacturers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -175,9 +179,10 @@ const ProductList = ({ productType = 'XeMay' }) => {
 
   const fetchFilters = async () => {
     try {
-      const [catRes, brandRes] = await Promise.allSettled([
+      const [catRes, brandRes, manuRes] = await Promise.allSettled([
         categoryService.getAll(),
         brandService.getAll(),
+        manufacturerService.getAll(),
       ]);
       if (catRes.status === 'fulfilled') {
         const data = catRes.value.data;
@@ -186,6 +191,10 @@ const ProductList = ({ productType = 'XeMay' }) => {
       if (brandRes.status === 'fulfilled') {
         const data = brandRes.value.data;
         setBrands(Array.isArray(data) ? data : data.items || data.data || []);
+      }
+      if (manuRes.status === 'fulfilled') {
+        const data = manuRes.value.data;
+        setManufacturers(Array.isArray(data) ? data : data.items || data.data || []);
       }
     } catch (err) {
       console.error('Lỗi tải bộ lọc:', err);
@@ -258,6 +267,9 @@ const ProductList = ({ productType = 'XeMay' }) => {
       const rows = allProducts.map((product) => {
         const category = categories.find((item) => String(getCategoryId(item)) === String(product.maDanhMuc ?? product.categoryId));
         const brand = brands.find((item) => String(item.maHangXe || item.id) === String(product.maHangXe ?? product.brandId));
+        const manufacturerName = product.tenHangSanXuat
+          || manufacturers.find((item) => String(item.id) === String(product.maHangSanXuat ?? product.manufacturerId))?.ten
+          || '';
         const statusKey = product.trangThaiSanPham || product.trangThai || product.status;
         const status = PRODUCT_STATUS[statusKey] || { label: statusKey || '' };
         return {
@@ -265,6 +277,7 @@ const ProductList = ({ productType = 'XeMay' }) => {
           name: product.tenSanPham || product.name,
           category: category?.tenDanhMuc || category?.name || '',
           brand: brand?.tenHang || brand?.name || '',
+          manufacturer: manufacturerName,
           listPrice: product.giaGoc ?? product.listPrice ?? 0,
           salePrice: getSalePrice(product),
           stock: product.soLuongTon ?? product.stock ?? 0,
@@ -279,7 +292,8 @@ const ProductList = ({ productType = 'XeMay' }) => {
             { header: 'Mã sản phẩm', key: 'code', width: 18 },
             { header: 'Tên sản phẩm', key: 'name', width: 32 },
             { header: 'Danh mục', key: 'category', width: 24 },
-            { header: 'Hãng xe', key: 'brand', width: 20 },
+            ...(config.showBrand ? [{ header: 'Hãng xe', key: 'brand', width: 20 }] : []),
+            ...(config.showManufacturer ? [{ header: 'Hãng SX', key: 'manufacturer', width: 20 }] : []),
             { header: 'Giá niêm yết', key: 'listPrice', type: 'currency', width: 16 },
             { header: 'Giá khuyến mại', key: 'salePrice', type: 'currency', width: 16 },
             { header: 'Tồn kho', key: 'stock', type: 'number', width: 12 },
@@ -460,6 +474,7 @@ const ProductList = ({ productType = 'XeMay' }) => {
                           <th className="table-col-text">{config.nameHeader}</th>
                           <th className="table-col-text">Danh mục</th>
                           {config.showBrand && <th className="table-col-text">Hãng xe</th>}
+                          {config.showManufacturer && <th className="table-col-text">Hãng SX</th>}
                           <th className="table-col-money">Giá gốc</th>
                           <th className="table-col-money">Giá KM</th>
                           <th className="table-col-number">Tồn kho</th>
@@ -473,12 +488,16 @@ const ProductList = ({ productType = 'XeMay' }) => {
                           const status = PRODUCT_STATUS[statusKey] || { label: statusKey || 'N/A', color: 'secondary' };
                           const category = categories.find((item) => String(getCategoryId(item)) === String(product.maDanhMuc ?? product.categoryId));
                           const brand = brands.find((item) => String(item.maHangXe || item.id) === String(product.maHangXe ?? product.brandId));
+                          const manufacturerName = product.tenHangSanXuat
+                            || manufacturers.find((item) => String(item.id) === String(product.maHangSanXuat ?? product.manufacturerId))?.ten
+                            || '';
                           return (
                             <tr key={getProductId(product)}>
                               <td className="table-col-code">{product.maSanPhamKinhDoanh || product.maSP || product.sku || product.id}</td>
                               <td className="table-col-text">{product.tenSanPham || product.name}</td>
                               <td className="table-col-text">{category?.tenDanhMuc || category?.name || ''}</td>
                               {config.showBrand && <td className="table-col-text">{brand?.tenHang || brand?.name || ''}</td>}
+                              {config.showManufacturer && <td className="table-col-text">{manufacturerName}</td>}
                               <td className="table-col-money">{formatCurrency(product.giaGoc ?? product.basePrice ?? 0)}</td>
                               <td className="table-col-money">{formatSalePrice(product)}</td>
                               <td className="table-col-number">{product.soLuongTon ?? product.stock ?? 0}</td>
@@ -548,6 +567,7 @@ const ProductList = ({ productType = 'XeMay' }) => {
           product={editProduct}
           categories={categories}
           brands={brands}
+          manufacturers={manufacturers}
           fixedProductType={productType}
         />
       )}

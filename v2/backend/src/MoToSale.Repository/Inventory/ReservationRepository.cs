@@ -18,7 +18,7 @@ public class ReservationRepository : Repository<Reservation>, IReservationReposi
                join o in Context.Orders.AsNoTracking() on r.OrderId equals o.Id into orders
                from o in orders.DefaultIfEmpty()
                orderby r.ExpiresAt
-               select new HoldDto(r.Id, r.OrderId, o != null ? o.Code : null, r.SkuId, s.SkuCode, p.Name, r.StoreId, r.Qty, r.ReservationStatus, r.ExpiresAt))
+               select new HoldDto(r.Id, r.OrderId, o != null ? o.Code : null, r.SkuId, s.SkuCode, p.Name, r.Qty, r.ReservationStatus, r.ExpiresAt))
               .ToListAsync();
 
     public async Task<int> GetActiveQtyAsync(int skuId) =>

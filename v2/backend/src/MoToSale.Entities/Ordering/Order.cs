@@ -47,7 +47,6 @@ public class OrderLine : BaseEntity
 public class Allocation : BaseEntity
 {
     public int OrderLineId { get; set; }
-    public int StoreId { get; set; }
     public int Qty { get; set; }
     public string AllocationStatus { get; set; } = Common.AllocationStatus.Planned;
 

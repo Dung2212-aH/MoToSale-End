@@ -16,6 +16,7 @@ public record AddressRequest(string RecipientName, string Phone, string Line, st
 
 public record CustomerDto(int Id, string FullName, string Email, string? PhoneNumber, int Status, string? CareNote, DateTime CreatedDate);
 public record CareNoteRequest(string? CareNote);
+public record CustomerUpsertRequest(string FullName, string? Email, string? PhoneNumber, int Status, string? CareNote);
 
 public record CreateUserRequest(string FullName, string Email, string? PhoneNumber, string Password, string Role);
 public record AdminUpdateUserRequest(string FullName, string? PhoneNumber, string Role, int Status);

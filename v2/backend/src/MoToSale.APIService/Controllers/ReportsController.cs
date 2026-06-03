@@ -53,6 +53,9 @@ public class ReportsController : ControllerBase
             .ToList();
 
         var revenue = revenueOrders.Sum(o => o.GrandTotal);
+        var costMap = await BuildAvgCostMapAsync();
+        var cogs = revenueOrders.SelectMany(o => o.Lines).Sum(l => costMap.GetValueOrDefault(l.SkuId) * l.Qty);
+        var grossProfit = revenue - cogs;
         var recentOrders = allOrders
             .OrderByDescending(o => o.PlacedAt ?? o.CreatedDate)
             .Take(5)
@@ -65,10 +68,10 @@ public class ReportsController : ControllerBase
             .ToList();
 
         return new ReportResponse(
-            new ReportStatsDto(products.Count, rangeOrders.Count, revenue, revenueOrders.Count, usersTotal),
+            new ReportStatsDto(products.Count, rangeOrders.Count, revenue, revenueOrders.Count, usersTotal, cogs, grossProfit),
             BuildRevenueSeries(revenueOrders, start, end),
             BuildOrderStatusSeries(rangeOrders),
-            BuildTopProducts(revenueOrders, topLimit),
+            BuildTopProducts(revenueOrders, topLimit, costMap),
             recentOrders,
             rangeOrderDtos,
             await BuildDashboardOperationsAsync(allOrders),
@@ -129,15 +132,39 @@ public class ReportsController : ControllerBase
         _ => "Khác",
     };
 
-    private static List<TopProductDto> BuildTopProducts(IEnumerable<Entities.Ordering.Order> revenueOrders, int limit) =>
+    private static List<TopProductDto> BuildTopProducts(IEnumerable<Entities.Ordering.Order> revenueOrders, int limit, IReadOnlyDictionary<int, decimal> costMap) =>
         revenueOrders
             .SelectMany(o => o.Lines)
             .GroupBy(l => new { l.SkuId, l.ProductNameSnapshot })
-            .Select(g => new TopProductDto(g.Key.SkuId, g.Key.ProductNameSnapshot, g.Sum(l => l.Qty), g.Sum(l => l.LineTotal)))
+            .Select(g =>
+            {
+                var revenue = g.Sum(l => l.LineTotal);
+                var cost = costMap.GetValueOrDefault(g.Key.SkuId) * g.Sum(l => l.Qty);
+                return new TopProductDto(g.Key.SkuId, g.Key.ProductNameSnapshot, g.Sum(l => l.Qty), revenue, cost, revenue - cost);
+            })
             .OrderByDescending(x => x.Sold)
             .ThenByDescending(x => x.Revenue)
             .Take(limit)
             .ToList();
+
+    /// <summary>Giá vốn bình quân theo SKU = tổng (Qty*UnitCost) / tổng Qty từ phiếu nhập; thiếu thì lấy theo đơn mua.</summary>
+    private async Task<Dictionary<int, decimal>> BuildAvgCostMapAsync()
+    {
+        var fromReceipts = await _db.GoodsReceiptLines.AsNoTracking()
+            .GroupBy(x => x.SkuId)
+            .Select(g => new { SkuId = g.Key, Qty = g.Sum(x => x.Qty), Cost = g.Sum(x => x.UnitCost * x.Qty) })
+            .ToListAsync();
+        var map = fromReceipts.Where(x => x.Qty > 0).ToDictionary(x => x.SkuId, x => x.Cost / x.Qty);
+
+        var fromPurchases = await _db.PurchaseOrderLines.AsNoTracking()
+            .GroupBy(x => x.SkuId)
+            .Select(g => new { SkuId = g.Key, Qty = g.Sum(x => x.OrderedQty), Cost = g.Sum(x => x.UnitCost * x.OrderedQty) })
+            .ToListAsync();
+        foreach (var row in fromPurchases.Where(x => x.Qty > 0 && !map.ContainsKey(x.SkuId)))
+            map[row.SkuId] = row.Cost / row.Qty;
+
+        return map;
+    }
 
     private async Task<DashboardOperationsDto> BuildDashboardOperationsAsync(List<Entities.Ordering.Order> orders)
     {
@@ -178,11 +205,10 @@ public class ReportsController : ControllerBase
         await (from i in _db.InventoryItems.AsNoTracking()
                join s in _db.Skus.AsNoTracking() on i.SkuId equals s.Id
                join p in _db.Products.AsNoTracking() on s.ProductId equals p.Id
-               join st in _db.Stores.AsNoTracking() on i.StoreId equals st.Id
                let available = i.OnHand - i.Reserved
                where available <= 0 || (available > 0 && available <= i.ReorderPoint)
                orderby available, p.Name
-               select new InventoryWarningDto(i.StoreId, st.Name, i.SkuId, s.SkuCode, p.Name, i.OnHand, i.Reserved, available, i.ReorderPoint, available <= 0 ? "Hết hàng" : "Sắp hết hàng"))
+               select new InventoryWarningDto(i.SkuId, s.SkuCode, p.Name, i.OnHand, i.Reserved, available, i.ReorderPoint, available <= 0 ? "Hết hàng" : "Sắp hết hàng"))
             .Take(limit)
             .ToListAsync();
 
@@ -273,13 +299,13 @@ public record ReportResponse(
     IReadOnlyList<ReceivableReportDto> ReceivableReports,
     IReadOnlyList<CrmTaskDto> CrmTasks);
 
-public record ReportStatsDto(int ProductCount, int OrderCount, decimal MonthRevenue, int RevenueOrderCount, int UserCount);
+public record ReportStatsDto(int ProductCount, int OrderCount, decimal MonthRevenue, int RevenueOrderCount, int UserCount, decimal Cogs, decimal GrossProfit);
 public record RevenuePointDto(string Key, string Label, decimal Value);
 public record OrderStatusPointDto(string Label, int Value);
-public record TopProductDto(int Id, string Name, int Sold, decimal Revenue);
+public record TopProductDto(int Id, string Name, int Sold, decimal Revenue, decimal Cost, decimal Profit);
 public record RecentOrderDto(int Id, string Code, int UserId, string? CustomerName, decimal GrandTotal, string OrderStatus, string PaymentStatus, string FulfillmentStatus, DateTime CreatedAt);
 public record DashboardOperationsDto(decimal TodayRevenue, decimal MonthRevenue, decimal PaidTotal, decimal RefundedTotal, decimal CustomerReceivable, decimal SupplierPayable, int PendingOrders, int ShippingOrders, int PendingPurchases, int OpenRepairs, int OpenWarranties, int OpenCrmTasks, int OutOfStock, int LowStock);
-public record InventoryWarningDto(int StoreId, string StoreName, int SkuId, string SkuCode, string ProductName, int OnHand, int Reserved, int Available, int ReorderPoint, string WarningStatus);
+public record InventoryWarningDto(int SkuId, string SkuCode, string ProductName, int OnHand, int Reserved, int Available, int ReorderPoint, string WarningStatus);
 public record PurchaseReportDto(int Id, string Code, string SupplierName, string Status, decimal TotalAmount, decimal PaidAmount, decimal Outstanding, DateTime CreatedDate);
 public record CashReportDto(int Id, string Code, string TransactionType, string Category, decimal Amount, string Method, string? ReferenceType, int? ReferenceId, DateTime OccurredAt, string? Note);
 public record ServiceReportDto(IReadOnlyList<RepairReportDto> Repairs, IReadOnlyList<WarrantyReportDto> Warranties);

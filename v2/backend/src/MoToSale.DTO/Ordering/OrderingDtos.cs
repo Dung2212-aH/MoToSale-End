@@ -15,7 +15,7 @@ public record CheckoutRequest(
     string? VoucherCode = null);
 
 public record OrderLineDto(int Id, int SkuId, string ProductName, string SkuCode, decimal UnitPrice, int Qty, decimal LineTotal, IEnumerable<AllocationDto> Allocations);
-public record AllocationDto(int Id, int StoreId, string StoreName, int Qty, string Status);
+public record AllocationDto(int Id, int Qty, string Status);
 public record OrderHistoryDto(int Id, string EventType, string? OldValue, string NewValue, string? Note, int? ActorUserId, DateTime CreatedAt);
 public record OrderPaymentDto(int Id, string Code, string PaymentType, decimal Amount, string Method, string Status, string? TransactionRef, DateTime? PaidAt);
 public record OrderLineSummaryDto(int SkuId, string ProductName, string SkuCode, decimal UnitPrice, int Qty, decimal LineTotal);
@@ -42,14 +42,26 @@ public class OrderSearchRequest : PagingRequest
 }
 
 // ===== Allocation (admin phân phối) =====
-public record AllocateLineRequest(int OrderLineId, int StoreId, int Qty);
+public record AllocateLineRequest(int OrderLineId, int Qty);
 public record AllocateRequest(List<AllocateLineRequest> Allocations);
-public record AllocationSuggestionItem(int OrderLineId, int SkuId, string ProductName, int Qty, IEnumerable<StoreStockDto> AvailableStores);
-public record StoreStockDto(int StoreId, string StoreName, int Available);
+public record AllocationSuggestionItem(int OrderLineId, int SkuId, string ProductName, int Qty, int Available);
 
 public record UpdateOrderStatusRequest(string ToStatus, string? Note);
 public record UpdateFulfillmentStatusRequest(string ToStatus, string? Note);
 public record CancelOrderRequest(string? Reason);
+
+// Sửa đơn: thông tin giao/khách + ghi chú (luôn cho sửa khi đơn chưa hoàn tất/hủy);
+// Lines chỉ áp dụng khi đơn đang Chờ thanh toán (chưa thu tiền, chưa xuất kho).
+public record UpdateOrderRequest(
+    string? ShippingRecipient, string? ShippingPhone, string? ShippingEmail, string? ShippingAddress,
+    string? Note, List<PosOrderLineRequest>? Lines = null);
+
+// ===== Bán tại quầy (POS) =====
+public record PosOrderLineRequest(int SkuId, int Qty, decimal? UnitPrice = null);
+public record PosOrderRequest(
+    int? CustomerId, string? CustomerName, string? CustomerPhone, string? Note,
+    string OrderType, decimal DepositAmount, string? VoucherCode,
+    string PaymentMethod, decimal PaidAmount, List<PosOrderLineRequest> Lines);
 
 // ===== Voucher =====
 public record VoucherDto(

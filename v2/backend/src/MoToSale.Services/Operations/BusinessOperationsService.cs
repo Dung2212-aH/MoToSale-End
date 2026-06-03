@@ -16,12 +16,11 @@ public class BusinessOperationsService : IBusinessOperationsService
     {
         var delivered = await _db.Orders.AsNoTracking().Where(x => x.OrderStatus == OrderStatus.Delivered || x.OrderStatus == OrderStatus.Completed)
             .OrderByDescending(x => x.Id).Select(x => new { x.Id, x.Code, x.UserId, x.GrandTotal, lines = x.Lines.Select(l => new { l.Id, l.SkuId, l.ProductNameSnapshot, l.SkuCodeSnapshot, l.Qty, l.UnitPrice }) }).ToListAsync();
-        var users = await _db.Users.AsNoTracking().OrderBy(x => x.FullName).Select(x => new { x.Id, x.FullName, x.Email }).ToListAsync();
+        var users = await _db.Users.AsNoTracking().OrderBy(x => x.FullName).Select(x => new { x.Id, x.FullName, x.Email, x.PhoneNumber }).ToListAsync();
         var staffIds = await _db.UserRoles.AsNoTracking().Where(x => x.Role.Code == "Staff").Select(x => x.UserId).Distinct().ToListAsync();
         var customerIds = await _db.UserRoles.AsNoTracking().Where(x => x.Role.Code == "Customer").Select(x => x.UserId).Distinct().ToListAsync();
         return new
         {
-            stores = await _db.Stores.AsNoTracking().OrderBy(x => x.Name).Select(x => new { x.Id, x.Code, x.Name }).ToListAsync(),
             skus = await _db.Skus.AsNoTracking().OrderBy(x => x.SkuCode).Select(x => new { x.Id, x.SkuCode, x.VariantName, productName = x.Product.Name }).ToListAsync(),
             suppliers = await _db.Suppliers.AsNoTracking().Where(x => x.Status == 1).OrderBy(x => x.Name).Select(x => new { x.Id, x.Code, x.Name }).ToListAsync(),
             customers = users.Where(x => customerIds.Contains(x.Id)),
@@ -46,19 +45,18 @@ public class BusinessOperationsService : IBusinessOperationsService
     }
 
     public async Task<object> GetPurchaseOrdersAsync() => new { items = await _db.PurchaseOrders.AsNoTracking().Include(x => x.Supplier).Include(x => x.Lines).OrderByDescending(x => x.Id)
-        .Select(x => new { x.Id, x.Code, supplierName = x.Supplier.Name, x.StoreId, storeName = _db.Stores.Where(s => s.Id == x.StoreId).Select(s => s.Name).FirstOrDefault(), x.PurchaseStatus, x.TotalAmount, x.PaidAmount, outstanding = x.TotalAmount - x.PaidAmount, x.Note, x.CreatedDate,
+        .Select(x => new { x.Id, x.Code, supplierName = x.Supplier.Name, x.PurchaseStatus, x.TotalAmount, x.PaidAmount, outstanding = x.TotalAmount - x.PaidAmount, x.Note, x.CreatedDate,
             lines = x.Lines.Select(l => new { l.Id, l.SkuId, skuCode = _db.Skus.Where(s => s.Id == l.SkuId).Select(s => s.SkuCode).FirstOrDefault(), productName = _db.Skus.Where(s => s.Id == l.SkuId).Select(s => s.Product.Name).FirstOrDefault(), l.OrderedQty, l.ReceivedQty, l.UnitCost }) }).ToListAsync() };
 
     public async Task<int> CreatePurchaseOrderAsync(CreatePurchaseOrderRequest r, int? userId)
     {
         if (!await _db.Suppliers.AnyAsync(x => x.Id == r.SupplierId && x.Status == 1)) throw new BusinessOperationsException("Nhà cung cấp không hợp lệ.");
-        if (!await _db.Stores.AnyAsync(x => x.Id == r.StoreId)) throw new BusinessOperationsException("Kho nhận không hợp lệ.");
         if (r.Lines is null || r.Lines.Count == 0 || r.Lines.Any(x => x.Qty <= 0 || x.UnitCost < 0)) throw new BusinessOperationsException("Đơn mua phải có dòng hàng hợp lệ.");
         if (r.Lines.Select(x => x.SkuId).Distinct().Count() != r.Lines.Count) throw new BusinessOperationsException("Một SKU chỉ được thêm một lần trong đơn mua.");
         var skuIds = r.Lines.Select(x => x.SkuId).Distinct().ToList();
         if (await _db.Skus.CountAsync(x => skuIds.Contains(x.Id)) != skuIds.Count) throw new BusinessOperationsException("Đơn mua có SKU không tồn tại.");
         var now = DateTime.UtcNow;
-        var row = new PurchaseOrder { Code = $"PO{now:yyyyMMddHHmmssfff}", SupplierId = r.SupplierId, StoreId = r.StoreId, Note = r.Note, CreatedBy = userId, CreatedDate = now,
+        var row = new PurchaseOrder { Code = $"PO{now:yyyyMMddHHmmssfff}", SupplierId = r.SupplierId, Note = r.Note, CreatedBy = userId, CreatedDate = now,
             Lines = r.Lines.Select(x => new PurchaseOrderLine { SkuId = x.SkuId, OrderedQty = x.Qty, UnitCost = x.UnitCost, CreatedDate = now }).ToList() };
         row.TotalAmount = row.Lines.Sum(x => x.OrderedQty * x.UnitCost);
         _db.PurchaseOrders.Add(row); await _db.SaveChangesAsync(); return row.Id;
@@ -85,17 +83,17 @@ public class BusinessOperationsService : IBusinessOperationsService
         if (row.PurchaseStatus is not ("Approved" or "PartiallyReceived")) throw new BusinessOperationsException("Đơn mua chưa sẵn sàng nhận hàng.");
         if (r.Lines is null || r.Lines.Count == 0) throw new BusinessOperationsException("Phiếu nhận phải có hàng.");
         var now = DateTime.UtcNow;
-        var receipt = new GoodsReceipt { Code = $"GR{now:yyyyMMddHHmmssfff}", PurchaseOrderId = id, StoreId = row.StoreId, Note = r.Note, ReceivedBy = userId, ReceivedAt = now, CreatedDate = now };
+        var receipt = new GoodsReceipt { Code = $"GR{now:yyyyMMddHHmmssfff}", PurchaseOrderId = id, Note = r.Note, ReceivedBy = userId, ReceivedAt = now, CreatedDate = now };
         foreach (var item in r.Lines)
         {
             var line = row.Lines.FirstOrDefault(x => x.Id == item.PurchaseOrderLineId) ?? throw new BusinessOperationsException("Dòng đơn mua không hợp lệ.");
             if (item.Qty <= 0 || line.ReceivedQty + item.Qty > line.OrderedQty) throw new BusinessOperationsException("Số lượng nhận vượt số lượng còn lại.");
             line.ReceivedQty += item.Qty;
             receipt.Lines.Add(new GoodsReceiptLine { PurchaseOrderLineId = line.Id, SkuId = line.SkuId, Qty = item.Qty, UnitCost = line.UnitCost, CreatedDate = now });
-            var inv = await _db.InventoryItems.FirstOrDefaultAsync(x => x.StoreId == row.StoreId && x.SkuId == line.SkuId);
-            if (inv is null) { inv = new InventoryItem { StoreId = row.StoreId, SkuId = line.SkuId, CreatedDate = now }; _db.InventoryItems.Add(inv); }
+            var inv = await _db.InventoryItems.FirstOrDefaultAsync(x => x.SkuId == line.SkuId);
+            if (inv is null) { inv = new InventoryItem { SkuId = line.SkuId, CreatedDate = now }; _db.InventoryItems.Add(inv); }
             inv.OnHand += item.Qty; inv.UpdatedDate = now;
-            _db.StockMovements.Add(new StockMovement { StoreId = row.StoreId, SkuId = line.SkuId, Type = (int)StockMovementType.Receipt, QtyDelta = item.Qty, BalanceAfter = inv.OnHand, RefType = "GoodsReceipt", Reason = receipt.Code, PerformedBy = userId, OccurredAt = now, CreatedDate = now });
+            _db.StockMovements.Add(new StockMovement { SkuId = line.SkuId, Type = (int)StockMovementType.Receipt, QtyDelta = item.Qty, BalanceAfter = inv.OnHand, RefType = "GoodsReceipt", Reason = receipt.Code, PerformedBy = userId, OccurredAt = now, CreatedDate = now });
         }
         _db.GoodsReceipts.Add(receipt);
         row.PurchaseStatus = row.Lines.All(x => x.ReceivedQty == x.OrderedQty) ? "Received" : "PartiallyReceived"; row.UpdatedDate = now;
@@ -133,9 +131,8 @@ public class BusinessOperationsService : IBusinessOperationsService
     {
         var rows = await (from x in _db.RepairOrders.AsNoTracking()
             join c in _db.Users.AsNoTracking() on x.CustomerId equals c.Id
-            join s in _db.Stores.AsNoTracking() on x.StoreId equals s.Id
             orderby x.Id descending
-            select new { x.Id, x.Code, x.CustomerId, customerName = c.FullName, x.StoreId, storeName = s.Name, x.AssignedStaffId, x.VehicleDescription, x.ReportedIssue, x.RepairStatus, x.LaborCost, x.PartsCost, total = x.LaborCost + x.PartsCost, x.ReceivedAt, x.CompletedAt, x.Note }).ToListAsync();
+            select new { x.Id, x.Code, x.CustomerId, customerName = c.FullName, x.AssignedStaffId, x.VehicleDescription, x.ReportedIssue, x.RepairStatus, x.LaborCost, x.PartsCost, total = x.LaborCost + x.PartsCost, x.ReceivedAt, x.CompletedAt, x.Note }).ToListAsync();
         var ids = rows.Select(x => x.Id).ToList();
         var lines = await _db.RepairOrderLines.AsNoTracking().Where(x => ids.Contains(x.RepairOrderId)).ToListAsync();
         var histories = await _db.RepairStatusHistories.AsNoTracking().Where(x => ids.Contains(x.RepairOrderId)).OrderBy(x => x.ChangedAt).ToListAsync();
@@ -143,7 +140,7 @@ public class BusinessOperationsService : IBusinessOperationsService
         {
             items = rows.Select(x => new
             {
-                x.Id, x.Code, x.CustomerId, x.customerName, x.StoreId, x.storeName, x.AssignedStaffId, x.VehicleDescription, x.ReportedIssue, x.RepairStatus, x.LaborCost, x.PartsCost, x.total, x.ReceivedAt, x.CompletedAt, x.Note,
+                x.Id, x.Code, x.CustomerId, x.customerName, x.AssignedStaffId, x.VehicleDescription, x.ReportedIssue, x.RepairStatus, x.LaborCost, x.PartsCost, x.total, x.ReceivedAt, x.CompletedAt, x.Note,
                 lines = lines.Where(line => line.RepairOrderId == x.Id).Select(line => new { line.Id, line.SkuId, line.Description, line.Qty, line.UnitPrice }),
                 histories = histories.Where(history => history.RepairOrderId == x.Id).Select(history => new { history.Id, history.FromStatus, history.ToStatus, history.Note, history.ChangedAt }),
             })
@@ -153,10 +150,9 @@ public class BusinessOperationsService : IBusinessOperationsService
     {
         if (string.IsNullOrWhiteSpace(r.VehicleDescription) || string.IsNullOrWhiteSpace(r.ReportedIssue)) throw new BusinessOperationsException("Thông tin xe và mô tả lỗi là bắt buộc.");
         if (!await HasRoleAsync(r.CustomerId, "Customer")) throw new BusinessOperationsException("Khách hàng không hợp lệ.");
-        if (!await _db.Stores.AnyAsync(x => x.Id == r.StoreId)) throw new BusinessOperationsException("Cửa hàng không hợp lệ.");
         if (r.AssignedStaffId.HasValue && !await HasRoleAsync(r.AssignedStaffId.Value, "Staff")) throw new BusinessOperationsException("Nhân viên phụ trách không hợp lệ.");
         if (r.LaborCost < 0 || (r.Lines ?? []).Any(x => x.Qty <= 0 || x.UnitPrice < 0)) throw new BusinessOperationsException("Chi phí hoặc phụ tùng sửa chữa không hợp lệ.");
-        var now = DateTime.UtcNow; var row = new RepairOrder { Code = $"RO{now:yyyyMMddHHmmssfff}", CustomerId = r.CustomerId, StoreId = r.StoreId, AssignedStaffId = r.AssignedStaffId, WarrantyId = r.WarrantyId, VehicleDescription = r.VehicleDescription, ReportedIssue = r.ReportedIssue, LaborCost = r.LaborCost, Note = r.Note, ReceivedAt = now, CreatedDate = now, Lines = (r.Lines ?? []).Select(x => new RepairOrderLine { SkuId = x.SkuId, Description = x.Description, Qty = x.Qty, UnitPrice = x.UnitPrice, CreatedDate = now }).ToList() };
+        var now = DateTime.UtcNow; var row = new RepairOrder { Code = $"RO{now:yyyyMMddHHmmssfff}", CustomerId = r.CustomerId, AssignedStaffId = r.AssignedStaffId, WarrantyId = r.WarrantyId, VehicleDescription = r.VehicleDescription, ReportedIssue = r.ReportedIssue, LaborCost = r.LaborCost, Note = r.Note, ReceivedAt = now, CreatedDate = now, Lines = (r.Lines ?? []).Select(x => new RepairOrderLine { SkuId = x.SkuId, Description = x.Description, Qty = x.Qty, UnitPrice = x.UnitPrice, CreatedDate = now }).ToList() };
         row.PartsCost = row.Lines.Sum(x => x.Qty * x.UnitPrice); _db.RepairOrders.Add(row); await _db.SaveChangesAsync();
         _db.RepairStatusHistories.Add(new RepairStatusHistory { RepairOrderId = row.Id, ToStatus = row.RepairStatus, Note = "Tiếp nhận phiếu sửa chữa", ChangedAt = now, CreatedDate = now }); await _db.SaveChangesAsync(); return row.Id;
     }
@@ -178,10 +174,10 @@ public class BusinessOperationsService : IBusinessOperationsService
             var lines = await _db.RepairOrderLines.Where(x => x.RepairOrderId == id && x.SkuId.HasValue).ToListAsync();
             foreach (var line in lines)
             {
-                var inv = await _db.InventoryItems.FirstOrDefaultAsync(x => x.StoreId == row.StoreId && x.SkuId == line.SkuId) ?? throw new BusinessOperationsException("Không có tồn kho cho phụ tùng sửa chữa.");
+                var inv = await _db.InventoryItems.FirstOrDefaultAsync(x => x.SkuId == line.SkuId) ?? throw new BusinessOperationsException("Không có tồn kho cho phụ tùng sửa chữa.");
                 if (inv.OnHand - inv.Reserved < line.Qty) throw new BusinessOperationsException("Không đủ tồn kho phụ tùng sửa chữa.");
                 inv.OnHand -= line.Qty; inv.UpdatedDate = now;
-                _db.StockMovements.Add(new StockMovement { StoreId = row.StoreId, SkuId = line.SkuId!.Value, Type = (int)StockMovementType.Issue, QtyDelta = -line.Qty, BalanceAfter = inv.OnHand, RefType = "RepairOrder", RefId = row.Id, Reason = row.Code, OccurredAt = now, CreatedDate = now });
+                _db.StockMovements.Add(new StockMovement { SkuId = line.SkuId!.Value, Type = (int)StockMovementType.Issue, QtyDelta = -line.Qty, BalanceAfter = inv.OnHand, RefType = "RepairOrder", RefId = row.Id, Reason = row.Code, OccurredAt = now, CreatedDate = now });
             }
             row.PartsIssued = true;
         }
@@ -230,15 +226,13 @@ public class BusinessOperationsService : IBusinessOperationsService
 
     public async Task<object> GetAttendanceAsync() => new { items = await (from x in _db.StaffAttendances.AsNoTracking()
         join u in _db.Users.AsNoTracking() on x.StaffUserId equals u.Id
-        join s in _db.Stores.AsNoTracking() on x.StoreId equals s.Id
         orderby x.CheckInAt descending
-        select new { x.Id, x.StaffUserId, staffName = u.FullName, x.StoreId, storeName = s.Name, x.CheckInAt, x.CheckOutAt, x.Note }).ToListAsync() };
+        select new { x.Id, x.StaffUserId, staffName = u.FullName, x.CheckInAt, x.CheckOutAt, x.Note }).ToListAsync() };
     public async Task<int> CheckInAsync(AttendanceRequest r)
     {
         if (!await HasRoleAsync(r.StaffUserId, "Staff")) throw new BusinessOperationsException("Nhân viên không hợp lệ.");
-        if (!await _db.Stores.AnyAsync(x => x.Id == r.StoreId)) throw new BusinessOperationsException("Cửa hàng không hợp lệ.");
         if (await _db.StaffAttendances.AnyAsync(x => x.StaffUserId == r.StaffUserId && x.CheckOutAt == null)) throw new BusinessOperationsException("Nhân viên đang có ca chưa check-out.");
-        var row = new StaffAttendance { StaffUserId = r.StaffUserId, StoreId = r.StoreId, Note = r.Note, CheckInAt = DateTime.UtcNow, CreatedDate = DateTime.UtcNow }; _db.StaffAttendances.Add(row); await _db.SaveChangesAsync(); return row.Id;
+        var row = new StaffAttendance { StaffUserId = r.StaffUserId, Note = r.Note, CheckInAt = DateTime.UtcNow, CreatedDate = DateTime.UtcNow }; _db.StaffAttendances.Add(row); await _db.SaveChangesAsync(); return row.Id;
     }
     public async Task CheckOutAsync(int id)
     {

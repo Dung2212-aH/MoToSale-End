@@ -5,7 +5,6 @@ namespace MoToSale.Entities.Inventory;
 /// <summary>Sổ cái tồn kho — bất biến (append-only). OnHand luôn = tổng QtyDelta ảnh hưởng.</summary>
 public class StockMovement : BaseEntity
 {
-    public int StoreId { get; set; }
     public int SkuId { get; set; }
     public int Type { get; set; }            // StockMovementType
     public int QtyDelta { get; set; }

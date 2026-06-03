@@ -37,7 +37,7 @@ const Sidebar = ({ collapsed = false }) => {
               </Link>
             </li>
 
-            <li className="nav-header">DANH MỤC & KINH DOANH</li>
+            <li className="nav-header">KINH DOANH & SẢN PHẨM</li>
             <li className="nav-item">
               <Link to="/motorcycles" className={`nav-link ${isActiveGroup('/motorcycles')}`}>
                 <i className="nav-icon fas fa-motorcycle"></i>
@@ -62,12 +62,24 @@ const Sidebar = ({ collapsed = false }) => {
                 <p>Hãng xe & Dòng xe</p>
               </Link>
             </li>
+            <li className="nav-item">
+              <Link to="/manufacturers" className={`nav-link ${isActiveGroup('/manufacturers')}`}>
+                <i className="nav-icon fas fa-trademark"></i>
+                <p>Hãng sản xuất phụ tùng</p>
+              </Link>
+            </li>
 
-            <li className="nav-header">ĐƠN HÀNG</li>
+            <li className="nav-header">BÁN HÀNG</li>
             <li className="nav-item">
               <Link to="/orders" className={`nav-link ${isActiveGroup('/orders')}`}>
                 <i className="nav-icon fas fa-shopping-cart"></i>
                 <p>Đơn hàng</p>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link to="/pos" className={`nav-link ${isActive('/pos')}`}>
+                <i className="nav-icon fas fa-cash-register"></i>
+                <p>Bán tại quầy (POS)</p>
               </Link>
             </li>
             <li className="nav-item">
@@ -76,6 +88,14 @@ const Sidebar = ({ collapsed = false }) => {
                 <p>Voucher</p>
               </Link>
             </li>
+            <li className="nav-item">
+              <Link to="/customers" className={`nav-link ${isActiveGroup('/customers')}`}>
+                <i className="nav-icon fas fa-user-tag"></i>
+                <p>Khách hàng</p>
+              </Link>
+            </li>
+
+            <li className="nav-header">KHO & CUNG ỨNG</li>
             <li className="nav-item">
               <Link to="/inventory" className={`nav-link ${isActiveGroup('/inventory')}`}>
                 <i className="nav-icon fas fa-warehouse"></i>
@@ -89,85 +109,55 @@ const Sidebar = ({ collapsed = false }) => {
               </Link>
             </li>
             <li className="nav-item">
-              <Link to="/advanced-operations" className={`nav-link ${isActiveGroup('/advanced-operations')}`}>
-                <i className="nav-icon fas fa-store-alt"></i>
-                <p>Đổi trả, công nợ & phân ca</p>
+              <Link to="/supply" className={`nav-link ${isActiveGroup('/supply')}`}>
+                <i className="nav-icon fas fa-truck-loading"></i>
+                <p>Cung ứng & mua hàng</p>
               </Link>
             </li>
-            <li className="nav-item">
-              <Link to="/business-operations" className={`nav-link ${isActiveGroup('/business-operations')}`}>
-                <i className="nav-icon fas fa-cash-register"></i>
-                <p>Nghiệp vụ cửa hàng</p>
-              </Link>
-            </li>
-            {isAdmin() && (
-              <li className="nav-item">
-                <Link to="/operational-imports" className={`nav-link ${isActiveGroup('/operational-imports')}`}>
-                  <i className="nav-icon fas fa-file-import"></i>
-                  <p>Import dữ liệu</p>
-                </Link>
-              </li>
-            )}
 
-            <li className="nav-header">NGƯỜI DÙNG & NỘI DUNG</li>
-            {isAdmin() && (
-              <li className="nav-item">
-                <Link to="/users" className={`nav-link ${isActiveGroup('/users')}`}>
-                  <i className="nav-icon fas fa-users"></i>
-                  <p>Người dùng</p>
-                </Link>
-              </li>
-            )}
+            <li className="nav-header">HẬU MÃI & DỊCH VỤ</li>
             <li className="nav-item">
-              <Link to="/customers" className={`nav-link ${isActiveGroup('/customers')}`}>
-                <i className="nav-icon fas fa-user-tag"></i>
-                <p>Khách hàng</p>
+              <Link to="/returns" className={`nav-link ${isActiveGroup('/returns')}`}>
+                <i className="nav-icon fas fa-undo"></i>
+                <p>Đổi trả & hoàn tiền</p>
               </Link>
             </li>
             <li className="nav-item">
               <Link to="/warranties" className={`nav-link ${isActiveGroup('/warranties')}`}>
-                <i className="nav-icon fas fa-tools"></i>
+                <i className="nav-icon fas fa-shield-alt"></i>
                 <p>Bảo hành</p>
               </Link>
             </li>
             <li className="nav-item">
-              <Link to="/reviews" className={`nav-link ${isActiveGroup('/reviews')}`}>
-                <i className="nav-icon fas fa-star"></i>
-                <p>Đánh giá</p>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link to="/home-banners" className={`nav-link ${isActiveGroup('/home-banners')}`}>
-                <i className="nav-icon fas fa-images"></i>
-                <p>Banner trang chủ</p>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link to="/posts" className={`nav-link ${isActiveGroup('/posts')}`}>
-                <i className="nav-icon fas fa-newspaper"></i>
-                <p>Bài viết</p>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link to="/faq" className={`nav-link ${isActiveGroup('/faq')}`}>
-                <i className="nav-icon fas fa-question-circle"></i>
-                <p>FAQ</p>
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link to="/contacts" className={`nav-link ${isActiveGroup('/contacts')}`}>
-                <i className="nav-icon fas fa-envelope"></i>
-                <p>Liên hệ</p>
+              <Link to="/service-crm" className={`nav-link ${isActiveGroup('/service-crm')}`}>
+                <i className="nav-icon fas fa-tools"></i>
+                <p>Dịch vụ & CSKH</p>
               </Link>
             </li>
 
-            <li className="nav-header">BÁO CÁO</li>
+            <li className="nav-header">TÀI CHÍNH & HỆ THỐNG</li>
+            {isAdmin() && (
+              <li className="nav-item">
+                <Link to="/finance" className={`nav-link ${isActiveGroup('/finance')}`}>
+                  <i className="nav-icon fas fa-cash-register"></i>
+                  <p>Tài chính: thu chi & công nợ</p>
+                </Link>
+              </li>
+            )}
             <li className="nav-item">
               <Link to="/reports" className={`nav-link ${isActiveGroup('/reports')}`}>
                 <i className="nav-icon fas fa-chart-bar"></i>
                 <p>Báo cáo & Thống kê</p>
               </Link>
             </li>
+            {isAdmin() && (
+              <li className="nav-item">
+                <Link to="/users" className={`nav-link ${isActiveGroup('/users')}`}>
+                  <i className="nav-icon fas fa-users"></i>
+                  <p>Tài khoản hệ thống</p>
+                </Link>
+              </li>
+            )}
             {isAdmin() && (
               <li className="nav-item">
                 <Link to="/audit-logs" className={`nav-link ${isActiveGroup('/audit-logs')}`}>
@@ -182,6 +172,14 @@ const Sidebar = ({ collapsed = false }) => {
                 <p>Cấu hình vận hành</p>
               </Link>
             </li>
+            {isAdmin() && (
+              <li className="nav-item">
+                <Link to="/operational-imports" className={`nav-link ${isActiveGroup('/operational-imports')}`}>
+                  <i className="nav-icon fas fa-file-import"></i>
+                  <p>Import dữ liệu</p>
+                </Link>
+              </li>
+            )}
           </ul>
         </nav>
       </div>

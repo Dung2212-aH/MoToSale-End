@@ -1,22 +1,39 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import userService from '../../services/userService';
 import { useAuth } from '../../contexts/AuthContext';
-import { USER_STATUS, ROLES } from '../../utils/constants';
 import { formatDate } from '../../utils/formatDate';
 
-const emptyForm = {
-  hoTen: '',
-  email: '',
-  soDienThoai: '',
-  matKhau: '',
-  vaiTro: 'Staff',
-  trangThai: 'Active',
+const INTERNAL_ROLES = {
+  Admin: 'Quản trị viên',
+  Staff: 'Nhân viên',
 };
 
-const getPrimaryRole = (user) => user?.vaiTro || user?.role || user?.roles?.[0] || 'Customer';
-const getUserId = (user) => user?.id ?? user?.userId ?? user?.maNguoiDung ?? user?.sub;
+const ACCOUNT_STATUS = {
+  1: { label: 'Hoạt động', color: 'success' },
+  0: { label: 'Khóa', color: 'danger' },
+  '-1': { label: 'Đã xóa', color: 'secondary' },
+};
 
+const emptyForm = {
+  fullName: '',
+  email: '',
+  phoneNumber: '',
+  password: '',
+  role: 'Staff',
+  status: 1,
+};
+
+const getPrimaryRole = (user) => user?.role || user?.vaiTro || user?.roles?.[0] || 'Staff';
+const getUserId = (user) => user?.id ?? user?.userId ?? user?.maNguoiDung ?? user?.sub;
 const getApiMessage = (err, fallback) => err?.response?.data?.message || fallback;
+
+const normalizeStatus = (value) => {
+  if (value === 'Active') return 1;
+  if (value === 'Inactive') return 0;
+  if (value === 'Deleted' || value === 'Locked') return -1;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 1;
+};
 
 const UserList = () => {
   const { user: currentUser } = useAuth();
@@ -50,7 +67,7 @@ const UserList = () => {
     try {
       const params = { page, pageSize };
       if (search) params.search = search;
-      if (filterStatus) params.status = filterStatus;
+      if (filterStatus !== '') params.status = filterStatus;
       if (filterRole) params.role = filterRole;
 
       const res = await userService.getAll(params);
@@ -63,7 +80,7 @@ const UserList = () => {
         setTotalPages(data.totalPages || Math.ceil((data.totalItems || data.total || 0) / pageSize) || 1);
       }
     } catch (err) {
-      setError(getApiMessage(err, 'Không thể tải danh sách người dùng.'));
+      setError(getApiMessage(err, 'Không thể tải danh sách tài khoản hệ thống.'));
       console.error(err);
     } finally {
       setLoading(false);
@@ -89,48 +106,34 @@ const UserList = () => {
   const openEdit = (item) => {
     setEditItem(item);
     setForm({
-      hoTen: item.hoTen || item.fullName || '',
+      fullName: item.fullName || item.hoTen || '',
       email: item.email || '',
-      soDienThoai: item.soDienThoai || item.phone || '',
-      matKhau: '',
-      vaiTro: getPrimaryRole(item),
-      trangThai: item.trangThai || item.status || 'Active',
+      phoneNumber: item.phoneNumber || item.soDienThoai || item.phone || '',
+      password: '',
+      role: getPrimaryRole(item) === 'Admin' ? 'Admin' : 'Staff',
+      status: normalizeStatus(item.status ?? item.trangThai),
     });
     setShowModal(true);
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => ({ ...prev, [name]: name === 'status' ? normalizeStatus(value) : value }));
   };
 
-  const validateDangerousUserChange = () => {
-    if (!editItem && form.vaiTro === 'Admin') {
-      alert('Hệ thống chỉ nên có một tài khoản Admin. Hãy tạo Staff cho nhân sự vận hành.');
+  const validateChange = () => {
+    if (!editItem && form.role === 'Admin') {
+      alert('Hệ thống chỉ duy trì một tài khoản Admin. Tài khoản mới nên là Nhân viên.');
       return false;
     }
 
-    if (editItem && !editItemWasAdmin && form.vaiTro === 'Admin') {
-      alert('Không thể nâng user khác lên Admin. Hệ thống chỉ duy trì một tài khoản Admin.');
-      return false;
-    }
-
-    if (editItemIsSelf && form.vaiTro !== 'Admin') {
-      alert('Không thể gỡ quyền Admin của chính tài khoản đang đăng nhập.');
-      return false;
-    }
-
-    if (editItemIsSelf && form.trangThai !== 'Active') {
+    if (editItemIsSelf && form.status !== 1) {
       alert('Không thể khóa chính tài khoản đang đăng nhập.');
       return false;
     }
 
-    if (editItemWasAdmin && form.vaiTro !== 'Admin') {
-      return window.confirm('Bạn đang hạ quyền một tài khoản Admin. Hệ thống sẽ chặn nếu đây là Admin hoạt động cuối cùng.');
-    }
-
-    if (editItemWasAdmin && form.trangThai !== 'Active') {
-      return window.confirm('Bạn đang khóa một tài khoản Admin. Hệ thống sẽ chặn nếu đây là Admin hoạt động cuối cùng.');
+    if (editItemWasAdmin && form.status !== 1) {
+      return window.confirm('Bạn đang khóa tài khoản Admin. Hệ thống sẽ chặn nếu đây là Admin hoạt động cuối cùng. Tiếp tục?');
     }
 
     return true;
@@ -138,31 +141,34 @@ const UserList = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.hoTen.trim() || !form.email.trim()) {
+    if (!form.fullName.trim() || !form.email.trim()) {
       alert('Họ tên và Email là bắt buộc.');
       return;
     }
-    if (!editItem && !form.matKhau) {
-      alert('Mật khẩu là bắt buộc khi thêm mới.');
+    if (!editItem && !form.password) {
+      alert('Mật khẩu là bắt buộc khi thêm tài khoản nhân viên.');
       return;
     }
-    if (!validateDangerousUserChange()) return;
+    if (!validateChange()) return;
 
     setSaving(true);
     try {
-      const payload = { ...form };
-      if (editItem && !payload.matKhau) {
-        delete payload.matKhau;
-      }
+      const payload = {
+        ...form,
+        role: editItemWasAdmin ? 'Admin' : 'Staff',
+      };
+      if (editItem && !payload.password) delete payload.password;
+
       if (editItem) {
         await userService.update(editItem.id, payload);
       } else {
         await userService.create(payload);
       }
+
       setShowModal(false);
       fetchUsers();
     } catch (err) {
-      alert(getApiMessage(err, 'Lưu người dùng thất bại.'));
+      alert(getApiMessage(err, 'Lưu tài khoản thất bại.'));
       console.error(err);
     } finally {
       setSaving(false);
@@ -170,42 +176,36 @@ const UserList = () => {
   };
 
   const handleToggleStatus = async (item) => {
-    const active = (item.trangThai || item.status) === 'Active';
-    const nextStatus = active ? 'Inactive' : 'Active';
+    const active = normalizeStatus(item.status ?? item.trangThai) === 1;
+    const nextStatus = active ? 0 : 1;
     const action = active ? 'khóa' : 'kích hoạt';
-    const name = item.hoTen || item.fullName || item.email;
+    const name = item.fullName || item.hoTen || item.email;
 
     if (isCurrentUser(item)) {
       alert('Không thể khóa chính tài khoản đang đăng nhập.');
       return;
     }
 
-    if (isAdminUser(item) && active) {
-      const ok = window.confirm(`Bạn đang khóa tài khoản Admin "${name}". Hệ thống sẽ chặn nếu đây là Admin hoạt động cuối cùng. Tiếp tục?`);
-      if (!ok) return;
-    } else if (!window.confirm(`Bạn có chắc muốn ${action} người dùng "${name}"?`)) {
-      return;
-    }
+    if (!window.confirm(`Bạn có chắc muốn ${action} tài khoản "${name}"?`)) return;
 
     try {
-      await userService.updateStatus(item.id, { status: nextStatus, trangThai: nextStatus });
+      await userService.updateStatus(item.id, { status: nextStatus });
       fetchUsers();
     } catch (err) {
-      alert(getApiMessage(err, `${action[0].toUpperCase()}${action.slice(1)} người dùng thất bại.`));
+      alert(getApiMessage(err, `${action[0].toUpperCase()}${action.slice(1)} tài khoản thất bại.`));
       console.error(err);
     }
   };
 
   const getRoleBadge = (role) => {
-    const colors = { Admin: 'danger', Staff: 'warning', Customer: 'info' };
-    const label = ROLES[role] || role || 'Không rõ';
-    return <span className={`badge badge-${colors[role] || 'secondary'}`}>{label}</span>;
+    const color = role === 'Admin' ? 'danger' : 'warning';
+    return <span className={`badge badge-${color}`}>{INTERNAL_ROLES[role] || role || 'Không rõ'}</span>;
   };
 
   const getStatusBadge = (status) => {
-    const info = USER_STATUS[status];
-    if (info) return <span className={`badge badge-${info.color}`}>{info.label}</span>;
-    return <span className="badge badge-secondary">{status || 'Không rõ'}</span>;
+    const normalized = normalizeStatus(status);
+    const info = ACCOUNT_STATUS[normalized] || ACCOUNT_STATUS[1];
+    return <span className={`badge badge-${info.color}`}>{info.label}</span>;
   };
 
   return (
@@ -214,7 +214,7 @@ const UserList = () => {
         <div className="container-fluid">
           <div className="row mb-2">
             <div className="col-sm-6">
-              <h1 className="m-0">Quản lý Người dùng</h1>
+              <h1 className="m-0">Tài khoản hệ thống</h1>
             </div>
           </div>
         </div>
@@ -224,16 +224,16 @@ const UserList = () => {
         <div className="container-fluid">
           <div className="card">
             <div className="card-header">
-              <h3 className="card-title">Danh sách người dùng</h3>
+              <h3 className="card-title">Danh sách tài khoản nội bộ</h3>
               <div className="card-tools">
                 <button className="btn btn-primary btn-sm" onClick={openAdd}>
-                  <i className="fas fa-plus"></i> Thêm người dùng
+                  <i className="fas fa-plus"></i> Thêm nhân viên
                 </button>
               </div>
             </div>
             <div className="card-body">
               <div className="alert alert-info py-2">
-                Hệ thống chỉ duy trì một tài khoản Admin. Các tài khoản vận hành nên dùng vai trò Staff; Admin được hiển thị để kiểm toán.
+                Trang này chỉ quản lý tài khoản đăng nhập admin nội bộ. Khách mua hàng được quản lý ở trang Khách hàng.
               </div>
 
               <form className="row mb-3" onSubmit={handleSearch}>
@@ -253,9 +253,8 @@ const UserList = () => {
                     onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
                   >
                     <option value="">-- Tất cả trạng thái --</option>
-                    {Object.entries(USER_STATUS).map(([key, val]) => (
-                      <option key={key} value={key}>{val.label}</option>
-                    ))}
+                    <option value="1">Hoạt động</option>
+                    <option value="0">Khóa</option>
                   </select>
                 </div>
                 <div className="col-md-3 mb-2 mb-md-0">
@@ -265,9 +264,8 @@ const UserList = () => {
                     onChange={(e) => { setFilterRole(e.target.value); setPage(1); }}
                   >
                     <option value="">-- Tất cả vai trò --</option>
-                    {Object.entries(ROLES).map(([key, label]) => (
-                      <option key={key} value={key}>{label}</option>
-                    ))}
+                    <option value="Admin">Quản trị viên</option>
+                    <option value="Staff">Nhân viên</option>
                   </select>
                 </div>
                 <div className="col-md-2">
@@ -287,8 +285,8 @@ const UserList = () => {
                 </div>
               ) : users.length === 0 ? (
                 <div className="text-center py-4 text-muted">
-                  <i className="fas fa-users fa-2x mb-2"></i>
-                  <p>Chưa có người dùng nào.</p>
+                  <i className="fas fa-user-shield fa-2x mb-2"></i>
+                  <p>Chưa có tài khoản nội bộ phù hợp.</p>
                 </div>
               ) : (
                 <>
@@ -308,21 +306,21 @@ const UserList = () => {
                       <tbody>
                         {users.map((u) => {
                           const role = getPrimaryRole(u);
-                          const status = u.trangThai || u.status;
+                          const status = normalizeStatus(u.status ?? u.trangThai);
                           const isSelf = isCurrentUser(u);
-                          const active = status === 'Active';
+                          const active = status === 1;
 
                           return (
                             <tr key={u.id}>
                               <td className="table-col-text">
-                                {u.hoTen || u.fullName}
+                                {u.fullName || u.hoTen}
                                 {isSelf && <span className="badge badge-primary ml-2">Bạn</span>}
                               </td>
                               <td className="table-col-text">{u.email}</td>
-                              <td className="table-col-code">{u.soDienThoai || u.phone || '-'}</td>
+                              <td className="table-col-code">{u.phoneNumber || u.soDienThoai || u.phone || '-'}</td>
                               <td className="table-col-status">{getRoleBadge(role)}</td>
                               <td className="table-col-status">{getStatusBadge(status)}</td>
-                              <td className="table-col-date">{formatDate(u.ngayTao || u.createdAt)}</td>
+                              <td className="table-col-date">{formatDate(u.createdDate || u.createdAt || u.ngayTao)}</td>
                               <td className="table-col-actions">
                                 <button className="btn btn-xs btn-info mr-1" onClick={() => openEdit(u)} title="Sửa">
                                   <i className="fas fa-edit"></i>
@@ -372,7 +370,7 @@ const UserList = () => {
           <div className="modal-dialog" style={{ maxHeight: '90vh' }}>
             <div className="modal-content" style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
               <div className="modal-header">
-                <h5 className="modal-title">{editItem ? 'Sửa người dùng' : 'Thêm người dùng mới'}</h5>
+                <h5 className="modal-title">{editItem ? 'Sửa tài khoản hệ thống' : 'Thêm tài khoản nhân viên'}</h5>
                 <button type="button" className="close" onClick={() => setShowModal(false)}>
                   <span>&times;</span>
                 </button>
@@ -381,48 +379,34 @@ const UserList = () => {
                 <div className="modal-body" style={{ overflowY: 'auto', flex: 1 }}>
                   {editItemIsSelf && (
                     <div className="alert alert-warning py-2">
-                      Bạn có thể sửa thông tin cá nhân, nhưng không thể tự khóa hoặc tự hạ quyền Admin.
+                      Bạn có thể sửa thông tin cá nhân, nhưng không thể tự khóa tài khoản đang đăng nhập.
                     </div>
                   )}
                   <div className="form-group">
                     <label>Họ tên <span className="text-danger">*</span></label>
-                    <input type="text" className="form-control" name="hoTen" value={form.hoTen} onChange={handleChange} />
+                    <input type="text" className="form-control" name="fullName" value={form.fullName} onChange={handleChange} />
                   </div>
                   <div className="form-group">
                     <label>Email <span className="text-danger">*</span></label>
-                    <input type="email" className="form-control" name="email" value={form.email} onChange={handleChange} />
+                    <input type="email" className="form-control" name="email" value={form.email} onChange={handleChange} disabled={Boolean(editItem)} />
                   </div>
                   <div className="form-group">
                     <label>Số điện thoại</label>
-                    <input type="text" className="form-control" name="soDienThoai" value={form.soDienThoai} onChange={handleChange} />
+                    <input type="text" className="form-control" name="phoneNumber" value={form.phoneNumber} onChange={handleChange} />
                   </div>
-                  <div className="form-group">
-                    <label>Mật khẩu {!editItem && <span className="text-danger">*</span>}</label>
-                    <input
-                      type="password"
-                      className="form-control"
-                      name="matKhau"
-                      value={form.matKhau}
-                      onChange={handleChange}
-                      placeholder={editItem ? 'Để trống nếu không đổi' : ''}
-                    />
-                  </div>
+                  {!editItem && (
+                    <div className="form-group">
+                      <label>Mật khẩu <span className="text-danger">*</span></label>
+                      <input type="password" className="form-control" name="password" value={form.password} onChange={handleChange} />
+                    </div>
+                  )}
                   <div className="row">
                     <div className="col-md-6">
                       <div className="form-group">
                         <label>Vai trò</label>
-                        <select
-                          className="form-control"
-                          name="vaiTro"
-                          value={form.vaiTro}
-                          onChange={handleChange}
-                          disabled={editItemIsSelf}
-                        >
-                          {Object.entries(ROLES)
-                            .filter(([key]) => key !== 'Admin' || editItemWasAdmin)
-                            .map(([key, label]) => (
-                            <option key={key} value={key}>{label}</option>
-                          ))}
+                        <select className="form-control" name="role" value={form.role} onChange={handleChange} disabled>
+                          {editItemWasAdmin && <option value="Admin">Quản trị viên</option>}
+                          <option value="Staff">Nhân viên</option>
                         </select>
                       </div>
                     </div>
@@ -432,14 +416,13 @@ const UserList = () => {
                           <label>Trạng thái</label>
                           <select
                             className="form-control"
-                            name="trangThai"
-                            value={form.trangThai}
+                            name="status"
+                            value={form.status}
                             onChange={handleChange}
                             disabled={editItemIsSelf}
                           >
-                            {Object.entries(USER_STATUS).map(([key, val]) => (
-                              <option key={key} value={key}>{val.label}</option>
-                            ))}
+                            <option value="1">Hoạt động</option>
+                            <option value="0">Khóa</option>
                           </select>
                         </div>
                       </div>

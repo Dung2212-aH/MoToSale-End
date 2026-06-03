@@ -16,7 +16,7 @@ public class BusinessOperationsServiceTests
         var skuId = await f.SeedSellableSkuAsync(onHand: 3);
         var service = new BusinessOperationsService(f.Db);
         var supplierId = await service.SaveSupplierAsync(null, new SupplierRequest("SUP-1", "Supplier", null, null, null, null, null, null));
-        var purchaseId = await service.CreatePurchaseOrderAsync(new CreatePurchaseOrderRequest(supplierId, 40, "test",
+        var purchaseId = await service.CreatePurchaseOrderAsync(new CreatePurchaseOrderRequest(supplierId, "test",
             [new PurchaseLineRequest(skuId, 2, 50_000)]), 1);
         await service.ApprovePurchaseOrderAsync(purchaseId, 1);
         var lineId = await f.Db.PurchaseOrderLines.Where(x => x.PurchaseOrderId == purchaseId).Select(x => x.Id).SingleAsync();
@@ -25,7 +25,7 @@ public class BusinessOperationsServiceTests
             [new ReceivePurchaseLineRequest(lineId, 2)]), 1);
 
         Assert.Equal("Received", (await f.Db.PurchaseOrders.FindAsync(purchaseId))!.PurchaseStatus);
-        Assert.Equal(5, (await f.Db.InventoryItems.SingleAsync(x => x.StoreId == 40 && x.SkuId == skuId)).OnHand);
+        Assert.Equal(5, (await f.Db.InventoryItems.SingleAsync(x => x.SkuId == skuId)).OnHand);
         Assert.Single(f.Db.StockMovements.Where(x => x.RefType == "GoodsReceipt" && x.SkuId == skuId && x.QtyDelta == 2));
     }
 
@@ -37,7 +37,7 @@ public class BusinessOperationsServiceTests
         var skuId = await f.SeedSellableSkuAsync();
         var service = new BusinessOperationsService(f.Db);
         var supplierId = await service.SaveSupplierAsync(null, new SupplierRequest("SUP-2", "Supplier", null, null, null, null, null, null));
-        var purchaseId = await service.CreatePurchaseOrderAsync(new CreatePurchaseOrderRequest(supplierId, 40, null,
+        var purchaseId = await service.CreatePurchaseOrderAsync(new CreatePurchaseOrderRequest(supplierId, null,
             [new PurchaseLineRequest(skuId, 1, 10)]), 1);
         await service.ApprovePurchaseOrderAsync(purchaseId, 1);
         var lineId = await f.Db.PurchaseOrderLines.Where(x => x.PurchaseOrderId == purchaseId).Select(x => x.Id).SingleAsync();
@@ -55,7 +55,7 @@ public class BusinessOperationsServiceTests
 
         var interactionId = await service.CreateInteractionAsync(new CustomerInteractionRequest(2, 1, "Call", "Follow up", null, DateTime.UtcNow.AddDays(1)));
         await service.CompleteInteractionAsync(interactionId);
-        var attendanceId = await service.CheckInAsync(new AttendanceRequest(1, 40, "Morning"));
+        var attendanceId = await service.CheckInAsync(new AttendanceRequest(1, "Morning"));
         await service.CheckOutAsync(attendanceId);
 
         Assert.Equal("Completed", (await f.Db.CustomerInteractions.FindAsync(interactionId))!.InteractionStatus);
@@ -70,7 +70,7 @@ public class BusinessOperationsServiceTests
         var skuId = await f.SeedSellableSkuAsync();
         var service = new BusinessOperationsService(f.Db);
         var supplierId = await service.SaveSupplierAsync(null, new SupplierRequest("SUP-3", "Supplier", null, null, null, null, null, null));
-        var purchaseId = await service.CreatePurchaseOrderAsync(new CreatePurchaseOrderRequest(supplierId, 40, null, [new PurchaseLineRequest(skuId, 2, 50_000)]), 1);
+        var purchaseId = await service.CreatePurchaseOrderAsync(new CreatePurchaseOrderRequest(supplierId, null, [new PurchaseLineRequest(skuId, 2, 50_000)]), 1);
 
         await service.PayPurchaseOrderAsync(purchaseId, new PayPurchaseOrderRequest(40_000, "Cash", "First payment"), 1);
 
@@ -85,13 +85,13 @@ public class BusinessOperationsServiceTests
         await f.SeedCoreAsync();
         var skuId = await f.SeedSellableSkuAsync(onHand: 5);
         var service = new BusinessOperationsService(f.Db);
-        var repairId = await service.CreateRepairAsync(new CreateRepairOrderRequest(2, 40, 1, null, "Test bike", "Test issue", 10_000, null, [new RepairLineRequest(skuId, "Part", 2, 20_000)]));
+        var repairId = await service.CreateRepairAsync(new CreateRepairOrderRequest(2, 1, null, "Test bike", "Test issue", 10_000, null, [new RepairLineRequest(skuId, "Part", 2, 20_000)]));
 
         await service.UpdateRepairStatusAsync(repairId, new UpdateRepairStatusRequest("Inspecting", "Inspect"));
         await service.UpdateRepairStatusAsync(repairId, new UpdateRepairStatusRequest("Quoted", "Quote"));
         await service.UpdateRepairStatusAsync(repairId, new UpdateRepairStatusRequest("Repairing", "Start"));
 
-        Assert.Equal(3, (await f.Db.InventoryItems.SingleAsync(x => x.StoreId == 40 && x.SkuId == skuId)).OnHand);
+        Assert.Equal(3, (await f.Db.InventoryItems.SingleAsync(x => x.SkuId == skuId)).OnHand);
         Assert.True((await f.Db.RepairOrders.FindAsync(repairId))!.PartsIssued);
         Assert.Equal(4, await f.Db.RepairStatusHistories.CountAsync(x => x.RepairOrderId == repairId));
         Assert.Single(f.Db.StockMovements.Where(x => x.RefType == "RepairOrder" && x.RefId == repairId && x.QtyDelta == -2));

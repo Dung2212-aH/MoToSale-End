@@ -15,23 +15,17 @@ public class StockDocumentRepository : Repository<StockDocument>, IStockDocument
 
     public async Task<PagingResponse<StockDocumentDto>> SearchAsync(PagingRequest r, string? status, int? type)
     {
-        var query =
-            from d in Set.AsNoTracking()
-            join st in Context.Stores.AsNoTracking() on d.StoreId equals st.Id
-            join tst in Context.Stores.AsNoTracking() on d.ToStoreId equals tst.Id into toStores
-            from tst in toStores.DefaultIfEmpty()
-            select new { d, StoreName = st.Name, ToStoreName = tst != null ? tst.Name : null };
+        var query = Set.AsNoTracking().AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(status)) query = query.Where(x => x.d.DocStatus == status);
-        if (type.HasValue) query = query.Where(x => x.d.Type == type);
+        if (!string.IsNullOrWhiteSpace(status)) query = query.Where(x => x.DocStatus == status);
+        if (type.HasValue) query = query.Where(x => x.Type == type);
 
         var total = await query.CountAsync();
         var rows = await query
-            .OrderByDescending(x => x.d.Id)
+            .OrderByDescending(x => x.Id)
             .Skip((r.Page - 1) * r.PageSize).Take(r.PageSize)
             .Select(x => new StockDocumentDto(
-                x.d.Id, x.d.Code, x.d.Type, x.d.DocStatus, x.d.StoreId, x.StoreName,
-                x.d.ToStoreId, x.ToStoreName, x.d.Note, x.d.CreatedDate, x.d.ApprovedAt, x.d.Lines.Count))
+                x.Id, x.Code, x.Type, x.DocStatus, x.Note, x.CreatedDate, x.ApprovedAt, x.Lines.Count))
             .ToListAsync();
 
         return new PagingResponse<StockDocumentDto> { Items = rows, Page = r.Page, PageSize = r.PageSize, TotalItems = total };
@@ -39,15 +33,10 @@ public class StockDocumentRepository : Repository<StockDocument>, IStockDocument
 
     public async Task<StockDocumentDetail?> GetDetailAsync(int id)
     {
-        var header = await (
-            from d in Set.AsNoTracking()
-            join st in Context.Stores.AsNoTracking() on d.StoreId equals st.Id
-            join tst in Context.Stores.AsNoTracking() on d.ToStoreId equals tst.Id into toStores
-            from tst in toStores.DefaultIfEmpty()
-            where d.Id == id
-            select new StockDocumentDto(
-                d.Id, d.Code, d.Type, d.DocStatus, d.StoreId, st.Name,
-                d.ToStoreId, tst != null ? tst.Name : null, d.Note, d.CreatedDate, d.ApprovedAt, d.Lines.Count))
+        var header = await Set.AsNoTracking()
+            .Where(d => d.Id == id)
+            .Select(d => new StockDocumentDto(
+                d.Id, d.Code, d.Type, d.DocStatus, d.Note, d.CreatedDate, d.ApprovedAt, d.Lines.Count))
             .FirstOrDefaultAsync();
 
         if (header is null) return null;

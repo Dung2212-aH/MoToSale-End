@@ -20,9 +20,6 @@ public class CatalogLookupController : ControllerBase
     [HttpGet("models")]
     public async Task<IActionResult> Models([FromQuery] int? brandId) => Ok(new { items = await _catalog.GetVehicleModelsAsync(brandId) });
 
-    [HttpGet("stores")]
-    public async Task<IActionResult> Stores() => Ok(new { items = await _catalog.GetStoresAsync() });
-
     [HttpGet("skus")]
     public async Task<IActionResult> Skus() => Ok(new { items = await _catalog.GetSkusAsync() });
 }

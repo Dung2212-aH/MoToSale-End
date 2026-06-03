@@ -18,7 +18,6 @@ public class PurchaseOrder : BaseEntity
 {
     public string Code { get; set; } = string.Empty;
     public int SupplierId { get; set; }
-    public int StoreId { get; set; }
     public string PurchaseStatus { get; set; } = "Draft";
     public decimal TotalAmount { get; set; }
     public decimal PaidAmount { get; set; }
@@ -44,7 +43,6 @@ public class GoodsReceipt : BaseEntity
 {
     public string Code { get; set; } = string.Empty;
     public int PurchaseOrderId { get; set; }
-    public int StoreId { get; set; }
     public string? Note { get; set; }
     public int? ReceivedBy { get; set; }
     public DateTime ReceivedAt { get; set; }
@@ -79,7 +77,6 @@ public class RepairOrder : BaseEntity
 {
     public string Code { get; set; } = string.Empty;
     public int CustomerId { get; set; }
-    public int StoreId { get; set; }
     public int? AssignedStaffId { get; set; }
     public int? WarrantyId { get; set; }
     public string VehicleDescription { get; set; } = string.Empty;
@@ -128,7 +125,6 @@ public class RepairStatusHistory : BaseEntity
 public class StaffAttendance : BaseEntity
 {
     public int StaffUserId { get; set; }
-    public int StoreId { get; set; }
     public DateTime CheckInAt { get; set; }
     public DateTime? CheckOutAt { get; set; }
     public string? Note { get; set; }

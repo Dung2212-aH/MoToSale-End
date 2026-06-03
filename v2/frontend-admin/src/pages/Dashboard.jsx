@@ -142,7 +142,7 @@ const Dashboard = () => {
                 <StatCard
                   color="warning"
                   icon="fas fa-users"
-                  label="Người dùng"
+                  label="Tài khoản"
                   value={data.stats.userCount}
                   to="/users"
                 />
@@ -165,16 +165,16 @@ const Dashboard = () => {
 
               <div className="row">
                 <StatCard color="warning" icon="fas fa-exclamation-triangle" label="Sắp hết hàng" value={operations.lowStock} to="/inventory" />
-                <StatCard color="secondary" icon="fas fa-envelope" label="Liên hệ mới" value={operations.newContacts} to="/contacts" />
+                <StatCard color="secondary" icon="fas fa-truck-loading" label="Đơn mua đang xử lý" value={operations.pendingPurchases} to="/supply" />
                 <StatCard color="success" icon="fas fa-ticket-alt" label="Voucher sắp hết hạn" value={operations.expiringVouchers} to="/vouchers" />
                 <StatCard color="info" icon="fas fa-tools" label="Bảo hành đang xử lý" value={operations.activeWarranties} to="/warranties" />
               </div>
 
               <div className="row">
                 <StatCard color="success" icon="fas fa-calendar-day" label="Doanh thu hôm nay" value={formatCurrency(operations.todayRevenue || 0)} to="/reports" />
-                <StatCard color="danger" icon="fas fa-hand-holding-usd" label="Còn phải thu" value={formatCurrency(operations.customerReceivable || 0)} to="/advanced-operations" />
-                <StatCard color="warning" icon="fas fa-file-invoice-dollar" label="Cần trả NCC" value={formatCurrency(operations.supplierPayable || 0)} to="/business-operations" />
-                <StatCard color="primary" icon="fas fa-phone-volume" label="CSKH cần xử lý" value={operations.openCrmTasks || 0} to="/business-operations" />
+                <StatCard color="danger" icon="fas fa-hand-holding-usd" label="Còn phải thu" value={formatCurrency(operations.customerReceivable || 0)} to="/reports" />
+                <StatCard color="warning" icon="fas fa-file-invoice-dollar" label="Cần trả NCC" value={formatCurrency(operations.supplierPayable || 0)} to="/supply" />
+                <StatCard color="primary" icon="fas fa-phone-volume" label="CSKH cần xử lý" value={operations.openCrmTasks || 0} to="/service-crm" />
               </div>
 
               <div className="row">
@@ -310,19 +310,17 @@ const Dashboard = () => {
                           <tr>
                             <th>SKU</th>
                             <th>Sản phẩm</th>
-                            <th>Kho</th>
                             <th className="text-right">Khả dụng</th>
                             <th className="text-center">Cảnh báo</th>
                           </tr>
                         </thead>
                         <tbody>
                           {(data.inventoryWarnings || []).length === 0 ? (
-                            <tr><td colSpan="5" className="text-center text-muted py-4">Không có cảnh báo tồn kho.</td></tr>
+                            <tr><td colSpan="4" className="text-center text-muted py-4">Không có cảnh báo tồn kho.</td></tr>
                           ) : data.inventoryWarnings.map((item) => (
-                            <tr key={`${item.storeId}-${item.skuId}`}>
+                            <tr key={item.skuId}>
                               <td>{item.skuCode}</td>
                               <td>{item.productName}</td>
-                              <td>{item.storeName}</td>
                               <td className="text-right">{item.available}</td>
                               <td className="text-center"><span className={`badge badge-${item.available <= 0 ? 'danger' : 'warning'}`}>{item.warningStatus}</span></td>
                             </tr>
@@ -337,7 +335,7 @@ const Dashboard = () => {
                     <div className="card-header">
                       <h3 className="card-title">CSKH cần xử lý</h3>
                       <div className="card-tools">
-                        <Link to="/business-operations" className="btn btn-tool" title="Xem vận hành"><i className="fas fa-external-link-alt"></i></Link>
+                        <Link to="/service-crm" className="btn btn-tool" title="Xem CSKH"><i className="fas fa-external-link-alt"></i></Link>
                       </div>
                     </div>
                     <div className="card-body table-responsive p-0">

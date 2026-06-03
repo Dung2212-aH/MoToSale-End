@@ -51,7 +51,6 @@ public sealed class TestBackendFactory
         Db.Brands.Add(new Brand { Id = 20, Name = "Honda", Slug = "honda", CreatedDate = now });
         Db.VehicleModels.Add(new VehicleModel { Id = 21, BrandId = 20, Name = "Air Blade", Slug = "air-blade", CreatedDate = now });
         Db.Manufacturers.Add(new Manufacturer { Id = 30, Name = "Motul", CreatedDate = now });
-        Db.Stores.Add(new Store { Id = 40, Code = "MAIN", Name = "Main Store", Slug = "main-store", AddressLine = "Test address", Type = (int)StoreType.Showroom, IsDefault = true, CreatedDate = now });
         await Db.SaveChangesAsync();
     }
 
@@ -82,7 +81,7 @@ public sealed class TestBackendFactory
         await Db.SaveChangesAsync();
 
         var skuId = product.Skus.Single().Id;
-        Db.InventoryItems.Add(new InventoryItem { StoreId = 40, SkuId = skuId, OnHand = onHand, Reserved = 0, ReorderPoint = 1, CreatedDate = now });
+        Db.InventoryItems.Add(new InventoryItem { SkuId = skuId, OnHand = onHand, Reserved = 0, ReorderPoint = 1, CreatedDate = now });
         await Db.SaveChangesAsync();
         return skuId;
     }
@@ -92,7 +91,6 @@ public sealed class TestBackendFactory
         new Repository<Category>(Db),
         new Repository<Brand>(Db),
         new Repository<VehicleModel>(Db),
-        new Repository<Store>(Db),
         new SkuRepository(Db),
         new ProductImageRepository(Db),
         new Repository<PartCompatibility>(Db),
@@ -124,5 +122,6 @@ public sealed class TestBackendFactory
         VoucherService(),
         new VoucherRepository(Db),
         new Repository<User>(Db),
-        new PaymentRepository(Db));
+        new PaymentRepository(Db),
+        Db);
 }

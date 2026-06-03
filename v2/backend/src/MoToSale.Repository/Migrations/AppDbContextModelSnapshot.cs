@@ -179,6 +179,10 @@ namespace MoToSale.Repository.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("LogoUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(120)
@@ -546,87 +550,6 @@ namespace MoToSale.Repository.Migrations
                         {
                             t.HasCheckConstraint("CK_Skus_Prices", "[ListPrice] >= 0 AND ([SalePrice] IS NULL OR ([SalePrice] >= 0 AND [SalePrice] <= [ListPrice]))");
                         });
-                });
-
-            modelBuilder.Entity("MoToSale.Entities.Catalog.Store", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AddressLine")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("nvarchar(40)");
-
-                    b.Property<DateTime>("CreatedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("District")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Email")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<bool>("IsDefault")
-                        .HasColumnType("bit");
-
-                    b.Property<double?>("Latitude")
-                        .HasColumnType("float");
-
-                    b.Property<double?>("Longitude")
-                        .HasColumnType("float");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(180)
-                        .HasColumnType("nvarchar(180)");
-
-                    b.Property<string>("OpeningHours")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("Phone")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("Province")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Slug")
-                        .IsRequired()
-                        .HasMaxLength(220)
-                        .HasColumnType("nvarchar(220)");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
-
-                    b.Property<int>("Type")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("UpdatedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Ward")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Code")
-                        .IsUnique();
-
-                    b.ToTable("Stores", (string)null);
                 });
 
             modelBuilder.Entity("MoToSale.Entities.Catalog.VehicleModel", b =>
@@ -1087,17 +1010,12 @@ namespace MoToSale.Repository.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
-                    b.Property<int>("StoreId")
-                        .HasColumnType("int");
-
                     b.Property<DateTime?>("UpdatedDate")
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SkuId");
-
-                    b.HasIndex("StoreId", "SkuId")
+                    b.HasIndex("SkuId")
                         .IsUnique();
 
                     b.ToTable("InventoryItems", null, t =>
@@ -1141,9 +1059,6 @@ namespace MoToSale.Repository.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
-                    b.Property<int?>("StoreId")
-                        .HasColumnType("int");
-
                     b.Property<DateTime?>("UpdatedDate")
                         .HasColumnType("datetime2");
 
@@ -1152,8 +1067,6 @@ namespace MoToSale.Repository.Migrations
                     b.HasIndex("OrderId");
 
                     b.HasIndex("OrderLineId");
-
-                    b.HasIndex("StoreId");
 
                     b.HasIndex("SkuId", "ReservationStatus");
 
@@ -1201,12 +1114,6 @@ namespace MoToSale.Repository.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
-                    b.Property<int>("StoreId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("ToStoreId")
-                        .HasColumnType("int");
-
                     b.Property<int>("Type")
                         .HasColumnType("int");
 
@@ -1222,14 +1129,7 @@ namespace MoToSale.Repository.Migrations
 
                     b.HasIndex("CreatedBy");
 
-                    b.HasIndex("StoreId");
-
-                    b.HasIndex("ToStoreId");
-
-                    b.ToTable("StockDocuments", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_StockDocuments_Stores", "[ToStoreId] IS NULL OR [ToStoreId] <> [StoreId]");
-                        });
+                    b.ToTable("StockDocuments", (string)null);
                 });
 
             modelBuilder.Entity("MoToSale.Entities.Inventory.StockDocumentLine", b =>
@@ -1314,9 +1214,6 @@ namespace MoToSale.Repository.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
-                    b.Property<int>("StoreId")
-                        .HasColumnType("int");
-
                     b.Property<int>("Type")
                         .HasColumnType("int");
 
@@ -1327,9 +1224,7 @@ namespace MoToSale.Repository.Migrations
 
                     b.HasIndex("PerformedBy");
 
-                    b.HasIndex("SkuId");
-
-                    b.HasIndex("StoreId", "SkuId", "OccurredAt");
+                    b.HasIndex("SkuId", "OccurredAt");
 
                     b.ToTable("StockMovements", null, t =>
                         {
@@ -1499,9 +1394,6 @@ namespace MoToSale.Repository.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
-                    b.Property<int>("StoreId")
-                        .HasColumnType("int");
-
                     b.Property<DateTime?>("UpdatedDate")
                         .HasColumnType("datetime2");
 
@@ -1511,8 +1403,6 @@ namespace MoToSale.Repository.Migrations
                         .IsUnique();
 
                     b.HasIndex("PurchaseOrderId");
-
-                    b.HasIndex("StoreId");
 
                     b.ToTable("GoodsReceipts", (string)null);
                 });
@@ -1606,9 +1496,6 @@ namespace MoToSale.Repository.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
-                    b.Property<int>("StoreId")
-                        .HasColumnType("int");
-
                     b.Property<int>("SupplierId")
                         .HasColumnType("int");
 
@@ -1623,8 +1510,6 @@ namespace MoToSale.Repository.Migrations
 
                     b.HasIndex("Code")
                         .IsUnique();
-
-                    b.HasIndex("StoreId");
 
                     b.HasIndex("SupplierId");
 
@@ -1811,9 +1696,6 @@ namespace MoToSale.Repository.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
-                    b.Property<int>("StoreId")
-                        .HasColumnType("int");
-
                     b.Property<DateTime?>("UpdatedDate")
                         .HasColumnType("datetime2");
 
@@ -1831,8 +1713,6 @@ namespace MoToSale.Repository.Migrations
                         .IsUnique();
 
                     b.HasIndex("CustomerId");
-
-                    b.HasIndex("StoreId");
 
                     b.HasIndex("WarrantyId");
 
@@ -1984,9 +1864,6 @@ namespace MoToSale.Repository.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
-                    b.Property<int>("StoreId")
-                        .HasColumnType("int");
-
                     b.Property<DateTime?>("UpdatedDate")
                         .HasColumnType("datetime2");
 
@@ -2000,8 +1877,6 @@ namespace MoToSale.Repository.Migrations
                     b.HasIndex("CreatedBy");
 
                     b.HasIndex("OrderId");
-
-                    b.HasIndex("StoreId");
 
                     b.ToTable("SalesReturns", null, t =>
                         {
@@ -2093,15 +1968,10 @@ namespace MoToSale.Repository.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
-                    b.Property<int>("StoreId")
-                        .HasColumnType("int");
-
                     b.Property<DateTime?>("UpdatedDate")
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("StoreId");
 
                     b.HasIndex("StaffUserId", "CheckInAt");
 
@@ -2144,17 +2014,12 @@ namespace MoToSale.Repository.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
-                    b.Property<int>("StoreId")
-                        .HasColumnType("int");
-
                     b.Property<DateTime?>("UpdatedDate")
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
                     b.HasIndex("AssignedBy");
-
-                    b.HasIndex("StoreId");
 
                     b.HasIndex("StaffUserId", "StartsAt");
 
@@ -2249,17 +2114,12 @@ namespace MoToSale.Repository.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
-                    b.Property<int>("StoreId")
-                        .HasColumnType("int");
-
                     b.Property<DateTime?>("UpdatedDate")
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
                     b.HasIndex("OrderLineId");
-
-                    b.HasIndex("StoreId");
 
                     b.ToTable("Allocations", null, t =>
                         {
@@ -3233,12 +3093,6 @@ namespace MoToSale.Repository.Migrations
                         .HasForeignKey("SkuId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("MoToSale.Entities.Catalog.Store", null)
-                        .WithMany()
-                        .HasForeignKey("StoreId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("MoToSale.Entities.Inventory.Reservation", b =>
@@ -3260,11 +3114,6 @@ namespace MoToSale.Repository.Migrations
                         .HasForeignKey("SkuId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("MoToSale.Entities.Catalog.Store", null)
-                        .WithMany()
-                        .HasForeignKey("StoreId")
-                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("MoToSale.Entities.Inventory.StockDocument", b =>
@@ -3277,17 +3126,6 @@ namespace MoToSale.Repository.Migrations
                     b.HasOne("MoToSale.Entities.Identity.User", null)
                         .WithMany()
                         .HasForeignKey("CreatedBy")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("MoToSale.Entities.Catalog.Store", null)
-                        .WithMany()
-                        .HasForeignKey("StoreId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("MoToSale.Entities.Catalog.Store", null)
-                        .WithMany()
-                        .HasForeignKey("ToStoreId")
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
@@ -3320,12 +3158,6 @@ namespace MoToSale.Repository.Migrations
                         .HasForeignKey("SkuId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("MoToSale.Entities.Catalog.Store", null)
-                        .WithMany()
-                        .HasForeignKey("StoreId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("MoToSale.Entities.Operations.CustomerInteraction", b =>
@@ -3342,12 +3174,6 @@ namespace MoToSale.Repository.Migrations
                     b.HasOne("MoToSale.Entities.Operations.PurchaseOrder", null)
                         .WithMany()
                         .HasForeignKey("PurchaseOrderId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("MoToSale.Entities.Catalog.Store", null)
-                        .WithMany()
-                        .HasForeignKey("StoreId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
@@ -3377,12 +3203,6 @@ namespace MoToSale.Repository.Migrations
 
             modelBuilder.Entity("MoToSale.Entities.Operations.PurchaseOrder", b =>
                 {
-                    b.HasOne("MoToSale.Entities.Catalog.Store", null)
-                        .WithMany()
-                        .HasForeignKey("StoreId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("MoToSale.Entities.Operations.Supplier", "Supplier")
                         .WithMany()
                         .HasForeignKey("SupplierId")
@@ -3436,12 +3256,6 @@ namespace MoToSale.Repository.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("MoToSale.Entities.Catalog.Store", null)
-                        .WithMany()
-                        .HasForeignKey("StoreId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("MoToSale.Entities.Ordering.Warranty", null)
                         .WithMany()
                         .HasForeignKey("WarrantyId")
@@ -3490,12 +3304,6 @@ namespace MoToSale.Repository.Migrations
                         .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("MoToSale.Entities.Catalog.Store", null)
-                        .WithMany()
-                        .HasForeignKey("StoreId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("MoToSale.Entities.Operations.SalesReturnLine", b =>
@@ -3528,12 +3336,6 @@ namespace MoToSale.Repository.Migrations
                         .HasForeignKey("StaffUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("MoToSale.Entities.Catalog.Store", null)
-                        .WithMany()
-                        .HasForeignKey("StoreId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("MoToSale.Entities.Operations.StaffShift", b =>
@@ -3548,12 +3350,6 @@ namespace MoToSale.Repository.Migrations
                         .HasForeignKey("StaffUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("MoToSale.Entities.Catalog.Store", null)
-                        .WithMany()
-                        .HasForeignKey("StoreId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("MoToSale.Entities.Ordering.Allocation", b =>
@@ -3562,12 +3358,6 @@ namespace MoToSale.Repository.Migrations
                         .WithMany("Allocations")
                         .HasForeignKey("OrderLineId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("MoToSale.Entities.Catalog.Store", null)
-                        .WithMany()
-                        .HasForeignKey("StoreId")
-                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("OrderLine");

@@ -40,6 +40,8 @@ public class AdvancedOperationsController : ControllerBase
     public async Task<IActionResult> Return(int id) { var row = await _service.GetReturnAsync(id); return row is null ? NotFound() : Ok(row); }
     [HttpPost("returns")]
     public async Task<IActionResult> CreateReturn(CreateSalesReturnRequest request) { try { var id = await _service.CreateReturnAsync(request, CurrentUserId); await AddAuditAsync("SalesReturn", id, "Create", $"OrderId={request.OrderId};Lines={request.Lines.Count}"); return Ok(new { id }); } catch (AdvancedOperationsException ex) { return BadRequest(new { message = ex.Message }); } }
+    [HttpPut("returns/{id:int}")]
+    public async Task<IActionResult> UpdateReturn(int id, UpdateSalesReturnRequest request) { try { await _service.UpdateReturnAsync(id, request, CurrentUserId); await AddAuditAsync("SalesReturn", id, "Update", $"OrderId={request.OrderId};Lines={request.Lines.Count}"); return Ok(new { id }); } catch (AdvancedOperationsException ex) { return BadRequest(new { message = ex.Message }); } }
     [HttpPost("returns/{id:int}/approve")]
     public async Task<IActionResult> ApproveReturn(int id, ApproveSalesReturnRequest request) { try { await _service.ApproveReturnAsync(id, request, CurrentUserId); await AddAuditAsync("SalesReturn", id, "Approve", $"RefundAmount={request.RefundAmount};Method={request.RefundMethod}"); return Ok(new { id }); } catch (AdvancedOperationsException ex) { return BadRequest(new { message = ex.Message }); } }
     [HttpPost("returns/{id:int}/reject")]
@@ -54,10 +56,10 @@ public class AdvancedOperationsController : ControllerBase
     public async Task<IActionResult> Shifts([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] int? staffUserId) => Ok(new { items = await _service.GetShiftsAsync(from, to, staffUserId) });
     [Authorize(Roles = RoleConstant.Admin)]
     [HttpPost("shifts")]
-    public async Task<IActionResult> CreateShift(CreateStaffShiftRequest request) { try { var id = await _service.CreateShiftAsync(request, CurrentUserId); await AddAuditAsync("StaffShift", id, "Create", $"StaffUserId={request.StaffUserId};StoreId={request.StoreId}"); return Ok(new { id }); } catch (AdvancedOperationsException ex) { return BadRequest(new { message = ex.Message }); } }
+    public async Task<IActionResult> CreateShift(CreateStaffShiftRequest request) { try { var id = await _service.CreateShiftAsync(request, CurrentUserId); await AddAuditAsync("StaffShift", id, "Create", $"StaffUserId={request.StaffUserId}"); return Ok(new { id }); } catch (AdvancedOperationsException ex) { return BadRequest(new { message = ex.Message }); } }
     [Authorize(Roles = RoleConstant.Admin)]
     [HttpPut("shifts/{id:int}")]
-    public async Task<IActionResult> UpdateShift(int id, UpdateStaffShiftRequest request) { try { await _service.UpdateShiftAsync(id, request); await AddAuditAsync("StaffShift", id, "Update", $"StoreId={request.StoreId};Status={request.ShiftStatus}"); return Ok(new { id }); } catch (AdvancedOperationsException ex) { return BadRequest(new { message = ex.Message }); } }
+    public async Task<IActionResult> UpdateShift(int id, UpdateStaffShiftRequest request) { try { await _service.UpdateShiftAsync(id, request); await AddAuditAsync("StaffShift", id, "Update", $"Status={request.ShiftStatus}"); return Ok(new { id }); } catch (AdvancedOperationsException ex) { return BadRequest(new { message = ex.Message }); } }
     [Authorize(Roles = RoleConstant.Admin)]
     [HttpDelete("shifts/{id:int}")]
     public async Task<IActionResult> DeleteShift(int id) { try { await _service.DeleteShiftAsync(id); await AddAuditAsync("StaffShift", id, "Cancel"); return Ok(new { id }); } catch (AdvancedOperationsException ex) { return BadRequest(new { message = ex.Message }); } }

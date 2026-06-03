@@ -10,6 +10,7 @@ public interface IUserRepository : IRepository<User>
     Task<User?> GetByIdWithRolesAsync(int id);
     Task<bool> EmailExistsAsync(string email);
     Task<Role> GetRoleByCodeAsync(string code);
-    Task<PagingResponse<User>> SearchAsync(PagingRequest request);
-    Task<PagingResponse<User>> SearchCustomersAsync(PagingRequest request);
+    Task<PagingResponse<User>> SearchAsync(PagingRequest request, string? role = null, int? status = null);
+    Task<PagingResponse<User>> SearchCustomersAsync(PagingRequest request, int? status = null);
+    Task<bool> AnyUserInRoleAsync(string role, int? excludingUserId = null, int? status = null);
 }

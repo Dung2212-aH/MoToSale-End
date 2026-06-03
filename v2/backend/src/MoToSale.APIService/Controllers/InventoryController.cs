@@ -55,8 +55,8 @@ public class InventoryController : ControllerBase
         Ok(await _inventory.GetInventoryAsync(request));
 
     [HttpGet("movements")]
-    public async Task<IActionResult> GetMovements([FromQuery] int? skuId, [FromQuery] int? storeId) =>
-        Ok(new { items = await _inventory.GetMovementsAsync(skuId, storeId) });
+    public async Task<IActionResult> GetMovements([FromQuery] int? skuId) =>
+        Ok(new { items = await _inventory.GetMovementsAsync(skuId) });
 
     [HttpGet("documents")]
     public async Task<IActionResult> SearchDocuments([FromQuery] PagingRequest request, [FromQuery] string? status, [FromQuery] int? type) =>
@@ -76,11 +76,10 @@ public class InventoryController : ControllerBase
             from receipt in _db.GoodsReceipts.AsNoTracking()
             join order in _db.PurchaseOrders.AsNoTracking() on receipt.PurchaseOrderId equals order.Id
             join supplier in _db.Suppliers.AsNoTracking() on order.SupplierId equals supplier.Id
-            join store in _db.Stores.AsNoTracking() on receipt.StoreId equals store.Id
             orderby receipt.ReceivedAt descending
             select new GoodsReceiptDto(
                 receipt.Id, receipt.Code, order.Id, order.Code, supplier.Name,
-                store.Id, store.Name, receipt.Note, receipt.ReceivedAt, receipt.Lines.Count);
+                receipt.Note, receipt.ReceivedAt, receipt.Lines.Count);
         var total = await query.CountAsync();
         var rows = await query.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToListAsync();
         return Ok(new PagingResponse<GoodsReceiptDto> { Items = rows, Page = request.Page, PageSize = request.PageSize, TotalItems = total });
@@ -93,11 +92,10 @@ public class InventoryController : ControllerBase
             from row in _db.GoodsReceipts.AsNoTracking()
             join order in _db.PurchaseOrders.AsNoTracking() on row.PurchaseOrderId equals order.Id
             join supplier in _db.Suppliers.AsNoTracking() on order.SupplierId equals supplier.Id
-            join store in _db.Stores.AsNoTracking() on row.StoreId equals store.Id
             where row.Id == id
             select new GoodsReceiptDto(
                 row.Id, row.Code, order.Id, order.Code, supplier.Name,
-                store.Id, store.Name, row.Note, row.ReceivedAt, row.Lines.Count))
+                row.Note, row.ReceivedAt, row.Lines.Count))
             .FirstOrDefaultAsync();
         if (receipt is null) return NotFound();
         var lines = await (
@@ -117,7 +115,7 @@ public class InventoryController : ControllerBase
         try
         {
             var id = await _inventory.CreateDocumentAsync(request, CurrentUserId);
-            await AddAuditAsync("StockDocument", id.ToString(), "Create", $"Type={request.Type};StoreId={request.StoreId};Lines={request.Lines.Count}");
+            await AddAuditAsync("StockDocument", id.ToString(), "Create", $"Type={request.Type};Lines={request.Lines.Count}");
             return Ok(new { id });
         }
         catch (InventoryException ex)
@@ -162,8 +160,8 @@ public class InventoryController : ControllerBase
     public async Task<IActionResult> GetHolds() => Ok(new { items = await _inventory.GetHoldsAsync() });
 
     [HttpGet("adjustments")]
-    public async Task<IActionResult> GetAdjustments([FromQuery] int? skuId, [FromQuery] int? storeId) =>
-        Ok(new { items = await _inventory.GetMovementsAsync(skuId, storeId) });
+    public async Task<IActionResult> GetAdjustments([FromQuery] int? skuId) =>
+        Ok(new { items = await _inventory.GetMovementsAsync(skuId) });
 
     [HttpPost("adjust")]
     public async Task<IActionResult> Adjust(AdjustStockRequest request)
@@ -172,7 +170,7 @@ public class InventoryController : ControllerBase
         try
         {
             await _inventory.AdjustStockAsync(request, CurrentUserId);
-            await AddAuditAsync("Inventory", $"{request.StoreId}:{request.SkuId}", "Adjust", $"Type={request.TransactionType};Qty={request.Qty};Reason={request.Reason}");
+            await AddAuditAsync("Inventory", request.SkuId.ToString(), "Adjust", $"Type={request.TransactionType};Qty={request.Qty};Reason={request.Reason}");
             return Ok(new { message = "Điều chỉnh tồn thành công." });
         }
         catch (InventoryException ex)
@@ -187,7 +185,7 @@ public class InventoryController : ControllerBase
         try
         {
             await _inventory.UpdateThresholdAsync(request);
-            await AddAuditAsync("InventoryThreshold", $"{request.StoreId}:{request.SkuId}", "Update", $"ReorderPoint={request.ReorderPoint}");
+            await AddAuditAsync("InventoryThreshold", request.SkuId.ToString(), "Update", $"ReorderPoint={request.ReorderPoint}");
             return Ok(new { message = "Cập nhật ngưỡng thành công." });
         }
         catch (InventoryException ex)
@@ -205,24 +203,23 @@ public class InventoryController : ControllerBase
     }
 
     [HttpGet("export")]
-    public async Task<IActionResult> Export([FromQuery] int? storeId)
+    public async Task<IActionResult> Export()
     {
-        var rows = await _inventory.ExportAsync(storeId);
+        var rows = await _inventory.ExportAsync();
         using var workbook = new XLWorkbook();
         var sheet = workbook.Worksheets.Add("TonKho");
-        var headers = new[] { "Cửa hàng", "SKU", "Sản phẩm", "Tồn thực tế", "Đang giữ", "Khả dụng", "Ngưỡng thấp", "Cập nhật" };
+        var headers = new[] { "SKU", "Sản phẩm", "Tồn thực tế", "Đang giữ", "Khả dụng", "Ngưỡng thấp", "Cập nhật" };
         for (var i = 0; i < headers.Length; i++) sheet.Cell(1, i + 1).Value = headers[i];
         for (var i = 0; i < rows.Count; i++)
         {
             var row = rows[i];
-            sheet.Cell(i + 2, 1).Value = row.StoreName;
-            sheet.Cell(i + 2, 2).Value = row.SkuCode;
-            sheet.Cell(i + 2, 3).Value = row.ProductName;
-            sheet.Cell(i + 2, 4).Value = row.OnHand;
-            sheet.Cell(i + 2, 5).Value = row.Reserved;
-            sheet.Cell(i + 2, 6).Value = row.Available;
-            sheet.Cell(i + 2, 7).Value = row.ReorderPoint;
-            if (row.UpdatedAt.HasValue) sheet.Cell(i + 2, 8).Value = row.UpdatedAt.Value;
+            sheet.Cell(i + 2, 1).Value = row.SkuCode;
+            sheet.Cell(i + 2, 2).Value = row.ProductName;
+            sheet.Cell(i + 2, 3).Value = row.OnHand;
+            sheet.Cell(i + 2, 4).Value = row.Reserved;
+            sheet.Cell(i + 2, 5).Value = row.Available;
+            sheet.Cell(i + 2, 6).Value = row.ReorderPoint;
+            if (row.UpdatedAt.HasValue) sheet.Cell(i + 2, 7).Value = row.UpdatedAt.Value;
         }
         sheet.Row(1).Style.Font.Bold = true;
         sheet.SheetView.FreezeRows(1);

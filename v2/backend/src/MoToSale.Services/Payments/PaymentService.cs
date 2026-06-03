@@ -1,7 +1,9 @@
 using MoToSale.Common;
 using MoToSale.DTO.Payments;
+using MoToSale.Entities.Operations;
 using MoToSale.Entities.Ordering;
 using MoToSale.Entities.Payments;
+using MoToSale.Repository;
 using MoToSale.Repository.Inventory;
 using MoToSale.Repository.Ordering;
 using MoToSale.Repository.Payments;
@@ -13,12 +15,14 @@ public class PaymentService : IPaymentService
     private readonly IPaymentRepository _payments;
     private readonly IOrderRepository _orders;
     private readonly IReservationRepository _reservations;
+    private readonly AppDbContext _db;
 
-    public PaymentService(IPaymentRepository payments, IOrderRepository orders, IReservationRepository reservations)
+    public PaymentService(IPaymentRepository payments, IOrderRepository orders, IReservationRepository reservations, AppDbContext db)
     {
         _payments = payments;
         _orders = orders;
         _reservations = reservations;
+        _db = db;
     }
 
     public async Task<int> RecordPaymentAsync(CreatePaymentRequest req, int? userId)
@@ -44,6 +48,14 @@ public class PaymentService : IPaymentService
             CreatedDate = now,
         };
         _payments.Add(payment);
+
+        // Ghi thu quỹ: dòng tiền vào khi thu tiền khách (đồng bộ sổ quỹ với phiếu thu).
+        _db.CashTransactions.Add(new CashTransaction
+        {
+            Code = $"CT{now:yyyyMMddHHmmssfff}", TransactionType = "Receipt", Category = "CustomerPayment",
+            Amount = req.Amount, Method = req.Method, ReferenceType = "Payment", ReferenceId = order.Id,
+            Note = $"Thu tiền đơn {order.Code} ({req.PaymentType})", RecordedBy = userId, OccurredAt = now, CreatedDate = now,
+        });
 
         // Tổng đã thu (gồm phiếu vừa ghi).
         var totalPaid = await _payments.GetTotalPaidAsync(order.Id) + req.Amount;
@@ -87,6 +99,21 @@ public class PaymentService : IPaymentService
             });
         }
 
+        // Đã thu đủ + hàng đã giao (bán đứt tại quầy) → hoàn tất đơn.
+        if (reachedFull
+            && order.FulfillmentStatus == Common.FulfillmentStatus.Fulfilled
+            && order.OrderStatus != OrderStatus.Completed
+            && order.OrderStatus != OrderStatus.Cancelled)
+        {
+            var fromC = order.OrderStatus;
+            order.OrderStatus = OrderStatus.Completed;
+            _orders.AddStatusHistory(new OrderStatusHistory
+            {
+                OrderId = order.Id, FromStatus = fromC, ToStatus = OrderStatus.Completed,
+                Note = "Hoàn tất (đã giao & thu đủ)", ChangedBy = userId, CreatedDate = now,
+            });
+        }
+
         order.UpdatedDate = now;
         _orders.Update(order);
         await _payments.SaveChangesAsync();
@@ -100,10 +127,19 @@ public class PaymentService : IPaymentService
         var payment = await _payments.GetByIdAsync(id) ?? throw new PaymentException("Không tìm thấy phiếu thanh toán.");
         if (payment.PaymentRecordStatus == Common.PaymentRecordStatus.Cancelled) throw new PaymentException("Phiếu đã hủy.");
 
+        var now = DateTime.UtcNow;
         payment.PaymentRecordStatus = Common.PaymentRecordStatus.Cancelled;
         payment.Note = string.IsNullOrWhiteSpace(reason) ? payment.Note : $"{payment.Note} | Hủy: {reason}";
-        payment.UpdatedDate = DateTime.UtcNow;
+        payment.UpdatedDate = now;
         _payments.Update(payment);
+
+        // Đảo quỹ: dòng tiền ra để bù lại khoản thu đã hủy.
+        _db.CashTransactions.Add(new CashTransaction
+        {
+            Code = $"CT{now:yyyyMMddHHmmssfff}", TransactionType = "Payment", Category = "PaymentReversal",
+            Amount = payment.Amount, Method = payment.Method, ReferenceType = "Payment", ReferenceId = payment.OrderId,
+            Note = $"Đảo phiếu thu {payment.Code}", OccurredAt = now, CreatedDate = now,
+        });
 
         // Tính lại trạng thái thanh toán đơn.
         var order = await _orders.GetByIdAsync(payment.OrderId);

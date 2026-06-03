@@ -225,7 +225,7 @@ public class BusinessOperationsController : ControllerBase
         if (result is OkObjectResult ok)
         {
             var id = ok.Value?.GetType().GetProperty("id")?.GetValue(ok.Value)?.ToString();
-            if (id is not null) await AddAuditAsync("StaffAttendance", id, "CheckIn", $"Staff={r.StaffUserId};Store={r.StoreId}");
+            if (id is not null) await AddAuditAsync("StaffAttendance", id, "CheckIn", $"Staff={r.StaffUserId}");
         }
         return result;
     }

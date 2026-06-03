@@ -9,7 +9,6 @@ const inventoryService = {
   getDocumentById: (id) => api.get(`/inventory/documents/${id}`),
   getGoodsReceipts: (params) => api.get('/inventory/goods-receipts', { params }),
   getGoodsReceiptById: (id) => api.get(`/inventory/goods-receipts/${id}`),
-  getStores: () => api.get('/stores'),
   getSkus: () => api.get('/skus'),
   createDocument: (payload) => api.post('/inventory/documents', payload),
   approveDocument: (id) => api.post(`/inventory/documents/${id}/approve`),

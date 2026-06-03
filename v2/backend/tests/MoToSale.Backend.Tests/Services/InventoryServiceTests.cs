@@ -17,8 +17,6 @@ public class InventoryServiceTests
 
         var docId = await service.CreateDocumentAsync(new CreateStockDocumentRequest(
             Type: (int)StockDocumentType.Receipt,
-            StoreId: 40,
-            ToStoreId: null,
             Note: "E2E receipt",
             Lines: [new StockDocumentLineRequest(skuId, 3, "Add stock")],
             Reason: "Supplement"), userId: 1);
@@ -33,12 +31,12 @@ public class InventoryServiceTests
         var approved = await service.GetDocumentAsync(docId);
         Assert.Equal(StockDocumentStatus.Approved, approved!.Document.Status);
 
-        var inventory = await service.GetInventoryAsync(new InventorySearchRequest { StoreId = 40, Page = 1, PageSize = 20 });
+        var inventory = await service.GetInventoryAsync(new InventorySearchRequest { Page = 1, PageSize = 20 });
         var row = Assert.Single(inventory.Items, x => x.SkuId == skuId);
         Assert.Equal(5, row.OnHand);
         Assert.Equal(5, row.Available);
 
-        var movements = await service.GetMovementsAsync(skuId, 40);
+        var movements = await service.GetMovementsAsync(skuId);
         Assert.Contains(movements, x => x.RefId == docId && x.QtyDelta == 3 && x.BalanceAfter == 5);
     }
 
@@ -52,8 +50,6 @@ public class InventoryServiceTests
 
         var docId = await service.CreateDocumentAsync(new CreateStockDocumentRequest(
             (int)StockDocumentType.Receipt,
-            40,
-            null,
             "Draft cancel",
             [new StockDocumentLineRequest(skuId, 1, null)],
             "OpeningBalance"), 1);

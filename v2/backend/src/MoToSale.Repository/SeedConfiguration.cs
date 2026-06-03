@@ -23,11 +23,12 @@ public static class SeedConfiguration
     {
         var now = DateTime.UtcNow;
 
-        await AddMissingStoresAsync(db, now);
         await AddMissingBrandsAsync(db, now);
         await db.SaveChangesAsync();
         await AddMissingModelsAsync(db, now);
         await AddMissingCategoriesAsync(db, now);
+        await db.SaveChangesAsync();
+        await AddMissingManufacturersAsync(db, now);
         await db.SaveChangesAsync();
 
         await AddMissingProductsAsync(db, now);
@@ -44,19 +45,6 @@ public static class SeedConfiguration
         await db.SaveChangesAsync();
         await AddMissingOperationalDataAsync(db, now);
         await db.SaveChangesAsync();
-    }
-
-    private static async Task AddMissingStoresAsync(AppDbContext db, DateTime now)
-    {
-        var existing = await db.Stores.Select(x => x.Code).ToListAsync();
-        var rows = new[]
-        {
-            new Store { Code = "ONLINE", Name = "Kho Online", Slug = "kho-online", Type = (int)StoreType.Online, AddressLine = "Trung tâm phân phối", IsDefault = true, CreatedDate = now },
-            new Store { Code = "SR-HCM", Name = "Showroom TP.HCM", Slug = "showroom-hcm", Type = (int)StoreType.Showroom, AddressLine = "12 Nguyễn Văn Cừ, Quận 5", Province = "TP.HCM", District = "Quận 5", Phone = "02838000000", CreatedDate = now },
-            new Store { Code = "SR-HN", Name = "Showroom Hà Nội", Slug = "showroom-ha-noi", Type = (int)StoreType.Showroom, AddressLine = "5 Cầu Giấy", Province = "Hà Nội", District = "Cầu Giấy", Phone = "02437000000", CreatedDate = now },
-            new Store { Code = "SR-DN", Name = "Showroom Đà Nẵng", Slug = "showroom-da-nang", Type = (int)StoreType.Showroom, AddressLine = "88 Nguyễn Văn Linh", Province = "Đà Nẵng", District = "Hải Châu", Phone = "02363800000", CreatedDate = now },
-        };
-        db.Stores.AddRange(rows.Where(x => !existing.Contains(x.Code)));
     }
 
     private static async Task AddMissingBrandsAsync(AppDbContext db, DateTime now)
@@ -117,11 +105,52 @@ public static class SeedConfiguration
             new Category { ParentId = existing[x.Item1].Id, Name = x.Item2, Slug = x.Item3, Kind = (int)x.Item4, SortOrder = x.Item5, CreatedDate = now }));
     }
 
+    private static async Task AddMissingManufacturersAsync(AppDbContext db, DateTime now)
+    {
+        var existing = await db.Manufacturers.Select(x => x.Name).ToListAsync();
+        var rows = new[]
+        {
+            new Manufacturer { Name = "Honda Genuine Parts", LogoUrl = null, Description = "Phụ tùng và dầu nhớt chính hãng Honda.", CreatedDate = now },
+            new Manufacturer { Name = "Motul", LogoUrl = null, Description = "Dầu nhớt và dung dịch bảo dưỡng xe máy.", CreatedDate = now },
+            new Manufacturer { Name = "Michelin", LogoUrl = null, Description = "Lốp xe máy và phụ kiện lốp.", CreatedDate = now },
+            new Manufacturer { Name = "GS Yuasa", LogoUrl = null, Description = "Ắc quy xe máy.", CreatedDate = now },
+            new Manufacturer { Name = "MoToSale", LogoUrl = null, Description = "Phụ kiện cửa hàng phân phối.", CreatedDate = now },
+        };
+
+        foreach (var row in rows)
+        {
+            var current = await db.Manufacturers.FirstOrDefaultAsync(x => x.Name == row.Name);
+            if (current is not null)
+            {
+                if (current.LogoUrl?.Contains("logo.clearbit.com", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    current.LogoUrl = null;
+                    current.UpdatedDate = now;
+                }
+
+                if (string.IsNullOrWhiteSpace(current.LogoUrl) && !string.IsNullOrWhiteSpace(row.LogoUrl))
+                {
+                    current.LogoUrl = row.LogoUrl;
+                    current.UpdatedDate = now;
+                }
+
+                if (string.IsNullOrWhiteSpace(current.Description) && !string.IsNullOrWhiteSpace(row.Description))
+                {
+                    current.Description = row.Description;
+                    current.UpdatedDate = now;
+                }
+            }
+        }
+
+        db.Manufacturers.AddRange(rows.Where(x => !existing.Contains(x.Name)));
+    }
+
     private static async Task AddMissingProductsAsync(AppDbContext db, DateTime now)
     {
         var categories = await db.Categories.ToDictionaryAsync(x => x.Slug);
         var brands = await db.Brands.ToDictionaryAsync(x => x.Slug);
         var models = await db.VehicleModels.ToDictionaryAsync(x => x.Slug);
+        var manufacturers = await db.Manufacturers.ToDictionaryAsync(x => x.Name);
         var existing = await db.Products.Select(x => x.Code).ToListAsync();
         var rows = new[]
         {
@@ -141,17 +170,17 @@ public static class SeedConfiguration
                 Sku("SP-RAIDER-TC", "Tiêu chuẩn", "Đen đỏ", 46_000_000)),
             Motorcycle("SP-VESPA", "Vespa Sprint 125", "vespa-sprint-125", "xe-tay-ga", "piaggio", "piaggio-vespa-sprint", true, false,
                 Sku("SP-VESPA-TC", "Tiêu chuẩn", "Trắng", 82_000_000), Sku("SP-VESPA-S", "S", "Đen", 85_000_000)),
-            Part("SP-NHOT", "Nhớt Honda chính hãng", "nhot-honda-chinh-hang", "dau-nhot", true,
+            Part("SP-NHOT", "Nhớt Honda chính hãng", "nhot-honda-chinh-hang", "dau-nhot", "Honda Genuine Parts", true,
                 Sku("PT-NHOT-HONDA-08", "Chai 0.8L", null, 120_000, 99_000), Sku("PT-NHOT-HONDA-10", "Chai 1L", null, 145_000)),
-            Part("PT-NHOT-MOTUL", "Nhớt Motul 300V", "nhot-motul-300v", "dau-nhot", true,
+            Part("PT-NHOT-MOTUL", "Nhớt Motul 300V", "nhot-motul-300v", "dau-nhot", "Motul", true,
                 Sku("PT-MOTUL-300V-1L", "Chai 1L", null, 420_000, 390_000)),
-            Part("PT-LOP-MICHELIN", "Lốp Michelin Pilot Street 2", "lop-michelin-pilot-street-2", "lop-xe", true,
+            Part("PT-LOP-MICHELIN", "Lốp Michelin Pilot Street 2", "lop-michelin-pilot-street-2", "lop-xe", "Michelin", true,
                 Sku("PT-LOP-MICH-8090", "80/90-14", null, 780_000), Sku("PT-LOP-MICH-9014", "90/90-14", null, 850_000)),
-            Part("PT-MAPHANH", "Má phanh đĩa Honda", "ma-phanh-dia-honda", "phanh-ma-phanh", false,
+            Part("PT-MAPHANH", "Má phanh đĩa Honda", "ma-phanh-dia-honda", "phanh-ma-phanh", "Honda Genuine Parts", false,
                 Sku("PT-MAPHANH-HONDA", "Bộ trước", null, 260_000)),
-            Part("PT-ACQUY", "Ắc quy GS GTZ5S", "ac-quy-gs-gtz5s", "ac-quy", false,
+            Part("PT-ACQUY", "Ắc quy GS GTZ5S", "ac-quy-gs-gtz5s", "ac-quy", "GS Yuasa", false,
                 Sku("PT-ACQUY-GTZ5S", "12V 3.5Ah", null, 520_000)),
-            Part("PT-MUBAOHOM", "Mũ bảo hiểm 3/4 MoToSale", "mu-bao-hiem-34-motosale", "phu-kien", true,
+            Part("PT-MUBAOHOM", "Mũ bảo hiểm 3/4 MoToSale", "mu-bao-hiem-34-motosale", "phu-kien", "MoToSale", true,
                 Sku("PT-MBH-DEN-M", "Đen - M", "Đen", 450_000), Sku("PT-MBH-TRANG-L", "Trắng - L", "Trắng", 450_000)),
         };
         db.Products.AddRange(rows.Where(x => !existing.Contains(x.Code)));
@@ -162,33 +191,47 @@ public static class SeedConfiguration
             oldOil.UpdatedDate = now;
         }
 
+        foreach (var (code, manufacturer) in new[]
+        {
+            ("SP-NHOT", "Honda Genuine Parts"),
+            ("PT-NHOT-MOTUL", "Motul"),
+            ("PT-LOP-MICHELIN", "Michelin"),
+            ("PT-MAPHANH", "Honda Genuine Parts"),
+            ("PT-ACQUY", "GS Yuasa"),
+            ("PT-MUBAOHOM", "MoToSale"),
+        })
+        {
+            var product = await db.Products.FirstOrDefaultAsync(x => x.Code == code);
+            if (product is not null && product.ManufacturerId != manufacturers[manufacturer].Id)
+            {
+                product.ManufacturerId = manufacturers[manufacturer].Id;
+                product.UpdatedDate = now;
+            }
+        }
+
         Product Motorcycle(string code, string name, string slug, string category, string brand, string model, bool featured, bool hotDeal, params Sku[] skus) =>
             new() { Code = code, Name = name, Slug = slug, CategoryId = categories[category].Id, BrandId = brands[brand].Id, VehicleModelId = models[model].Id, Kind = (int)ProductKind.Motorcycle, ShortDescription = $"{name} chính hãng, bảo hành theo tiêu chuẩn nhà sản xuất.", IsFeatured = featured, IsHotDeal = hotDeal, CreatedDate = now, Skus = skus };
-        Product Part(string code, string name, string slug, string category, bool hotDeal, params Sku[] skus) =>
-            new() { Code = code, Name = name, Slug = slug, CategoryId = categories[category].Id, Kind = (int)ProductKind.Part, ShortDescription = $"{name} dành cho nhu cầu bảo dưỡng và nâng cấp xe.", IsHotDeal = hotDeal, CreatedDate = now, Skus = skus };
+        Product Part(string code, string name, string slug, string category, string manufacturer, bool hotDeal, params Sku[] skus) =>
+            new() { Code = code, Name = name, Slug = slug, CategoryId = categories[category].Id, ManufacturerId = manufacturers[manufacturer].Id, Kind = (int)ProductKind.Part, ShortDescription = $"{name} dành cho nhu cầu bảo dưỡng và nâng cấp xe.", IsHotDeal = hotDeal, CreatedDate = now, Skus = skus };
         Sku Sku(string code, string variant, string? color, decimal price, decimal? salePrice = null) =>
             new() { SkuCode = code, VariantName = variant, Color = color, ListPrice = price, SalePrice = salePrice, CreatedDate = now };
     }
 
     private static async Task AddMissingInventoryAsync(AppDbContext db, DateTime now)
     {
-        var stores = await db.Stores.OrderBy(x => x.Id).ToListAsync();
         var skus = await db.Skus.OrderBy(x => x.Id).ToListAsync();
-        var existing = await db.InventoryItems.Select(x => new { x.StoreId, x.SkuId }).ToListAsync();
-        var pairs = existing.Select(x => (x.StoreId, x.SkuId)).ToHashSet();
+        var existing = await db.InventoryItems.Select(x => x.SkuId).ToListAsync();
+        var existingSkuIds = existing.ToHashSet();
         var index = 0;
         foreach (var sku in skus)
         {
-            foreach (var store in stores)
-            {
-                if (pairs.Contains((store.Id, sku.Id))) continue;
-                var onHand = sku.ListPrice > 10_000_000 ? 2 + index % 6 : 12 + index % 35;
-                if (index % 11 == 0) onHand = 3;
-                var item = new InventoryItem { StoreId = store.Id, SkuId = sku.Id, OnHand = onHand, Reserved = 0, ReorderPoint = sku.ListPrice > 10_000_000 ? 2 : 5, CreatedDate = now };
-                db.InventoryItems.Add(item);
-                db.StockMovements.Add(new StockMovement { StoreId = store.Id, SkuId = sku.Id, Type = (int)StockMovementType.Receipt, QtyDelta = onHand, BalanceAfter = onHand, RefType = "Seed", Reason = "Tồn đầu kỳ dữ liệu mẫu", OccurredAt = now, CreatedDate = now });
-                index++;
-            }
+            if (existingSkuIds.Contains(sku.Id)) continue;
+            var onHand = sku.ListPrice > 10_000_000 ? 2 + index % 6 : 12 + index % 35;
+            if (index % 11 == 0) onHand = 3;
+            var item = new InventoryItem { SkuId = sku.Id, OnHand = onHand, Reserved = 0, ReorderPoint = sku.ListPrice > 10_000_000 ? 2 : 5, CreatedDate = now };
+            db.InventoryItems.Add(item);
+            db.StockMovements.Add(new StockMovement { SkuId = sku.Id, Type = (int)StockMovementType.Receipt, QtyDelta = onHand, BalanceAfter = onHand, RefType = "Seed", Reason = "Tồn đầu kỳ dữ liệu mẫu", OccurredAt = now, CreatedDate = now });
+            index++;
         }
     }
 
@@ -289,7 +332,7 @@ public static class SeedConfiguration
 
         var orders = new[]
         {
-            Order("DEMO-2026-001", "customer@motosale.local", OrderStatus.AwaitingPayment, PaymentStatus.Unpaid, FulfillmentStatus.Unallocated, 0, 0, "SP-VISION-DEFAULT"),
+            Order("DEMO-2026-001", "customer@motosale.local", OrderStatus.AwaitingPayment, PaymentStatus.Unpaid, FulfillmentStatus.Unallocated, 0, 0, "SP-VISION-TC"),
             Order("DEMO-2026-002", "minhanh@example.com", OrderStatus.Confirmed, PaymentStatus.Paid, FulfillmentStatus.Unallocated, 1, 200_000, "PT-LOP-MICH-8090", "PT-MAPHANH-HONDA"),
             Order("DEMO-2026-003", "quochuy@example.com", OrderStatus.Shipping, PaymentStatus.Paid, FulfillmentStatus.Shipped, 3, 1_000_000, "SP-EX155-ABS"),
             Order("DEMO-2026-004", "hoangnam@example.com", OrderStatus.Delivered, PaymentStatus.Paid, FulfillmentStatus.Fulfilled, 8, 0, "SP-AB160-TC"),

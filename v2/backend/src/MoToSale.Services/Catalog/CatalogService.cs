@@ -15,7 +15,6 @@ public class CatalogService : ICatalogService
     private readonly IRepository<Category> _categories;
     private readonly IRepository<Brand> _brands;
     private readonly IRepository<VehicleModel> _models;
-    private readonly IRepository<Store> _stores;
     private readonly ISkuRepository _skus;
     private readonly IProductImageRepository _images;
     private readonly IRepository<PartCompatibility> _compat;
@@ -28,7 +27,6 @@ public class CatalogService : ICatalogService
         IRepository<Category> categories,
         IRepository<Brand> brands,
         IRepository<VehicleModel> models,
-        IRepository<Store> stores,
         ISkuRepository skus,
         IProductImageRepository images,
         IRepository<PartCompatibility> compat,
@@ -42,7 +40,6 @@ public class CatalogService : ICatalogService
         _categories = categories;
         _brands = brands;
         _models = models;
-        _stores = stores;
         _skus = skus;
         _images = images;
         _compat = compat;
@@ -74,14 +71,21 @@ public class CatalogService : ICatalogService
     public async Task<List<ManufacturerDto>> GetManufacturersAsync()
     {
         var list = await _manufacturers.GetAllAsync();
-        return list.OrderBy(m => m.Name).Select(m => new ManufacturerDto(m.Id, m.Name, m.Description, m.Status)).ToList();
+        return list.OrderBy(m => m.Name).Select(m => new ManufacturerDto(m.Id, m.Name, m.LogoUrl, m.Description, m.Status)).ToList();
     }
 
     public async Task<int> CreateManufacturerAsync(SaveManufacturerRequest r)
     {
         if (string.IsNullOrWhiteSpace(r.Name)) throw new CatalogException("Tên hãng sản xuất là bắt buộc.");
         if (await _manufacturers.AnyAsync(m => m.Name == r.Name.Trim())) throw new CatalogException("Hãng sản xuất đã tồn tại.");
-        var m = new Manufacturer { Name = r.Name.Trim(), Description = r.Description, CreatedDate = DateTime.UtcNow, Status = (int)EntityStatus.Active };
+        var m = new Manufacturer
+        {
+            Name = r.Name.Trim(),
+            LogoUrl = string.IsNullOrWhiteSpace(r.LogoUrl) ? null : r.LogoUrl.Trim(),
+            Description = r.Description,
+            CreatedDate = DateTime.UtcNow,
+            Status = (int)EntityStatus.Active,
+        };
         _manufacturers.Add(m);
         await _manufacturers.SaveChangesAsync();
         return m.Id;
@@ -91,8 +95,18 @@ public class CatalogService : ICatalogService
     {
         var m = await _manufacturers.GetByIdAsync(id) ?? throw new CatalogException("Không tìm thấy hãng sản xuất.");
         m.Name = r.Name.Trim();
+        m.LogoUrl = string.IsNullOrWhiteSpace(r.LogoUrl) ? null : r.LogoUrl.Trim();
         m.Description = r.Description;
         m.Status = r.Status;
+        m.UpdatedDate = DateTime.UtcNow;
+        _manufacturers.Update(m);
+        await _manufacturers.SaveChangesAsync();
+    }
+
+    public async Task SetManufacturerLogoAsync(int id, string url)
+    {
+        var m = await _manufacturers.GetByIdAsync(id) ?? throw new CatalogException("Không tìm thấy hãng sản xuất.");
+        m.LogoUrl = url;
         m.UpdatedDate = DateTime.UtcNow;
         _manufacturers.Update(m);
         await _manufacturers.SaveChangesAsync();
@@ -236,12 +250,6 @@ public class CatalogService : ICatalogService
         return list.OrderBy(m => m.Name).Select(m => new VehicleModelDto(m.Id, m.BrandId, m.Name, m.Slug, m.Status)).ToList();
     }
 
-    public async Task<List<StoreDto>> GetStoresAsync()
-    {
-        var list = await _stores.GetAllAsync();
-        return list.OrderByDescending(s => s.IsDefault).ThenBy(s => s.Name).Select(MapStore).ToList();
-    }
-
     public async Task<List<SkuLookupDto>> GetSkusAsync()
     {
         var skus = await _skus.GetAllAsync();
@@ -312,6 +320,10 @@ public class CatalogService : ICatalogService
         var sku = await _skus.GetByIdAsync(skuId);
         if (sku is null || sku.ProductId != productId) throw new CatalogException("Không tìm thấy biến thể.");
         if (await _skus.CountByProductAsync(productId) <= 1) throw new CatalogException("Sản phẩm phải còn ít nhất 1 biến thể.");
+        if (await _db.OrderLines.AnyAsync(l => l.SkuId == skuId)
+            || await _db.StockMovements.AnyAsync(m => m.SkuId == skuId)
+            || await _db.Reservations.AnyAsync(r => r.SkuId == skuId))
+            throw new CatalogException("Biến thể đã phát sinh đơn hàng/tồn kho, không thể xóa. Hãy đặt trạng thái Ngừng bán thay vì xóa.");
 
         // Gỡ ảnh gắn riêng biến thể này (đưa về ảnh chung).
         foreach (var img in (await _images.GetByProductAsync(productId)).Where(i => i.SkuId == skuId))
@@ -700,10 +712,6 @@ public class CatalogService : ICatalogService
         p.Skus.Select(s => new SkuDto(s.Id, s.SkuCode, s.VariantName, s.Color, s.Version, s.ListPrice, s.SalePrice, s.Barcode, s.Status)),
         p.Images.OrderByDescending(i => i.IsPrimary).ThenBy(i => i.SortOrder)
             .Select(i => new ProductImageDto(i.Id, i.SkuId, i.Url, i.Alt, i.IsPrimary, i.SortOrder)));
-
-    private static StoreDto MapStore(Store s) => new(
-        s.Id, s.Code, s.Name, s.Slug, s.Type, s.AddressLine, s.Province, s.District, s.Ward,
-        s.Phone, s.Email, s.Latitude, s.Longitude, s.OpeningHours, s.IsDefault, s.Status);
 
     private static string Slugify(string value)
     {

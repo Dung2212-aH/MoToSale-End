@@ -5,7 +5,6 @@ namespace MoToSale.Entities.Operations;
 public class StaffShift : BaseEntity
 {
     public int StaffUserId { get; set; }
-    public int StoreId { get; set; }
     public DateTime StartsAt { get; set; }
     public DateTime EndsAt { get; set; }
     public string ShiftStatus { get; set; } = "Scheduled";

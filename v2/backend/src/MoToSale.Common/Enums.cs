@@ -7,13 +7,6 @@ public enum ProductKind
     Part = 2,
 }
 
-public enum StoreType
-{
-    Showroom = 1,
-    Warehouse = 2,
-    Online = 3,
-}
-
 /// <summary>Loại biến động tồn kho trong sổ cái.</summary>
 public enum StockMovementType
 {

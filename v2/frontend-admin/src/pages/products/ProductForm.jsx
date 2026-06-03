@@ -39,7 +39,7 @@ const normalizeText = (value) => String(value || '')
   .replace(/đ/g, 'd')
   .trim();
 
-const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands = [], fixedProductType = null }) => {
+const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands = [], manufacturers = [], fixedProductType = null }) => {
   const isEdit = !!product;
   const lockedType = fixedProductType || null;
   const [models, setModels] = useState([]);
@@ -54,6 +54,7 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
     danhMucId: '',
     hangXeId: '',
     dongXeId: '',
+    hangSXId: '',
     moTaNgan: '',
     giaGoc: '',
     giaKhuyenMai: '',
@@ -135,6 +136,7 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
         danhMucId: String(product.maDanhMuc || product.danhMucId || product.categoryId || ''),
         hangXeId: String(product.maHangXe || product.hangXeId || product.brandId || ''),
         dongXeId: String(product.maDongXe || product.dongXeId || product.vehicleModelId || product.modelId || ''),
+        hangSXId: String(product.maHangSanXuat || product.manufacturerId || ''),
         moTaNgan: product.moTaNgan || product.shortDescription || '',
         giaGoc: product.giaGoc || product.basePrice || '',
         giaKhuyenMai: product.giaKhuyenMai || product.salePrice || '',
@@ -154,6 +156,7 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
         danhMucId: '',
         hangXeId: '',
         dongXeId: '',
+        hangSXId: '',
         moTaNgan: '',
         giaGoc: '',
         giaKhuyenMai: '',
@@ -205,6 +208,8 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
         if (value === 'PhuTung') {
           updated.hangXeId = '';
           updated.dongXeId = '';
+        } else {
+          updated.hangSXId = '';
         }
       }
       if (name === 'hangXeId') {
@@ -244,6 +249,7 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
         maDanhMuc: form.danhMucId ? Number(form.danhMucId) : undefined,
         maHangXe: form.loaiSP === 'XeMay' && form.hangXeId ? Number(form.hangXeId) : null,
         maDongXe: form.loaiSP === 'XeMay' && form.dongXeId ? Number(form.dongXeId) : null,
+        maHangSanXuat: form.loaiSP === 'PhuTung' && form.hangSXId ? Number(form.hangSXId) : null,
         moTaNgan: form.moTaNgan || undefined,
         giaGoc: Number(form.giaGoc) || 0,
         giaKhuyenMai: Number(form.giaKhuyenMai) || null,
@@ -331,7 +337,7 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
               </div>
 
               <div className="row">
-                <div className={showVehicleFields ? 'col-md-4' : 'col-md-12'}>
+                <div className={showVehicleFields ? 'col-md-4' : 'col-md-6'}>
                   <div className="form-group">
                     <label>Danh mục {selectedType.label.toLowerCase()} <span className="text-danger">*</span></label>
                     <select className={`form-control ${errors.danhMucId ? 'is-invalid' : ''}`} name="danhMucId" value={form.danhMucId} onChange={handleChange}>
@@ -348,6 +354,22 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
                     {errors.danhMucId && <div className="invalid-feedback">{errors.danhMucId}</div>}
                   </div>
                 </div>
+                {!showVehicleFields && (
+                  <div className="col-md-6">
+                    <div className="form-group">
+                      <label>Hãng sản xuất</label>
+                      <select className="form-control" name="hangSXId" value={form.hangSXId} onChange={handleChange}>
+                        <option value="">-- Chọn hãng sản xuất --</option>
+                        {manufacturers.map((manufacturer) => (
+                          <option key={manufacturer.id} value={String(manufacturer.id)}>{manufacturer.ten || manufacturer.name}</option>
+                        ))}
+                      </select>
+                      {manufacturers.length === 0 && (
+                        <small className="form-text text-muted">Chưa có hãng sản xuất. Thêm tại mục "Hãng sản xuất phụ tùng".</small>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {showVehicleFields && (
                   <>
                     <div className="col-md-4">

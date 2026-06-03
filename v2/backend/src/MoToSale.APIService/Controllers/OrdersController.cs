@@ -52,6 +52,20 @@ public class OrdersController : ControllerBase
         catch (OrderException ex) { return BadRequest(new { message = ex.Message }); }
     }
 
+    /// <summary>Admin/staff lập đơn bán tại quầy (POS): trừ kho ngay nếu bán đứt, hỗ trợ đặt cọc, ghi thu tiền.</summary>
+    [Authorize(Roles = $"{RoleConstant.Admin},{RoleConstant.Staff}")]
+    [HttpPost("pos")]
+    public async Task<IActionResult> CreatePos(PosOrderRequest request)
+    {
+        try
+        {
+            var orderId = await _orders.CreatePosOrderAsync(request, UserIdOrNull);
+            await AddAuditAsync(orderId, "CreatePos", $"Lines={request.Lines?.Count ?? 0};Type={request.OrderType};Paid={request.PaidAmount}");
+            return Ok(new { id = orderId });
+        }
+        catch (OrderException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
     [HttpGet("mine")]
     public async Task<IActionResult> Mine() => Ok(new { items = await _orders.GetMyOrdersAsync(CurrentUserId) });
 
@@ -102,7 +116,33 @@ public class OrdersController : ControllerBase
         {
             await _orders.AllocateAsync(id, request, UserIdOrNull);
             await AddAuditAsync(id, "Allocate", $"Lines={request.Allocations.Count}");
-            return Ok(new { message = "Phân bổ thành công." });
+            return Ok(new { message = "Đã soạn hàng & xuất kho." });
+        }
+        catch (OrderException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    [Authorize(Roles = $"{RoleConstant.Admin},{RoleConstant.Staff}")]
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(int id, UpdateOrderRequest request)
+    {
+        try
+        {
+            await _orders.UpdateOrderAsync(id, request, UserIdOrNull);
+            await AddAuditAsync(id, "Update", $"Lines={(request.Lines?.Count ?? 0)}");
+            return Ok(new { message = "Đã cập nhật đơn hàng." });
+        }
+        catch (OrderException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    [Authorize(Roles = $"{RoleConstant.Admin},{RoleConstant.Staff}")]
+    [HttpPost("{id:int}/fulfill")]
+    public async Task<IActionResult> Fulfill(int id)
+    {
+        try
+        {
+            await _orders.FulfillAsync(id, UserIdOrNull);
+            await AddAuditAsync(id, "Fulfill", "Giao hàng & xuất kho");
+            return Ok(new { message = "Đã giao hàng & xuất kho." });
         }
         catch (OrderException ex) { return BadRequest(new { message = ex.Message }); }
     }

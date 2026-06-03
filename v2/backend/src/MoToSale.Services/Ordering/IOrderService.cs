@@ -13,6 +13,7 @@ public interface IOrderService
 
     // Order
     Task<int> CheckoutAsync(int userId, CheckoutRequest request);
+    Task<int> CreatePosOrderAsync(PosOrderRequest request, int? staffUserId);
     Task<List<OrderListItem>> GetMyOrdersAsync(int userId);
     Task<OrderDetail?> GetOrderAsync(int id);
     Task<PagingResponse<OrderListItem>> SearchOrdersAsync(OrderSearchRequest request);
@@ -20,6 +21,10 @@ public interface IOrderService
     // Allocation (admin phân phối)
     Task<List<AllocationSuggestionItem>> GetAllocationSuggestionAsync(int orderId);
     Task AllocateAsync(int orderId, AllocateRequest request, int? userId);
+    Task FulfillAsync(int orderId, int? userId);
+
+    // Sửa đơn (thông tin + sản phẩm khi còn Chờ thanh toán)
+    Task UpdateOrderAsync(int orderId, UpdateOrderRequest request, int? userId);
 
     // Status
     Task CancelOrderAsync(int orderId, string? reason, int? userId);

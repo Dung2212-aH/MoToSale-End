@@ -62,6 +62,8 @@ public class VoucherService : IVoucherService
     public async Task DeleteAsync(int id)
     {
         var v = await _vouchers.GetByIdAsync(id) ?? throw new VoucherException("Không tìm thấy voucher.");
+        if (v.UsedCount > 0)
+            throw new VoucherException("Voucher đã được sử dụng trong đơn hàng, không thể xóa. Hãy đặt trạng thái Ngừng thay vì xóa.");
         _vouchers.Delete(v);
         await _vouchers.SaveChangesAsync();
     }

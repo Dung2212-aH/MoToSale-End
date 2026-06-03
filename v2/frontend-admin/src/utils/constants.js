@@ -3,7 +3,7 @@ export const ORDER_STATUS_LABELS = {
   Checkout: { label: 'Đang checkout', color: 'secondary' },
   AwaitingPayment: { label: 'Chờ thanh toán / xác nhận', color: 'warning' },
   Confirmed: { label: 'Đã xác nhận', color: 'primary' },
-  Allocated: { label: 'Đã phân bổ', color: 'info' },
+  Allocated: { label: 'Đã soạn hàng', color: 'info' },
   Shipping: { label: 'Đang giao', color: 'info' },
   Delivered: { label: 'Đã giao', color: 'success' },
   Completed: { label: 'Hoàn tất', color: 'success' },
@@ -13,7 +13,7 @@ export const ORDER_STATUS_LABELS = {
 export const ORDER_STATUS_OPTIONS = [
   { value: 'AwaitingPayment', label: 'Chờ thanh toán / xác nhận' },
   { value: 'Confirmed', label: 'Đã xác nhận' },
-  { value: 'Allocated', label: 'Đã phân bổ' },
+  { value: 'Allocated', label: 'Đã soạn hàng' },
   { value: 'Shipping', label: 'Đang giao' },
   { value: 'Delivered', label: 'Đã giao' },
   { value: 'Completed', label: 'Hoàn tất' },
@@ -59,8 +59,8 @@ export const PAYMENT_STATUS_OPTIONS = [
 ];
 
 export const SHIPPING_STATUS = {
-  Unallocated: { label: 'Chưa phân bổ', color: 'secondary' },
-  Allocated: { label: 'Đã phân bổ', color: 'warning' },
+  Unallocated: { label: 'Chưa soạn hàng', color: 'secondary' },
+  Allocated: { label: 'Đã soạn hàng', color: 'warning' },
   Shipped: { label: 'Đang giao', color: 'info' },
   Fulfilled: { label: 'Đã giao', color: 'success' },
 };

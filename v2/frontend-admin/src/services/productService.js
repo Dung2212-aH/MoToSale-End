@@ -32,6 +32,8 @@ const normalizeProduct = (product) => ({
   giaGoc: product.giaGoc ?? product.listPrice ?? 0,
   giaKhuyenMai: product.giaKhuyenMai ?? product.salePrice ?? null,
   anhChinhUrl: product.anhChinhUrl ?? product.mainImageUrl ?? null,
+  maHangSanXuat: product.maHangSanXuat ?? product.manufacturerId ?? null,
+  tenHangSanXuat: product.tenHangSanXuat ?? product.manufacturerName ?? '',
   trangThaiSanPham: product.trangThaiSanPham ?? (product.status === 0 ? 'Inactive' : 'Available'),
   noiBat: product.noiBat ?? product.isFeatured ?? false,
   hotDeal: product.hotDeal ?? product.isHotDeal ?? false,

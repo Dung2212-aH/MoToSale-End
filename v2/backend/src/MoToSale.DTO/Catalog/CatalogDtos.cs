@@ -31,8 +31,8 @@ public record ProductImageDto(int Id, int? SkuId, string Url, string? Alt, bool 
 
 public record AddImageRequest(string Url, string? Alt, int? SkuId, bool IsPrimary, int SortOrder);
 
-public record ManufacturerDto(int Id, string Name, string? Description, int Status);
-public record SaveManufacturerRequest(string Name, string? Description, int Status);
+public record ManufacturerDto(int Id, string Name, string? LogoUrl, string? Description, int Status);
+public record SaveManufacturerRequest(string Name, string? LogoUrl, string? Description, int Status);
 
 public record ProductListItem(
     int Id, string Code, string Name, string Slug, int CategoryId, int? BrandId, int? VehicleModelId, int Kind,
@@ -49,11 +49,6 @@ public record CategoryDto(int Id, int? ParentId, string Name, string Slug, int K
 public record BrandDto(int Id, string Name, string Slug, string? LogoUrl, int Status);
 
 public record VehicleModelDto(int Id, int BrandId, string Name, string Slug, int Status);
-
-public record StoreDto(
-    int Id, string Code, string Name, string Slug, int Type, string AddressLine,
-    string? Province, string? District, string? Ward, string? Phone, string? Email,
-    double? Latitude, double? Longitude, string? OpeningHours, bool IsDefault, int Status);
 
 public record CreateBrandRequest(string Name, string? Slug, string? LogoUrl);
 public record UpdateBrandRequest(string Name, string? Slug, string? LogoUrl, int Status);

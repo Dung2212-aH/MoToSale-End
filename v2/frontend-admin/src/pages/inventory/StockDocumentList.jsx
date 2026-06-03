@@ -5,13 +5,13 @@ import { createDateStamp, exportWorkbook } from '../../utils/exportExcel';
 import { useAuth } from '../../contexts/AuthContext';
 
 const TYPES = {
-  1: 'Nhập kho khác',
+  1: 'Phiếu nhập kho khác',
   2: 'Phiếu xuất kho',
   3: 'Phiếu điều chỉnh tồn',
   4: 'Phiếu kiểm kê',
-  5: 'Phiếu chuyển kho',
   PurchaseReceipt: 'Nhận hàng từ NCC',
 };
+
 const RECEIPT_REASONS = [
   ['OpeningBalance', 'Tồn đầu kỳ'],
   ['Supplement', 'Nhập bù'],
@@ -34,7 +34,6 @@ const StockDocumentList = () => {
   const [documents, setDocuments] = useState([]);
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [details, setDetails] = useState([]);
-  const [stores, setStores] = useState([]);
   const [skus, setSkus] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -44,7 +43,7 @@ const StockDocumentList = () => {
   const [filterType, setFilterType] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
-  const [form, setForm] = useState({ type: isAdmin() ? 1 : 2, reason: '', storeId: '', toStoreId: '', note: '', lines: [{ ...emptyLine }] });
+  const [form, setForm] = useState({ type: isAdmin() ? 1 : 2, reason: '', note: '', lines: [{ ...emptyLine }] });
 
   const fetchDocuments = async () => {
     setLoading(true);
@@ -76,9 +75,8 @@ const StockDocumentList = () => {
   };
 
   const fetchLookups = async () => {
-    const [storeRes, skuRes] = await Promise.allSettled([inventoryService.getStores(), inventoryService.getSkus()]);
-    setStores(storeRes.status === 'fulfilled' ? asItems(storeRes.value.data) : []);
-    setSkus(skuRes.status === 'fulfilled' ? asItems(skuRes.value.data) : []);
+    const skuRes = await inventoryService.getSkus();
+    setSkus(asItems(skuRes.data));
   };
 
   useEffect(() => {
@@ -90,7 +88,7 @@ const StockDocumentList = () => {
   }, []);
 
   const openCreate = () => {
-    setForm({ type: isAdmin() ? 1 : 2, reason: '', storeId: stores[0]?.id || '', toStoreId: '', note: '', lines: [{ ...emptyLine }] });
+    setForm({ type: isAdmin() ? 1 : 2, reason: '', note: '', lines: [{ ...emptyLine }] });
     setShowCreate(true);
   };
 
@@ -110,21 +108,6 @@ const StockDocumentList = () => {
       .filter((line) => line.skuId && Number(line.qty) > 0)
       .map((line) => ({ skuId: Number(line.skuId), qty: Number(line.qty), note: line.note || null }));
 
-    if (!form.storeId) {
-      alert('Vui lòng chọn kho/cửa hàng.');
-      return;
-    }
-
-    if (type === 5 && !form.toStoreId) {
-      alert('Phiếu chuyển kho cần chọn kho nhận.');
-      return;
-    }
-
-    if (type === 5 && Number(form.toStoreId) === Number(form.storeId)) {
-      alert('Kho nhận phải khác kho xuất.');
-      return;
-    }
-
     if (type === 1 && !form.reason) {
       alert('Vui lòng chọn lý do nhập kho khác.');
       return;
@@ -139,8 +122,6 @@ const StockDocumentList = () => {
     try {
       await inventoryService.createDocument({
         type,
-        storeId: Number(form.storeId),
-        toStoreId: type === 5 ? Number(form.toStoreId) : null,
         reason: type === 1 ? form.reason : null,
         note: form.note || null,
         lines,
@@ -240,8 +221,6 @@ const StockDocumentList = () => {
           <div class="muted">Mã phiếu: ${selectedDocument.code}</div>
           <div class="meta">
             <div>Nguồn: ${selectedDocument.sourceLabel || 'Phiếu kho thủ công'}</div>
-            <div>Kho xuất/áp dụng: ${selectedDocument.storeName || '-'}</div>
-            <div>Kho nhận: ${selectedDocument.toStoreName || '-'}</div>
             <div>Trạng thái: ${status}</div>
             <div>Ngày tạo: ${formatDate(selectedDocument.createdDate)}</div>
             <div>Ngày duyệt: ${formatDate(selectedDocument.approvedAt)}</div>
@@ -273,8 +252,6 @@ const StockDocumentList = () => {
             { header: 'Mã phiếu', key: 'code', width: 18 },
             { header: 'Loại phiếu', key: 'type', width: 22 },
             { header: 'Nguồn chứng từ', key: 'source', width: 28 },
-            { header: 'Kho áp dụng', key: 'store', width: 24 },
-            { header: 'Kho nhận', key: 'toStore', width: 24 },
             { header: 'Trạng thái', key: 'status', width: 14 },
             { header: 'Số dòng', key: 'lines', type: 'number', width: 12 },
             { header: 'Ngày tạo', key: 'createdAt', type: 'date', width: 20 },
@@ -285,8 +262,6 @@ const StockDocumentList = () => {
             code: item.code,
             type: TYPES[item.type] || item.type,
             source: item.sourceLabel || 'Phiếu kho thủ công',
-            store: item.storeName,
-            toStore: item.toStoreName || '',
             status: STATUS[item.status]?.label || item.status,
             lines: item.lineCount || 0,
             createdAt: item.createdDate,
@@ -356,8 +331,6 @@ const StockDocumentList = () => {
                       <th>Mã phiếu</th>
                       <th>Loại phiếu</th>
                       <th>Nguồn chứng từ</th>
-                      <th>Kho áp dụng</th>
-                      <th>Kho nhận</th>
                       <th className="text-center">Số dòng</th>
                       <th>Trạng thái</th>
                       <th>Ngày tạo</th>
@@ -368,16 +341,14 @@ const StockDocumentList = () => {
                   </thead>
                   <tbody>
                     {loading ? (
-                      <tr><td colSpan="11" className="text-center py-4">Đang tải phiếu kho...</td></tr>
+                      <tr><td colSpan="9" className="text-center py-4">Đang tải phiếu kho...</td></tr>
                     ) : documents.length === 0 ? (
-                      <tr><td colSpan="11" className="text-center text-muted py-4">Chưa có phiếu kho.</td></tr>
+                      <tr><td colSpan="9" className="text-center text-muted py-4">Chưa có phiếu kho.</td></tr>
                     ) : documents.map((item) => (
                       <tr key={`${item.source}-${item.id}`}>
                         <td><strong>{item.code}</strong></td>
                         <td>{TYPES[item.type] || item.type}</td>
                         <td>{item.sourceLabel || 'Phiếu kho thủ công'}</td>
-                        <td>{item.storeName || '-'}</td>
-                        <td>{item.toStoreName || '-'}</td>
                         <td className="text-center">{item.lineCount || 0}</td>
                         <td>{statusBadge(item.status)}</td>
                         <td>{formatDate(item.createdDate)}</td>
@@ -408,13 +379,13 @@ const StockDocumentList = () => {
               </div>
               <div className="modal-body">
                 <div className="alert alert-info">
-                  Với phiếu kiểm kê/điều chỉnh, số lượng nhập là tồn thực tế sau kiểm kê. Khi duyệt, hệ thống tự tính chênh lệch và ghi lịch sử tồn.
+                  Hệ thống chỉ quản lý một kho duy nhất. Phiếu nhập, xuất, kiểm kê và điều chỉnh sẽ cập nhật trực tiếp vào tồn kho chung.
                 </div>
                 <div className="row">
                   <div className="col-md-3">
                     <div className="form-group">
                       <label>Loại phiếu</label>
-                      <select className="form-control" value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: Number(e.target.value), toStoreId: '' }))}>
+                      <select className="form-control" value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: Number(e.target.value) }))}>
                         {Object.entries(TYPES).filter(([value]) => value !== 'PurchaseReceipt' && (isAdmin() || value !== '1')).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                       </select>
                     </div>
@@ -430,27 +401,7 @@ const StockDocumentList = () => {
                       </div>
                     </div>
                   )}
-                  <div className="col-md-3">
-                    <div className="form-group">
-                      <label>{selectedType === 5 ? 'Kho xuất' : 'Kho áp dụng'}</label>
-                      <select className="form-control" value={form.storeId} onChange={(e) => setForm((prev) => ({ ...prev, storeId: e.target.value }))}>
-                        <option value="">-- Chọn kho --</option>
-                        {stores.map((store) => <option key={store.id} value={store.id}>{store.code ? `${store.code} - ` : ''}{store.name}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  {selectedType === 5 && (
-                    <div className="col-md-3">
-                      <div className="form-group">
-                        <label>Kho nhận</label>
-                        <select className="form-control" value={form.toStoreId} onChange={(e) => setForm((prev) => ({ ...prev, toStoreId: e.target.value }))}>
-                          <option value="">-- Chọn kho nhận --</option>
-                          {stores.map((store) => <option key={store.id} value={store.id}>{store.code ? `${store.code} - ` : ''}{store.name}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  )}
-                  <div className={selectedType === 5 || selectedType === 1 ? 'col-md-3' : 'col-md-6'}>
+                  <div className={selectedType === 1 ? 'col-md-6' : 'col-md-9'}>
                     <div className="form-group">
                       <label>Ghi chú</label>
                       <input className="form-control" value={form.note} onChange={(e) => setForm((prev) => ({ ...prev, note: e.target.value }))} />
@@ -523,9 +474,7 @@ const StockDocumentList = () => {
                   <div className="col-md-3"><strong>Loại:</strong> {TYPES[selectedDocument.type]}</div>
                   <div className="col-md-3"><strong>Nguồn:</strong> {selectedDocument.sourceLabel || 'Phiếu kho thủ công'}</div>
                   <div className="col-md-3"><strong>Trạng thái:</strong> {statusBadge(selectedDocument.status)}</div>
-                  <div className="col-md-3"><strong>Kho áp dụng:</strong> {selectedDocument.storeName || '-'}</div>
-                  <div className="col-md-3"><strong>Kho nhận:</strong> {selectedDocument.toStoreName || '-'}</div>
-                  <div className="col-md-3 mt-2"><strong>Ngày tạo:</strong> {formatDate(selectedDocument.createdDate)}</div>
+                  <div className="col-md-3"><strong>Ngày tạo:</strong> {formatDate(selectedDocument.createdDate)}</div>
                   <div className="col-md-3 mt-2"><strong>Ngày duyệt:</strong> {formatDate(selectedDocument.approvedAt)}</div>
                   {selectedDocument.purchaseOrderCode && <div className="col-md-3 mt-2"><strong>Đơn mua:</strong> {selectedDocument.purchaseOrderCode}</div>}
                   {selectedDocument.supplierName && <div className="col-md-3 mt-2"><strong>NCC:</strong> {selectedDocument.supplierName}</div>}
