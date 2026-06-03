@@ -18,6 +18,8 @@ test-results/
 **/test-results/
 playwright-report/
 **/playwright-report/
+.runtime/
+**/.runtime/
 
 docs/*.png
 docs/modal-full-submit-test-20260602/
