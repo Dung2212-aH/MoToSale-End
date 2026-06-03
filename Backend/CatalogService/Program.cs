@@ -51,6 +51,40 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+// Idempotent schema upgrade for homepage-content features (featured flags + banners).
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
+    await db.Database.ExecuteSqlRawAsync(
+        """
+        IF COL_LENGTH(N'dbo.SANPHAM', N'NoiBat') IS NULL
+            ALTER TABLE dbo.SANPHAM ADD NoiBat BIT NOT NULL CONSTRAINT DF_SANPHAM_NoiBat DEFAULT(0);
+        IF COL_LENGTH(N'dbo.SANPHAM', N'HotDeal') IS NULL
+            ALTER TABLE dbo.SANPHAM ADD HotDeal BIT NOT NULL CONSTRAINT DF_SANPHAM_HotDeal DEFAULT(0);
+
+        IF OBJECT_ID(N'dbo.TRANGCHU_BANNER', N'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.TRANGCHU_BANNER (
+                MaBanner INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                ViTri VARCHAR(30) NOT NULL,
+                TieuDe NVARCHAR(255) NULL,
+                UrlAnh NVARCHAR(500) NOT NULL,
+                LienKet NVARCHAR(500) NULL,
+                ThuTu INT NOT NULL CONSTRAINT DF_TRANGCHU_BANNER_ThuTu DEFAULT(0),
+                DangHoatDong BIT NOT NULL CONSTRAINT DF_TRANGCHU_BANNER_DangHoatDong DEFAULT(1),
+                NgayCapNhat DATETIME2(0) NOT NULL CONSTRAINT DF_TRANGCHU_BANNER_NgayCapNhat DEFAULT(SYSDATETIME())
+            );
+
+            INSERT INTO dbo.TRANGCHU_BANNER (ViTri, TieuDe, UrlAnh, LienKet, ThuTu, DangHoatDong, NgayCapNhat)
+            VALUES
+                ('Slider', N'Banner chính', N'https://bizweb.dktcdn.net/100/519/812/themes/954445/assets/slider_1.jpg?1758009468922', N'/products', 0, 1, SYSDATETIME()),
+                ('BannerLeft', N'Ưu đãi xe máy', N'https://bizweb.dktcdn.net/100/519/812/themes/954445/assets/banner_three_1.jpg?1758009468922', NULL, 0, 1, SYSDATETIME()),
+                ('BannerRight', N'Ưu đãi phụ tùng', N'https://bizweb.dktcdn.net/100/519/812/themes/954445/assets/banner_three_2.jpg?1758009468922', NULL, 0, 1, SYSDATETIME()),
+                ('ProductBanner', N'Sản phẩm nổi bật', N'https://bizweb.dktcdn.net/100/519/812/themes/954445/assets/image_product_3.png?1758009468922', NULL, 0, 1, SYSDATETIME());
+        END;
+        """);
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

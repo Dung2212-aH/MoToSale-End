@@ -15,6 +15,8 @@ public class ProductSearchDto
     public decimal? GiaTu { get; set; }
     public decimal? GiaDen { get; set; }
     public bool? DangHoatDong { get; set; }
+    public bool? NoiBat { get; set; }
+    public bool? HotDeal { get; set; }
     public string? SortBy { get; set; }
     public bool SortDescending { get; set; } = true;
     public int Page { get; set; } = 1;

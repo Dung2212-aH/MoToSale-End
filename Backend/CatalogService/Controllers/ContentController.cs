@@ -496,10 +496,137 @@ public class ContentController : ControllerBase
         return Ok(new { id = contact.MaLienHe, trangThai = contact.TrangThai, daXuLyLuc = contact.DaXuLyLuc });
     }
 
+    // ===== Home Banners =====
+
+    [HttpGet("home-banners")]
+    public async Task<IActionResult> GetHomeBanners([FromQuery] bool all = false)
+    {
+        var rows = await _dbContext.Database
+            .SqlQueryRaw<HomeBannerRow>(
+                """
+                SELECT MaBanner, ViTri, TieuDe, UrlAnh, LienKet, ThuTu, DangHoatDong, NgayCapNhat
+                FROM dbo.TRANGCHU_BANNER
+                ORDER BY ViTri, ThuTu, MaBanner
+                """)
+            .ToListAsync();
+
+        if (!all)
+        {
+            rows = rows.Where(r => r.DangHoatDong).ToList();
+        }
+
+        return Ok(new { items = rows });
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPost("home-banners")]
+    public async Task<IActionResult> CreateHomeBanner([FromBody] HomeBannerRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.UrlAnh))
+        {
+            return BadRequest(new { message = "Anh banner la bat buoc." });
+        }
+
+        var viTri = NormalizeBannerPosition(request.ViTri);
+        await _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO dbo.TRANGCHU_BANNER (ViTri, TieuDe, UrlAnh, LienKet, ThuTu, DangHoatDong, NgayCapNhat)
+            VALUES ({viTri}, {TrimToNull(request.TieuDe)}, {request.UrlAnh.Trim()}, {TrimToNull(request.LienKet)}, {request.ThuTu}, {request.DangHoatDong}, SYSDATETIME())
+            """);
+        await _auditLog.WriteAsync(this, "HomeBanner", "New", "Create", null, request);
+        return Ok(new { message = "Them banner thanh cong." });
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPut("home-banners/{id:int}")]
+    public async Task<IActionResult> UpdateHomeBanner(int id, [FromBody] HomeBannerRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.UrlAnh))
+        {
+            return BadRequest(new { message = "Anh banner la bat buoc." });
+        }
+
+        var viTri = NormalizeBannerPosition(request.ViTri);
+        var affected = await _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE dbo.TRANGCHU_BANNER
+            SET ViTri = {viTri}, TieuDe = {TrimToNull(request.TieuDe)}, UrlAnh = {request.UrlAnh.Trim()}, LienKet = {TrimToNull(request.LienKet)}, ThuTu = {request.ThuTu}, DangHoatDong = {request.DangHoatDong}, NgayCapNhat = SYSDATETIME()
+            WHERE MaBanner = {id}
+            """);
+        if (affected == 0) return NotFound();
+        await _auditLog.WriteAsync(this, "HomeBanner", id.ToString(), "Update", null, request);
+        return Ok(new { id });
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpDelete("home-banners/{id:int}")]
+    public async Task<IActionResult> DeleteHomeBanner(int id)
+    {
+        var affected = await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"DELETE FROM dbo.TRANGCHU_BANNER WHERE MaBanner = {id}");
+        if (affected == 0) return NotFound();
+        await _auditLog.WriteAsync(this, "HomeBanner", id.ToString(), "Delete", null, null);
+        return NoContent();
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPost("home-banners/image")]
+    public async Task<IActionResult> UploadHomeBannerImage([FromForm] IFormFile? file)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest(new { message = "Vui long chon file anh." });
+        }
+
+        string url;
+        try
+        {
+            url = await _imageStorage.SaveImageAsync(file, "banners", HttpContext.RequestAborted);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
+        return Ok(new { urlAnh = url });
+    }
+
+    private static string NormalizeBannerPosition(string? value)
+    {
+        return value?.Trim() switch
+        {
+            "Slider" => "Slider",
+            "BannerLeft" => "BannerLeft",
+            "BannerRight" => "BannerRight",
+            "ProductBanner" => "ProductBanner",
+            _ => "Slider"
+        };
+    }
+
     private static string? TrimToNull(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
+}
+
+public class HomeBannerRequest
+{
+    public string ViTri { get; set; } = "Slider";
+    public string? TieuDe { get; set; }
+    public string UrlAnh { get; set; } = string.Empty;
+    public string? LienKet { get; set; }
+    public int ThuTu { get; set; }
+    public bool DangHoatDong { get; set; } = true;
+}
+
+public class HomeBannerRow
+{
+    public int MaBanner { get; set; }
+    public string ViTri { get; set; } = string.Empty;
+    public string? TieuDe { get; set; }
+    public string UrlAnh { get; set; } = string.Empty;
+    public string? LienKet { get; set; }
+    public int ThuTu { get; set; }
+    public bool DangHoatDong { get; set; }
+    public DateTime NgayCapNhat { get; set; }
 }
 
 // ===== Request DTOs for admin endpoints =====

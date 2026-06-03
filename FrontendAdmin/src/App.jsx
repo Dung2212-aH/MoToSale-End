@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import ProductList from './pages/products/ProductList';
 import CategoryList from './pages/categories/CategoryList';
 import BrandList from './pages/brands/BrandList';
+import ManufacturerList from './pages/manufacturers/ManufacturerList';
 import OrderList from './pages/orders/OrderList';
 import OrderDetail from './pages/orders/OrderDetail';
 import VoucherList from './pages/vouchers/VoucherList';
@@ -19,6 +20,7 @@ import ReviewList from './pages/reviews/ReviewList';
 import PostList from './pages/posts/PostList';
 import FaqList from './pages/faq/FaqList';
 import ContactList from './pages/contacts/ContactList';
+import HomeBannerList from './pages/content/HomeBannerList';
 import ReportsPage from './pages/reports/ReportsPage';
 import AuditLogList from './pages/audit/AuditLogList';
 import WarrantyList from './pages/warranties/WarrantyList';
@@ -68,6 +70,7 @@ function AppRoutes() {
       <Route path="/parts" element={<ProtectedRoute><MainLayout><ProductList productType="PhuTung" /></MainLayout></ProtectedRoute>} />
       <Route path="/categories" element={<ProtectedRoute><MainLayout><CategoryList /></MainLayout></ProtectedRoute>} />
       <Route path="/brands" element={<ProtectedRoute><MainLayout><BrandList /></MainLayout></ProtectedRoute>} />
+      <Route path="/manufacturers" element={<ProtectedRoute><MainLayout><ManufacturerList /></MainLayout></ProtectedRoute>} />
 
       {/* Orders & Payments */}
       <Route path="/orders" element={<ProtectedRoute><MainLayout><OrderList /></MainLayout></ProtectedRoute>} />
@@ -84,6 +87,7 @@ function AppRoutes() {
       <Route path="/posts" element={<ProtectedRoute><MainLayout><PostList /></MainLayout></ProtectedRoute>} />
       <Route path="/faq" element={<ProtectedRoute><MainLayout><FaqList /></MainLayout></ProtectedRoute>} />
       <Route path="/contacts" element={<ProtectedRoute><MainLayout><ContactList /></MainLayout></ProtectedRoute>} />
+      <Route path="/home-banners" element={<ProtectedRoute><MainLayout><HomeBannerList /></MainLayout></ProtectedRoute>} />
 
       {/* Reports */}
       <Route path="/reports" element={<ProtectedRoute><MainLayout><ReportsPage /></MainLayout></ProtectedRoute>} />

@@ -20,6 +20,8 @@ public class ProductDetailDto
     public int SoLuongTon { get; set; }
     public string? AnhChinhUrl { get; set; }
     public bool DangHoatDong { get; set; }
+    public bool NoiBat { get; set; }
+    public bool HotDeal { get; set; }
     public double DiemTrungBinh { get; set; }
     public int TongDanhGia { get; set; }
     public List<ProductVariantDto> BienThe { get; set; } = new();

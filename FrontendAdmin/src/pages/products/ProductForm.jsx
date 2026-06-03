@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import productService from '../../services/productService';
 import brandService from '../../services/brandService';
+import manufacturerService from '../../services/manufacturerService';
 
 const PRODUCT_TYPE = {
   XeMay: {
@@ -43,8 +44,13 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
   const isEdit = !!product;
   const lockedType = fixedProductType || null;
   const [models, setModels] = useState([]);
+  const [manufacturers, setManufacturers] = useState([]);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    manufacturerService.getAll().then((res) => setManufacturers(res.data.items || [])).catch(() => setManufacturers([]));
+  }, []);
 
   const [form, setForm] = useState({
     maSP: '',
@@ -55,12 +61,15 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
     hangXeId: '',
     dongXeId: '',
     moTaNgan: '',
+    hangSanXuatId: '',
     giaGoc: '',
     giaKhuyenMai: '',
     soLuongTon: '',
     anhChinhUrl: '',
     anhChinhFile: null,
     trangThai: 'Available',
+    noiBat: false,
+    hotDeal: false,
   });
 
   const categoryTree = useMemo(() => {
@@ -134,12 +143,15 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
         hangXeId: String(product.maHangXe || product.hangXeId || product.brandId || ''),
         dongXeId: String(product.maDongXe || product.dongXeId || product.modelId || ''),
         moTaNgan: product.moTaNgan || product.shortDescription || '',
+        hangSanXuatId: String(product.hangSanXuatId || product.manufacturerId || ''),
         giaGoc: product.giaGoc || product.basePrice || '',
         giaKhuyenMai: product.giaKhuyenMai || product.salePrice || '',
         soLuongTon: product.soLuongTon ?? product.stock ?? 0,
         anhChinhUrl: product.anhChinhUrl || product.mainImage || '',
         anhChinhFile: null,
         trangThai: product.trangThaiSanPham || product.trangThai || product.status || 'Available',
+        noiBat: product.noiBat ?? product.NoiBat ?? false,
+        hotDeal: product.hotDeal ?? product.HotDeal ?? false,
       });
     } else {
       setForm({
@@ -151,12 +163,15 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
         hangXeId: '',
         dongXeId: '',
         moTaNgan: '',
+        hangSanXuat: '',
         giaGoc: '',
         giaKhuyenMai: '',
         soLuongTon: '',
         anhChinhUrl: '',
         anhChinhFile: null,
         trangThai: 'Available',
+        noiBat: false,
+        hotDeal: false,
       });
     }
     setErrors({});
@@ -239,10 +254,13 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
         maHangXe: form.loaiSP === 'XeMay' && form.hangXeId ? Number(form.hangXeId) : null,
         maDongXe: form.loaiSP === 'XeMay' && form.dongXeId ? Number(form.dongXeId) : null,
         moTaNgan: form.moTaNgan || undefined,
+        hangSanXuatId: form.loaiSP === 'PhuTung' && form.hangSanXuatId ? Number(form.hangSanXuatId) : null,
         giaGoc: Number(form.giaGoc) || 0,
         giaKhuyenMai: Number(form.giaKhuyenMai) || null,
         anhChinhUrl: mainImageFile ? undefined : form.anhChinhUrl || undefined,
         trangThaiSanPham: form.trangThai,
+        noiBat: !!form.noiBat,
+        hotDeal: !!form.hotDeal,
       };
       if (!isEdit) {
         payload.soLuongTon = Number(form.soLuongTon) || 0;
@@ -387,7 +405,45 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
                     </select>
                   </div>
                 </div>
+                <div className="col-md-6">
+                  <div className="form-group">
+                    <label>Hiển thị trang chủ</label>
+                    <div className="custom-control custom-switch">
+                      <input
+                        type="checkbox"
+                        className="custom-control-input"
+                        id="productNoiBat"
+                        checked={form.noiBat}
+                        onChange={(e) => setForm((prev) => ({ ...prev, noiBat: e.target.checked }))}
+                      />
+                      <label className="custom-control-label" htmlFor="productNoiBat">Sản phẩm nổi bật</label>
+                    </div>
+                    <div className="custom-control custom-switch mt-1">
+                      <input
+                        type="checkbox"
+                        className="custom-control-input"
+                        id="productHotDeal"
+                        checked={form.hotDeal}
+                        onChange={(e) => setForm((prev) => ({ ...prev, hotDeal: e.target.checked }))}
+                      />
+                      <label className="custom-control-label" htmlFor="productHotDeal">Hot deal</label>
+                    </div>
+                  </div>
+                </div>
               </div>
+
+              {form.loaiSP === 'PhuTung' && (
+                <div className="form-group">
+                  <label>Hãng sản xuất (phụ tùng)</label>
+                  <select className="form-control" name="hangSanXuatId" value={form.hangSanXuatId} onChange={handleChange}>
+                    <option value="">-- Chọn hãng sản xuất --</option>
+                    {manufacturers.map((m) => (
+                      <option key={m.maHangSanXuat || m.id} value={m.maHangSanXuat || m.id}>{m.tenHangSanXuat || m.name}</option>
+                    ))}
+                  </select>
+                  <small className="form-text text-muted">Nhà sản xuất phụ tùng (quản lý ở mục "Hãng sản xuất") — tách biệt với hãng xe.</small>
+                </div>
+              )}
 
               <div className="form-group">
                 <label>Mô tả ngắn</label>

@@ -829,6 +829,19 @@ export const favoriteApi = {
 };
 
 export const contentApi = {
+  async getHomeBanners() {
+    const response = await api.get('/content/home-banners');
+    const data = responseData(response);
+    const items = data?.items || data?.Items || data || [];
+    return (Array.isArray(items) ? items : []).map((raw) => ({
+      id: field(raw, 'maBanner', 'MaBanner', 'id', 'Id'),
+      position: field(raw, 'viTri', 'ViTri', 'position'),
+      title: field(raw, 'tieuDe', 'TieuDe', 'title'),
+      imageUrl: normalizeImageUrl(field(raw, 'urlAnh', 'UrlAnh', 'imageUrl')),
+      link: field(raw, 'lienKet', 'LienKet', 'link'),
+      sortOrder: Number(field(raw, 'thuTu', 'ThuTu', 'sortOrder') || 0),
+    }));
+  },
   getBlogPosts: (params) => api.get('/content/blog-posts', { params }),
   getFaqs: (params) => api.get('/content/faqs', { params }),
   createContactRequest: (data) => api.post('/content/contact-requests', {

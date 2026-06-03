@@ -322,6 +322,7 @@ const ProductList = ({ productType = 'XeMay' }) => {
                           <th className="table-col-text">{config.nameHeader}</th>
                           <th className="table-col-text">Danh mục</th>
                           {config.showBrand && <th className="table-col-text">Hãng xe</th>}
+                          {!config.showBrand && <th className="table-col-text">Hãng sản xuất</th>}
                           <th className="table-col-money">Giá gốc</th>
                           <th className="table-col-money">Giá KM</th>
                           <th className="table-col-number">Tồn kho</th>
@@ -341,6 +342,7 @@ const ProductList = ({ productType = 'XeMay' }) => {
                               <td className="table-col-text">{product.tenSanPham || product.name}</td>
                               <td className="table-col-text">{category?.tenDanhMuc || category?.name || ''}</td>
                               {config.showBrand && <td className="table-col-text">{brand?.tenHang || brand?.name || ''}</td>}
+                              {!config.showBrand && <td className="table-col-text">{product.tenHangSanXuat || '—'}</td>}
                               <td className="table-col-money">{formatCurrency(product.giaGoc || product.basePrice || 0)}</td>
                               <td className="table-col-money">{formatCurrency(product.giaKhuyenMai || product.giaBan || product.salePrice || 0)}</td>
                               <td className="table-col-number">{product.soLuongTon ?? product.stock ?? 0}</td>

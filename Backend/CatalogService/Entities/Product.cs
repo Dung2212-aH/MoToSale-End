@@ -17,6 +17,8 @@ public class Product
     public int SoLuongTon { get; set; }
     public string? AnhChinhUrl { get; set; }
     public bool DangHoatDong { get; set; }
+    public bool NoiBat { get; set; }
+    public bool HotDeal { get; set; }
     public string TrangThaiSanPham { get; set; } = string.Empty;
     public DateTime NgayTao { get; set; }
     public DateTime NgayCapNhat { get; set; }

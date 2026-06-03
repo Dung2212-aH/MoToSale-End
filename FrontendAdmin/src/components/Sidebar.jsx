@@ -61,6 +61,12 @@ const Sidebar = ({ collapsed = false }) => {
                 <p>Hãng xe & Dòng xe</p>
               </Link>
             </li>
+            <li className="nav-item">
+              <Link to="/manufacturers" className={`nav-link ${isActiveGroup('/manufacturers')}`}>
+                <i className="nav-icon fas fa-tools"></i>
+                <p>Hãng sản xuất PT</p>
+              </Link>
+            </li>
 
             <li className="nav-header">ĐƠN HÀNG</li>
             <li className="nav-item">
@@ -113,6 +119,12 @@ const Sidebar = ({ collapsed = false }) => {
               <Link to="/reviews" className={`nav-link ${isActiveGroup('/reviews')}`}>
                 <i className="nav-icon fas fa-star"></i>
                 <p>Đánh giá</p>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link to="/home-banners" className={`nav-link ${isActiveGroup('/home-banners')}`}>
+                <i className="nav-icon fas fa-images"></i>
+                <p>Banner trang chủ</p>
               </Link>
             </li>
             <li className="nav-item">

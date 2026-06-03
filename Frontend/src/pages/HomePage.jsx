@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FiAlertCircle } from 'react-icons/fi';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { categoryApi, orderApi, productApi } from '../services/api.js';
+import { categoryApi, contentApi, orderApi, productApi } from '../services/api.js';
 import { brandAssets, homeCategoryReferences, serviceHighlights } from '../assets/siteData.js';
 import CategoryMenu from '../components/CategoryMenu.jsx';
 import ErrorState from '../components/ErrorState.jsx';
@@ -56,6 +56,9 @@ function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [pendingOrders, setPendingOrders] = useState([]);
+  const [featuredList, setFeaturedList] = useState([]);
+  const [dealList, setDealList] = useState([]);
+  const [banners, setBanners] = useState([]);
 
   async function loadHomeData() {
     setLoading(true);
@@ -65,6 +68,9 @@ function HomePage() {
       const tasks = [
         productApi.getProducts({ page: 1, pageSize: 12 }),
         categoryApi.getAll().then((res) => res.data),
+        productApi.getProducts({ page: 1, pageSize: 8, NoiBat: true }).then((res) => res.items).catch(() => []),
+        productApi.getProducts({ page: 1, pageSize: 8, HotDeal: true }).then((res) => res.items).catch(() => []),
+        contentApi.getHomeBanners().catch(() => []),
       ];
 
       if (isAuthenticated) {
@@ -74,10 +80,16 @@ function HomePage() {
       const results = await Promise.all(tasks);
       const productsResponse = results[0];
       const categoriesResponse = results[1];
-      const ordersResponse = results.length > 2 ? results[2] : [];
+      const featuredResponse = results[2];
+      const dealResponse = results[3];
+      const bannersResponse = results[4];
+      const ordersResponse = results.length > 5 ? results[5] : [];
 
       setProducts(productsResponse.items);
       setCategories(categoriesResponse.filter((category) => category.isActive));
+      setFeaturedList(Array.isArray(featuredResponse) ? featuredResponse : []);
+      setDealList(Array.isArray(dealResponse) ? dealResponse : []);
+      setBanners(Array.isArray(bannersResponse) ? bannersResponse : []);
 
       if (Array.isArray(ordersResponse)) {
         setPendingOrders(
@@ -180,11 +192,28 @@ function HomePage() {
   }
 
   const featuredCategories = useMemo(() => buildFeaturedCategories(categories), [categories]);
-  const featuredProducts = useMemo(() => products.slice(0, 4), [products]);
+  const bannerByPosition = useMemo(() => {
+    const map = {};
+    [...banners]
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+      .forEach((banner) => {
+        if (banner.position && !map[banner.position] && banner.imageUrl) {
+          map[banner.position] = banner;
+        }
+      });
+    return map;
+  }, [banners]);
+  const featuredProducts = useMemo(
+    () => (featuredList.length ? featuredList : products).slice(0, 4),
+    [featuredList, products],
+  );
   const dealProducts = useMemo(() => {
+    if (dealList.length) {
+      return dealList.slice(0, 4);
+    }
     const discounted = products.filter((product) => Number(product.salePrice) > 0 && product.salePrice < product.basePrice);
     return (discounted.length ? discounted : products).slice(0, 4);
-  }, [products]);
+  }, [dealList, products]);
   const bestSellerProducts = useMemo(() => {
     const nextProducts = products.slice(4, 8);
     return (nextProducts.length ? nextProducts : products.slice(0, 4)).slice(0, 4);
@@ -213,8 +242,8 @@ function HomePage() {
       )}
 
       <section id="trang-chu" className="scroll-mt-32 bg-[#101010]">
-        <Link to="/products">
-          <img src={brandAssets.slider} alt="EURO Moto" className="h-auto max-h-[560px] w-full object-cover" />
+        <Link to={bannerByPosition.Slider?.link || '/products'}>
+          <img src={bannerByPosition.Slider?.imageUrl || brandAssets.slider} alt={bannerByPosition.Slider?.title || 'EURO Moto'} className="h-auto max-h-[560px] w-full object-cover" />
         </Link>
       </section>
 
@@ -241,15 +270,15 @@ function HomePage() {
 
       <section className="px-4 py-10 sm:py-12">
         <div className="mx-auto grid w-full max-w-[1200px] grid-cols-1 gap-5 md:grid-cols-2">
-          <img src={brandAssets.bannerOne} alt="Ưu đãi xe máy" className="w-full rounded-2xl object-cover" />
-          <img src={brandAssets.bannerTwo} alt="Ưu đãi phụ tùng" className="w-full rounded-2xl object-cover" />
+          <img src={bannerByPosition.BannerLeft?.imageUrl || brandAssets.bannerOne} alt={bannerByPosition.BannerLeft?.title || 'Ưu đãi xe máy'} className="w-full rounded-2xl object-cover" />
+          <img src={bannerByPosition.BannerRight?.imageUrl || brandAssets.bannerTwo} alt={bannerByPosition.BannerRight?.title || 'Ưu đãi phụ tùng'} className="w-full rounded-2xl object-cover" />
         </div>
       </section>
 
       <section id="san-pham-noi-bat" className="scroll-mt-32 px-4 py-10 sm:py-12">
         <div className="mx-auto grid w-full max-w-[1200px] grid-cols-1 gap-7 xl:grid-cols-[33%_1fr]">
           <div>
-            <img src={brandAssets.productBanner} alt="Sản phẩm nổi bật" className="w-full rounded-2xl object-cover" />
+            <img src={bannerByPosition.ProductBanner?.imageUrl || brandAssets.productBanner} alt={bannerByPosition.ProductBanner?.title || 'Sản phẩm nổi bật'} className="w-full rounded-2xl object-cover" />
           </div>
 
           <div className="space-y-6">

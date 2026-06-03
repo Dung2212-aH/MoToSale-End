@@ -113,6 +113,8 @@ public class CatalogService : ICatalogService
             SoLuongTon = product.SoLuongTon,
             AnhChinhUrl = product.AnhChinhUrl,
             DangHoatDong = product.DangHoatDong,
+            NoiBat = product.NoiBat,
+            HotDeal = product.HotDeal,
             BienThe = variants.Select(MapProductVariant).ToList(),
             Anh = images.Select(MapProductImage).ToList()
         };
@@ -136,7 +138,9 @@ public class CatalogService : ICatalogService
             TyLeGiam = GetDiscountPercent(product),
             SoLuongTon = product.SoLuongTon,
             AnhChinhUrl = product.AnhChinhUrl,
-            TrangThaiSanPham = product.TrangThaiSanPham
+            TrangThaiSanPham = product.TrangThaiSanPham,
+            NoiBat = product.NoiBat,
+            HotDeal = product.HotDeal
         };
     }
 

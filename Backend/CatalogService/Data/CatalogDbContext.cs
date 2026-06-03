@@ -188,6 +188,8 @@ public class CatalogDbContext : DbContext
             e.Property(e => e.GiaKhuyenMai).HasPrecision(18, 2);
             e.Property(e => e.AnhChinhUrl).HasMaxLength(500);
             e.Property(e => e.TrangThaiSanPham).HasMaxLength(20).IsUnicode(false).IsRequired();
+            e.Property(e => e.NoiBat).IsRequired().HasDefaultValue(false);
+            e.Property(e => e.HotDeal).IsRequired().HasDefaultValue(false);
             e.Property(e => e.NgayTao).HasColumnType("datetime2(0)");
             e.Property(e => e.NgayCapNhat).HasColumnType("datetime2(0)");
 

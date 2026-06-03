@@ -77,6 +77,8 @@ export function normalizeProduct(raw) {
     mainImageUrl: normalizeImageUrl(valueOf(raw, 'mainImageUrl', 'MainImageUrl', 'anhChinhUrl', 'AnhChinhUrl')),
     status: valueOf(raw, 'status', 'Status', 'trangThaiSanPham', 'TrangThaiSanPham'),
     isActive: valueOf(raw, 'isActive', 'IsActive', 'dangHoatDong', 'DangHoatDong') !== false,
+    isFeatured: valueOf(raw, 'isFeatured', 'IsFeatured', 'noiBat', 'NoiBat') === true,
+    isHotDeal: valueOf(raw, 'isHotDeal', 'IsHotDeal', 'hotDeal', 'HotDeal') === true,
     averageRating: Number(valueOf(raw, 'averageRating', 'AverageRating', 'diemTrungBinh', 'DiemTrungBinh') || 0),
     totalReviews: Number(valueOf(raw, 'totalReviews', 'TotalReviews', 'tongDanhGia', 'TongDanhGia') || 0),
     mainColor: valueOf(raw, 'mainColor'),

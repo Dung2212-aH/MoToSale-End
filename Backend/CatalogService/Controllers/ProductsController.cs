@@ -140,6 +140,8 @@ public class ProductsController : ControllerBase
             AnhChinhUrl = request.AnhChinhUrl,
             TrangThaiSanPham = string.IsNullOrWhiteSpace(request.TrangThaiSanPham) ? "Available" : request.TrangThaiSanPham,
             DangHoatDong = request.DangHoatDong ?? true,
+            NoiBat = request.NoiBat ?? false,
+            HotDeal = request.HotDeal ?? false,
             NgayTao = now,
             NgayCapNhat = now
         };
@@ -225,6 +227,8 @@ public class ProductsController : ControllerBase
         if (request.AnhChinhUrl != null) product.AnhChinhUrl = request.AnhChinhUrl;
         if (request.TrangThaiSanPham != null) product.TrangThaiSanPham = request.TrangThaiSanPham;
         if (request.DangHoatDong.HasValue) product.DangHoatDong = request.DangHoatDong.Value;
+        if (request.NoiBat.HasValue) product.NoiBat = request.NoiBat.Value;
+        if (request.HotDeal.HasValue) product.HotDeal = request.HotDeal.Value;
         product.NgayCapNhat = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync();
@@ -1054,4 +1058,6 @@ public class UpdateProductRequest
     public string? AnhChinhUrl { get; set; }
     public string? TrangThaiSanPham { get; set; }
     public bool? DangHoatDong { get; set; }
+    public bool? NoiBat { get; set; }
+    public bool? HotDeal { get; set; }
 }

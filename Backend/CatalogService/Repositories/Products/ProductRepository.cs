@@ -114,6 +114,16 @@ public class ProductRepository : IProductRepository
             query = query.Where(p => p.DangHoatDong == search.DangHoatDong.Value);
         }
 
+        if (search.NoiBat.HasValue)
+        {
+            query = query.Where(p => p.NoiBat == search.NoiBat.Value);
+        }
+
+        if (search.HotDeal.HasValue)
+        {
+            query = query.Where(p => p.HotDeal == search.HotDeal.Value);
+        }
+
         return ApplySort(query, search);
     }
 
