@@ -141,7 +141,7 @@ public class OrderService : IOrderService
         var now = DateTime.UtcNow;
         var order = new Order
         {
-            Code = $"DH{now:yyyyMMddHHmmss}",
+            Code = $"DH{now:yyyyMMddHHmmssfff}",
             UserId = userId,
             Channel = "Online",
             OrderType = req.OrderType is OrderType.Deposit or OrderType.Installment ? req.OrderType : OrderType.FullPayment,
@@ -244,7 +244,7 @@ public class OrderService : IOrderService
 
         var order = new Order
         {
-            Code = $"POS{now:yyyyMMddHHmmss}",
+            Code = $"POS{now:yyyyMMddHHmmssfff}",
             UserId = customerId,
             Channel = "InStore",
             OrderType = isDeposit ? OrderType.Deposit : OrderType.FullPayment,

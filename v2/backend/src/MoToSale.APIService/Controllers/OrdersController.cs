@@ -7,6 +7,7 @@ using MoToSale.DTO.Ordering;
 using MoToSale.Entities.Audit;
 using MoToSale.Repository;
 using MoToSale.Services.Ordering;
+using MoToSale.Services.Payments;
 
 namespace MoToSale.APIService.Controllers;
 
@@ -16,11 +17,13 @@ namespace MoToSale.APIService.Controllers;
 public class OrdersController : ControllerBase
 {
     private readonly IOrderService _orders;
+    private readonly IPaymentService _payments;
     private readonly AppDbContext _db;
 
-    public OrdersController(IOrderService orders, AppDbContext db)
+    public OrdersController(IOrderService orders, IPaymentService payments, AppDbContext db)
     {
         _orders = orders;
+        _payments = payments;
         _db = db;
     }
 
@@ -93,6 +96,22 @@ public class OrdersController : ControllerBase
             return Ok(new { message = "Đã hủy đơn." });
         }
         catch (OrderException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    /// <summary>Khách báo đã chuyển khoản: tạo phiếu thanh toán chờ xác nhận cho đơn của mình.</summary>
+    [HttpPost("{id:int}/payment-claim")]
+    public async Task<IActionResult> ClaimTransfer(int id)
+    {
+        var order = await _orders.GetOrderAsync(id);
+        if (order is null) return NotFound();
+        if (!IsStaff && order.UserId != CurrentUserId) return NotFound();
+        try
+        {
+            var pid = await _payments.ClaimTransferAsync(id, UserIdOrNull);
+            await AddAuditAsync(id, "PaymentClaim", "Khách báo đã chuyển khoản");
+            return Ok(new { id = pid, status = "AwaitingConfirmation" });
+        }
+        catch (PaymentException ex) { return BadRequest(new { message = ex.Message }); }
     }
 
     [Authorize(Roles = $"{RoleConstant.Admin},{RoleConstant.Staff}")]

@@ -8,6 +8,7 @@ public interface IWarrantyService
     Task<PagingResponse<WarrantyDto>> SearchAsync(PagingRequest request, string? status);
     Task<WarrantyDetailDto?> GetAsync(int id);
     Task<int> CreateAsync(SaveWarrantyRequest request);
+    Task UpdateAsync(int id, SaveWarrantyRequest request);
     Task UpdateStatusAsync(int id, UpdateWarrantyStatusRequest request, int? userId);
 }
 

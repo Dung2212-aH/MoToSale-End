@@ -156,6 +156,25 @@ public class BusinessOperationsService : IBusinessOperationsService
         row.PartsCost = row.Lines.Sum(x => x.Qty * x.UnitPrice); _db.RepairOrders.Add(row); await _db.SaveChangesAsync();
         _db.RepairStatusHistories.Add(new RepairStatusHistory { RepairOrderId = row.Id, ToStatus = row.RepairStatus, Note = "Tiếp nhận phiếu sửa chữa", ChangedAt = now, CreatedDate = now }); await _db.SaveChangesAsync(); return row.Id;
     }
+    public async Task UpdateRepairAsync(int id, CreateRepairOrderRequest r)
+    {
+        var row = await _db.RepairOrders.Include(x => x.Lines).FirstOrDefaultAsync(x => x.Id == id) ?? throw new BusinessOperationsException("Không tìm thấy phiếu sửa chữa.");
+        if (row.RepairStatus != "Received") throw new BusinessOperationsException("Chỉ sửa được thông tin khi phiếu đang ở trạng thái mới tiếp nhận.");
+        if (string.IsNullOrWhiteSpace(r.VehicleDescription) || string.IsNullOrWhiteSpace(r.ReportedIssue)) throw new BusinessOperationsException("Thông tin xe và mô tả lỗi là bắt buộc.");
+        if (!await HasRoleAsync(r.CustomerId, "Customer")) throw new BusinessOperationsException("Khách hàng không hợp lệ.");
+        if (r.AssignedStaffId.HasValue && !await HasRoleAsync(r.AssignedStaffId.Value, "Staff")) throw new BusinessOperationsException("Nhân viên phụ trách không hợp lệ.");
+        if (r.LaborCost < 0 || (r.Lines ?? []).Any(x => x.Qty <= 0 || x.UnitPrice < 0)) throw new BusinessOperationsException("Chi phí hoặc phụ tùng sửa chữa không hợp lệ.");
+        var now = DateTime.UtcNow;
+        row.CustomerId = r.CustomerId; row.AssignedStaffId = r.AssignedStaffId; row.WarrantyId = r.WarrantyId;
+        row.VehicleDescription = r.VehicleDescription; row.ReportedIssue = r.ReportedIssue; row.LaborCost = r.LaborCost; row.Note = r.Note;
+        _db.RepairOrderLines.RemoveRange(row.Lines);
+        var newLines = (r.Lines ?? new()).Select(x => new RepairOrderLine { RepairOrderId = id, SkuId = x.SkuId, Description = x.Description, Qty = x.Qty, UnitPrice = x.UnitPrice, CreatedDate = now }).ToList();
+        _db.RepairOrderLines.AddRange(newLines);
+        row.PartsCost = newLines.Sum(x => x.Qty * x.UnitPrice);
+        row.UpdatedDate = now;
+        await _db.SaveChangesAsync();
+    }
+
     public async Task UpdateRepairStatusAsync(int id, UpdateRepairStatusRequest r)
     {
         var transitions = new Dictionary<string, string[]>

@@ -125,7 +125,18 @@ public class CatalogService : ICatalogService
         var p = await _products.GetDetailAsync(id);
         if (p is null) return null;
         string? mfgName = p.ManufacturerId.HasValue ? (await _manufacturers.GetByIdAsync(p.ManufacturerId.Value))?.Name : null;
-        return MapDetail(p, mfgName);
+        var detail = MapDetail(p, mfgName);
+
+        // Gắn tồn khả dụng (OnHand - Reserved) cho từng SKU để storefront biết còn hàng hay không.
+        var skuIds = detail.Skus.Select(s => s.Id).ToList();
+        if (skuIds.Count > 0)
+        {
+            var avail = await _db.InventoryItems.AsNoTracking()
+                .Where(i => skuIds.Contains(i.SkuId))
+                .ToDictionaryAsync(i => i.SkuId, i => i.OnHand - i.Reserved);
+            detail = detail with { Skus = detail.Skus.Select(s => s with { Available = avail.GetValueOrDefault(s.Id) }).ToList() };
+        }
+        return detail;
     }
 
     public async Task DeleteProductAsync(int id)

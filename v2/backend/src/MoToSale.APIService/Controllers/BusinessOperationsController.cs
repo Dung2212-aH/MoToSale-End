@@ -169,6 +169,14 @@ public class BusinessOperationsController : ControllerBase
         return result;
     }
 
+    [HttpPut("repairs/{id:int}")]
+    public async Task<IActionResult> UpdateRepair(int id, CreateRepairOrderRequest r)
+    {
+        var result = await Run(() => _service.UpdateRepairAsync(id, r));
+        if (result is OkResult) await AddAuditAsync("RepairOrder", id.ToString(), "Update", r.VehicleDescription);
+        return result;
+    }
+
     [HttpPut("repairs/{id:int}/status")]
     public async Task<IActionResult> RepairStatus(int id, UpdateRepairStatusRequest r)
     {

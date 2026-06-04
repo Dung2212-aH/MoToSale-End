@@ -13,6 +13,12 @@ const DEFAULT_SETTINGS = [
   ['DefaultShippingFee', 'Phí vận chuyển mặc định'],
   ['TaxCode', 'Mã số thuế cửa hàng (hóa đơn VAT)'],
   ['VatRate', 'Thuế suất VAT mặc định (%) - để trống = 10'],
+  // Thanh toán chuyển khoản (hiển thị QR cho khách ở storefront)
+  ['BankName', 'Ngân hàng nhận chuyển khoản (vd: Vietcombank)'],
+  ['BankCode', 'Mã ngân hàng VietQR (vd: VCB, TCB, BIDV, MB)'],
+  ['BankAccountNo', 'Số tài khoản nhận chuyển khoản'],
+  ['BankAccountName', 'Tên chủ tài khoản'],
+  ['BankQrUrl', 'Link ảnh QR cố định (tùy chọn — nếu có thì dùng thay QR tự sinh)'],
 ];
 
 const getApiMessage = (err, fallback) => err?.response?.data?.message || fallback;

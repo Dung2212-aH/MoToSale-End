@@ -30,6 +30,13 @@ public class WarrantiesController : ControllerBase
         catch (WarrantyException ex) { return BadRequest(new { message = ex.Message }); }
     }
 
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Update(int id, SaveWarrantyRequest request)
+    {
+        try { await _warranties.UpdateAsync(id, request); return Ok(new { id }); }
+        catch (WarrantyException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
     [HttpPatch("{id:int}/status")]
     public async Task<IActionResult> UpdateStatus(int id, UpdateWarrantyStatusRequest request)
     {

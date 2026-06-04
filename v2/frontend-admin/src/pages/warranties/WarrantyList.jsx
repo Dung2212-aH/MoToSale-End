@@ -45,6 +45,7 @@ const WarrantyList = () => {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [statusForm, setStatusForm] = useState({ trangThai: 'Processing', ghiChu: '', chiPhiThucTe: '' });
 
@@ -85,22 +86,40 @@ const WarrantyList = () => {
 
     setSaving(true);
     try {
-      await warrantyService.create({
+      const payload = {
         ...form,
         maDonHang: form.maDonHang ? Number(form.maDonHang) : null,
         maNguoiDung: form.maNguoiDung ? Number(form.maNguoiDung) : null,
         maSanPham: form.maSanPham ? Number(form.maSanPham) : null,
         maBienSanPham: form.maBienSanPham ? Number(form.maBienSanPham) : null,
         chiPhiDuKien: form.chiPhiDuKien ? Number(form.chiPhiDuKien) : null,
-      });
+      };
+      if (editingId) await warrantyService.update(editingId, payload);
+      else await warrantyService.create(payload);
       setShowCreate(false);
+      setEditingId(null);
       setForm(emptyForm);
       await fetchItems();
     } catch (err) {
-      alert(getApiMessage(err, 'Không thể tạo phiếu bảo hành.'));
+      alert(getApiMessage(err, editingId ? 'Không thể cập nhật phiếu bảo hành.' : 'Không thể tạo phiếu bảo hành.'));
     } finally {
       setSaving(false);
     }
+  };
+
+  const openCreate = () => { setEditingId(null); setForm(emptyForm); setShowCreate(true); };
+  const openEditWarranty = (item) => {
+    setEditingId(item.maBaoHanh ?? item.MaBaoHanh);
+    setForm({
+      tenKhachHang: item.tenKhachHang || '', soDienThoai: item.soDienThoai || '',
+      maDonHang: item.maDonHang || '', maNguoiDung: item.maNguoiDung || '', maSanPham: '',
+      maBienSanPham: item.maBienSanPham || '', sku: item.sku || '', tenSanPham: item.tenSanPham || '',
+      soKhung: item.soKhung || '', soMay: item.soMay || '',
+      ngayMua: item.ngayMua ? String(item.ngayMua).slice(0, 10) : '',
+      hetHanBaoHanh: item.hetHanBaoHanh ? String(item.hetHanBaoHanh).slice(0, 10) : '',
+      loiKhachBao: item.loiKhachBao || '', chiPhiDuKien: item.chiPhiDuKien || '', ghiChu: item.ghiChu || '',
+    });
+    setShowCreate(true);
   };
 
   const updateStatus = async () => {
@@ -175,7 +194,7 @@ const WarrantyList = () => {
           <div className="row mb-2">
             <div className="col-sm-6"><h1 className="m-0">Bảo hành</h1></div>
             <div className="col-sm-6 text-right">
-              <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+              <button className="btn btn-primary" onClick={openCreate}>
                 <i className="fas fa-plus mr-1"></i>
                 Tạo phiếu bảo hành
               </button>
@@ -230,10 +249,15 @@ const WarrantyList = () => {
                         <td>{formatDate(item.hetHanBaoHanh ?? item.HetHanBaoHanh)}</td>
                         <td>{formatCurrency(item.chiPhiThucTe ?? item.ChiPhiThucTe ?? item.chiPhiDuKien ?? item.ChiPhiDuKien ?? 0)}</td>
                         <td>{formatDate(item.ngayTao ?? item.NgayTao)}</td>
-                        <td className="text-center">
-                          <button className="btn btn-xs btn-info" onClick={() => openDetail(item)}>
+                        <td className="text-center text-nowrap">
+                          <button className="btn btn-xs btn-info mr-1" onClick={() => openDetail(item)}>
                             <i className="fas fa-eye"></i>
                           </button>
+                          {(item.trangThai ?? item.TrangThai) === 'Received' && (
+                            <button className="btn btn-xs btn-warning" title="Sửa thông tin" onClick={() => openEditWarranty(item)}>
+                              <i className="fas fa-pen"></i>
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -250,7 +274,7 @@ const WarrantyList = () => {
           <div className="modal-dialog modal-xl">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Tạo phiếu bảo hành</h5>
+                <h5 className="modal-title">{editingId ? 'Sửa phiếu bảo hành' : 'Tạo phiếu bảo hành'}</h5>
                 <button className="close" onClick={() => setShowCreate(false)}><span>&times;</span></button>
               </div>
               <div className="modal-body">

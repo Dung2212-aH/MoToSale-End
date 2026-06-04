@@ -28,6 +28,10 @@ public class ContentController : ControllerBase
     private int? CurrentUserId => int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
 
     // ===== Bài viết =====
+    // Storefront: danh sách bài viết đã xuất bản (công khai)
+    [HttpGet("posts/public")]
+    public async Task<IActionResult> PublicPosts() => Ok(new { items = await _content.GetPublishedPostsAsync() });
+
     [Authorize(Roles = StaffRoles)]
     [HttpGet("posts")]
     public async Task<IActionResult> Posts([FromQuery] PagingRequest request, [FromQuery] string? status) => Ok(await _content.SearchPostsAsync(request, status));
@@ -77,6 +81,11 @@ public class ContentController : ControllerBase
     { try { await _content.DeleteFaqAsync(id); return Ok(new { message = "Đã xóa." }); } catch (ContentException ex) { return BadRequest(new { message = ex.Message }); } }
 
     // ===== Liên hệ =====
+    // Storefront: khách gửi yêu cầu liên hệ (công khai)
+    [HttpPost("contacts")]
+    public async Task<IActionResult> CreateContact(CreateContactRequest request)
+    { try { return Ok(new { id = await _content.CreateContactAsync(request) }); } catch (ContentException ex) { return BadRequest(new { message = ex.Message }); } }
+
     [Authorize(Roles = StaffRoles)]
     [HttpGet("contacts")]
     public async Task<IActionResult> Contacts([FromQuery] PagingRequest request, [FromQuery] string? status) => Ok(await _content.SearchContactsAsync(request, status));

@@ -166,6 +166,131 @@ public class PaymentService : IPaymentService
         await _payments.SaveChangesAsync();
     }
 
+    public async Task<int> ClaimTransferAsync(int orderId, int? userId)
+    {
+        var order = await _orders.GetByIdAsync(orderId) ?? throw new PaymentException("Không tìm thấy đơn hàng.");
+        if (order.OrderStatus == OrderStatus.Cancelled) throw new PaymentException("Đơn đã hủy.");
+        if (order.PaymentStatus == Common.PaymentStatus.Paid) throw new PaymentException("Đơn đã thanh toán đủ.");
+
+        // Đơn cọc chưa trả gì -> khách chuyển khoản tiền cọc; còn lại -> chuyển phần còn thiếu.
+        decimal amount;
+        string payType;
+        if (order.OrderType == Common.OrderType.Deposit && order.PaymentStatus == Common.PaymentStatus.Unpaid && order.DepositAmount > 0)
+        {
+            amount = order.DepositAmount; payType = PaymentRecordType.Deposit;
+        }
+        else
+        {
+            amount = order.RemainingAmount > 0 ? order.RemainingAmount : order.GrandTotal;
+            payType = amount >= order.GrandTotal ? PaymentRecordType.Full : PaymentRecordType.Remaining;
+        }
+        if (amount <= 0) throw new PaymentException("Đơn không còn khoản cần thanh toán.");
+
+        // Idempotent: đã có phiếu chờ xác nhận thì trả lại phiếu đó.
+        var existing = (await _payments.GetByOrderAsync(orderId))
+            .FirstOrDefault(p => p.PaymentRecordStatus == PaymentRecordStatus.Pending);
+        if (existing is not null) return existing.Id;
+
+        var now = DateTime.UtcNow;
+        var payment = new Payment
+        {
+            Code = $"TT{now:yyyyMMddHHmmssfff}",
+            OrderId = order.Id,
+            PaymentType = payType,
+            Amount = amount,
+            Method = PaymentMethod.BankTransfer,
+            PaymentRecordStatus = PaymentRecordStatus.Pending,
+            Note = "Khách báo đã chuyển khoản — chờ xác nhận",
+            RecordedBy = userId,
+            CreatedDate = now,
+        };
+        _payments.Add(payment);
+        await _payments.SaveChangesAsync();
+        return payment.Id;
+    }
+
+    public async Task ConfirmPaymentAsync(int paymentId, int? userId)
+    {
+        var payment = await _payments.GetByIdAsync(paymentId) ?? throw new PaymentException("Không tìm thấy phiếu thanh toán.");
+        if (payment.PaymentRecordStatus != PaymentRecordStatus.Pending)
+            throw new PaymentException("Phiếu không ở trạng thái chờ xác nhận.");
+        var order = await _orders.GetByIdAsync(payment.OrderId) ?? throw new PaymentException("Không tìm thấy đơn hàng.");
+        if (order.OrderStatus == OrderStatus.Cancelled) throw new PaymentException("Đơn đã hủy.");
+
+        var now = DateTime.UtcNow;
+        var paymentStatusBefore = order.PaymentStatus;
+
+        payment.PaymentRecordStatus = PaymentRecordStatus.Paid;
+        payment.PaidAt = now;
+        payment.RecordedBy ??= userId;
+        payment.UpdatedDate = now;
+        _payments.Update(payment);
+
+        // Ghi thu quỹ khi xác nhận chuyển khoản.
+        _db.CashTransactions.Add(new CashTransaction
+        {
+            Code = $"CT{now:yyyyMMddHHmmssfff}", TransactionType = "Receipt", Category = "CustomerPayment",
+            Amount = payment.Amount, Method = payment.Method, ReferenceType = "Payment", ReferenceId = order.Id,
+            Note = $"Xác nhận chuyển khoản đơn {order.Code}", RecordedBy = userId, OccurredAt = now, CreatedDate = now,
+        });
+
+        // Phiếu vẫn đang Pending trong DB nên cộng thêm Amount.
+        var totalPaid = await _payments.GetTotalPaidAsync(order.Id) + payment.Amount;
+        if (totalPaid > order.GrandTotal) totalPaid = order.GrandTotal;
+        order.RemainingAmount = Math.Max(0, order.GrandTotal - totalPaid);
+
+        var reachedFull = totalPaid >= order.GrandTotal;
+        var reachedDeposit = order.OrderType == Common.OrderType.Deposit && totalPaid >= order.DepositAmount;
+        order.PaymentStatus = reachedFull
+            ? Common.PaymentStatus.Paid
+            : reachedDeposit ? Common.PaymentStatus.DepositPaid : Common.PaymentStatus.PartiallyPaid;
+        if (order.PaymentStatus != paymentStatusBefore)
+        {
+            _orders.AddStatusHistory(new OrderStatusHistory
+            {
+                OrderId = order.Id, FromStatus = paymentStatusBefore, ToStatus = order.PaymentStatus,
+                Note = "PaymentStatus: Xác nhận chuyển khoản", ChangedBy = userId, CreatedDate = now,
+            });
+        }
+
+        if ((reachedFull || reachedDeposit) && order.OrderStatus == OrderStatus.AwaitingPayment)
+        {
+            foreach (var r in await _reservations.GetByOrderAsync(order.Id))
+            {
+                if (r.ReservationStatus == ReservationStatus.Active)
+                {
+                    r.ReservationStatus = ReservationStatus.Confirmed;
+                    r.UpdatedDate = now;
+                }
+            }
+            var from = order.OrderStatus;
+            order.OrderStatus = OrderStatus.Confirmed;
+            _orders.AddStatusHistory(new OrderStatusHistory
+            {
+                OrderId = order.Id, FromStatus = from, ToStatus = OrderStatus.Confirmed,
+                Note = "Xác nhận thanh toán (chuyển khoản)", ChangedBy = userId, CreatedDate = now,
+            });
+        }
+
+        if (reachedFull
+            && order.FulfillmentStatus == Common.FulfillmentStatus.Fulfilled
+            && order.OrderStatus != OrderStatus.Completed
+            && order.OrderStatus != OrderStatus.Cancelled)
+        {
+            var fromC = order.OrderStatus;
+            order.OrderStatus = OrderStatus.Completed;
+            _orders.AddStatusHistory(new OrderStatusHistory
+            {
+                OrderId = order.Id, FromStatus = fromC, ToStatus = OrderStatus.Completed,
+                Note = "Hoàn tất (đã giao & thu đủ)", ChangedBy = userId, CreatedDate = now,
+            });
+        }
+
+        order.UpdatedDate = now;
+        _orders.Update(order);
+        await _payments.SaveChangesAsync();
+    }
+
     public async Task<List<PaymentDto>> GetByOrderAsync(int orderId)
     {
         var list = await _payments.GetByOrderAsync(orderId);

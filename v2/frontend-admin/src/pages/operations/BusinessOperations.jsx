@@ -124,7 +124,7 @@ const BusinessOperations = ({ section = 'supply' }) => {
       }
       if (modal === 'cash') await service.createCash({ ...cash, amount: Number(cash.amount) });
       if (modal === 'repair') {
-        await service.createRepair({
+        const repairPayload = {
           customerId: Number(repair.customerId),
           assignedStaffId: repair.assignedStaffId ? Number(repair.assignedStaffId) : null,
           laborCost: Number(repair.laborCost),
@@ -137,7 +137,9 @@ const BusinessOperations = ({ section = 'supply' }) => {
             qty: Number(x.qty),
             unitPrice: Number(x.unitPrice),
           })),
-        });
+        };
+        if (repair.id) await service.updateRepair(repair.id, repairPayload);
+        else await service.createRepair(repairPayload);
       }
       if (modal === 'crm') {
         const payload = {
@@ -280,7 +282,7 @@ const BusinessOperations = ({ section = 'supply' }) => {
     supplier: supplier.id ? 'Cập nhật nhà cung cấp' : 'Thêm nhà cung cấp',
     purchase: 'Lập đơn mua hàng',
     cash: 'Lập phiếu thu chi',
-    repair: 'Tiếp nhận sửa chữa',
+    repair: repair.id ? 'Sửa phiếu sửa chữa' : 'Tiếp nhận sửa chữa',
     crm: crm.id ? 'Cập nhật lịch chăm sóc khách hàng' : 'Tạo lịch chăm sóc khách hàng',
   }[modal];
   const pageSize = 10;
@@ -335,7 +337,7 @@ const BusinessOperations = ({ section = 'supply' }) => {
             {tab === 'purchases' && <PurchasesTable rows={visibleRows} isAdmin={isAdmin()} run={run} view={setDetailPurchase} receive={openReceive} pay={(x) => { setPaymentTarget(x); setPayment({ ...emptyPayment, amount: x.outstanding }); }} printRecord={printRecord} />}
             {tab === 'cash' && <CashTable rows={visibleRows} isAdmin={isAdmin()} run={run} printRecord={printRecord} />}
             {tab === 'receivables' && <ReceivablesTable rows={visibleRows} />}
-            {tab === 'repairs' && <RepairsTable rows={visibleRows} run={run} view={setRepairDetail} printRecord={printRecord} />}
+            {tab === 'repairs' && <RepairsTable rows={visibleRows} run={run} view={setRepairDetail} printRecord={printRecord} edit={(x) => { setRepair({ id: x.id, customerId: x.customerId, assignedStaffId: x.assignedStaffId || '', vehicleDescription: x.vehicleDescription, reportedIssue: x.reportedIssue, laborCost: x.laborCost, note: x.note || '', lines: (x.lines || []).map((l) => ({ skuId: l.skuId || '', description: l.description, qty: l.qty, unitPrice: l.unitPrice })) }); setModal('repair'); }} />}
             {tab === 'crm' && (
               <>
                 <div className="row mb-3">
@@ -381,11 +383,11 @@ const Modal = ({ title, close, save, children }) => <div className="modal fade s
 const SuppliersTable = ({ rows, edit, canEdit }) => <Table headers={['Mã NCC', 'Tên nhà cung cấp', 'Liên hệ', 'Điện thoại', 'Mã số thuế', 'Trạng thái', 'Thao tác']}>{rows.map((x) => <tr key={x.id}><td>{x.code}</td><td>{x.name}</td><td>{x.contactName || '-'}</td><td>{x.phone || '-'}</td><td>{x.taxCode || '-'}</td><td>{x.status === 1 ? 'Hoạt động' : 'Ngừng hợp tác'}</td><td>{canEdit && <button className="btn btn-info btn-xs" onClick={() => edit(x)}>Sửa</button>}</td></tr>)}</Table>;
 const PurchasesTable = ({ rows, run, view, receive, pay, isAdmin, printRecord }) => <Table headers={['Mã đơn mua', 'Nhà cung cấp', 'Tổng tiền', 'Còn phải trả', 'Trạng thái', 'Ngày tạo', 'Thao tác']}>{rows.map((x) => <tr key={x.id}><td>{x.code}</td><td>{x.supplierName}</td><td className="text-right">{formatCurrency(x.totalAmount)}</td><td className="text-right">{formatCurrency(x.outstanding)}</td><td><StatusBadge value={x.purchaseStatus} /></td><td>{formatDate(x.createdDate)}</td><td className="text-nowrap"><button className="btn btn-secondary btn-xs mr-1" onClick={() => view(x)}>Chi tiết</button>{isAdmin && x.purchaseStatus === 'Draft' && <><button className="btn btn-success btn-xs mr-1" onClick={() => run(() => service.approvePurchase(x.id))}>Duyệt</button><button className="btn btn-danger btn-xs mr-1" onClick={() => window.confirm('Hủy đơn mua này?') && run(() => service.cancelPurchase(x.id))}>Hủy</button></>}{['Approved', 'PartiallyReceived'].includes(x.purchaseStatus) && <button className="btn btn-info btn-xs mr-1" onClick={() => receive(x)}>Nhận hàng từ NCC</button>}{isAdmin && x.outstanding > 0 && x.purchaseStatus !== 'Cancelled' && <button className="btn btn-warning btn-xs mr-1" onClick={() => pay(x)}>Thanh toán</button>}<button className="btn btn-outline-secondary btn-xs" onClick={() => printRecord(`Đơn mua ${x.code}`, [['Nhà cung cấp', x.supplierName], ['Tổng tiền', formatCurrency(x.totalAmount)], ['Còn phải trả', formatCurrency(x.outstanding)], ['Trạng thái', label(x.purchaseStatus)], ['Ngày tạo', formatDate(x.createdDate)]])}>In</button></td></tr>)}</Table>;
 const CashTable = ({ rows, printRecord, isAdmin, run }) => <Table headers={['Mã phiếu', 'Loại', 'Nhóm', 'Số tiền', 'Hình thức', 'Ngày ghi nhận', 'Ghi chú', 'Thao tác']}>{rows.map((x) => <tr key={x.id}><td>{x.code}</td><td>{label(x.transactionType)}</td><td>{x.category}</td><td className="text-right">{formatCurrency(x.amount)}</td><td>{label(x.method)}</td><td>{formatDate(x.occurredAt)}</td><td>{x.note || '-'}</td><td className="text-nowrap"><button className="btn btn-secondary btn-xs mr-1" onClick={() => printRecord(`Phiếu ${label(x.transactionType).toLowerCase()} ${x.code}`, [['Nhóm', x.category], ['Số tiền', formatCurrency(x.amount)], ['Hình thức', label(x.method)], ['Ngày ghi nhận', formatDate(x.occurredAt)], ['Ghi chú', x.note]])}>In</button>{isAdmin && x.referenceType !== 'CashReversal' && <button className="btn btn-outline-danger btn-xs" onClick={() => window.confirm(`Đảo phiếu ${x.code}?`) && run(() => service.reverseCash(x.id))}>Đảo phiếu</button>}</td></tr>)}</Table>;
-const RepairsTable = ({ rows, run, view, printRecord }) => {
+const RepairsTable = ({ rows, run, view, printRecord, edit }) => {
   const actions = { Received: ['Inspecting', 'Kiểm tra xe'], Inspecting: ['Quoted', 'Xác nhận báo giá'], Quoted: ['Repairing', 'Bắt đầu sửa'], Repairing: ['Completed', 'Sửa xong'], Completed: ['Delivered', 'Bàn giao'] };
   return <Table headers={['Mã phiếu', 'Khách hàng', 'Xe', 'Lỗi ghi nhận', 'Trạng thái', 'Tổng phí', 'Ngày nhận', 'Thao tác']}>{rows.map((x) => {
     const action = actions[x.repairStatus];
-    return <tr key={x.id}><td>{x.code}</td><td>{x.customerName}</td><td>{x.vehicleDescription}</td><td>{x.reportedIssue}</td><td><StatusBadge value={x.repairStatus} /></td><td className="text-right">{formatCurrency(x.total)}</td><td>{formatDate(x.receivedAt)}</td><td className="text-nowrap"><button className="btn btn-secondary btn-xs mr-1" onClick={() => view(x)}>Chi tiết</button>{action && <button className="btn btn-primary btn-xs mr-1" onClick={() => run(() => service.updateRepairStatus(x.id, { status: action[0], note: action[1] }))}>{action[1]}</button>}{['Received', 'Inspecting', 'Quoted'].includes(x.repairStatus) && <button className="btn btn-outline-danger btn-xs mr-1" onClick={() => window.confirm('Hủy phiếu sửa chữa này?') && run(() => service.updateRepairStatus(x.id, { status: 'Cancelled', note: 'Hủy phiếu sửa chữa' }))}>Hủy</button>}<button className="btn btn-outline-secondary btn-xs" onClick={() => printRecord(`Phiếu sửa chữa ${x.code}`, [['Khách hàng', x.customerName], ['Xe', x.vehicleDescription], ['Lỗi ghi nhận', x.reportedIssue], ['Trạng thái', label(x.repairStatus)], ['Tổng phí', formatCurrency(x.total)], ['Ngày nhận', formatDate(x.receivedAt)]])}>In</button></td></tr>;
+    return <tr key={x.id}><td>{x.code}</td><td>{x.customerName}</td><td>{x.vehicleDescription}</td><td>{x.reportedIssue}</td><td><StatusBadge value={x.repairStatus} /></td><td className="text-right">{formatCurrency(x.total)}</td><td>{formatDate(x.receivedAt)}</td><td className="text-nowrap"><button className="btn btn-secondary btn-xs mr-1" onClick={() => view(x)}>Chi tiết</button>{x.repairStatus === 'Received' && <button className="btn btn-warning btn-xs mr-1" onClick={() => edit(x)}>Sửa</button>}{action && <button className="btn btn-primary btn-xs mr-1" onClick={() => run(() => service.updateRepairStatus(x.id, { status: action[0], note: action[1] }))}>{action[1]}</button>}{['Received', 'Inspecting', 'Quoted'].includes(x.repairStatus) && <button className="btn btn-outline-danger btn-xs mr-1" onClick={() => window.confirm('Hủy phiếu sửa chữa này?') && run(() => service.updateRepairStatus(x.id, { status: 'Cancelled', note: 'Hủy phiếu sửa chữa' }))}>Hủy</button>}<button className="btn btn-outline-secondary btn-xs" onClick={() => printRecord(`Phiếu sửa chữa ${x.code}`, [['Khách hàng', x.customerName], ['Xe', x.vehicleDescription], ['Lỗi ghi nhận', x.reportedIssue], ['Trạng thái', label(x.repairStatus)], ['Tổng phí', formatCurrency(x.total)], ['Ngày nhận', formatDate(x.receivedAt)]])}>In</button></td></tr>;
   })}</Table>;
 };
 const CrmTable = ({ rows, run, edit }) => <Table headers={['Khách hàng', 'Loại', 'Nội dung', 'Trạng thái', 'Nhắc lại', 'Thao tác']}>{rows.map((x) => <tr key={x.id}><td>{x.customerName}</td><td>{label(x.interactionType)}</td><td>{x.subject}<div className="text-muted small">{x.note || ''}</div></td><td><StatusBadge value={x.interactionStatus} /></td><td>{formatDate(x.followUpAt)}</td><td className="text-nowrap">{x.interactionStatus === 'Open' && <><button className="btn btn-info btn-xs mr-1" onClick={() => edit(x)}>Sửa</button><button className="btn btn-success btn-xs mr-1" onClick={() => run(() => service.completeInteraction(x.id))}>Hoàn thành</button><button className="btn btn-outline-danger btn-xs" onClick={() => window.confirm('Hủy lịch chăm sóc này?') && run(() => service.cancelInteraction(x.id))}>Hủy</button></>}</td></tr>)}</Table>;

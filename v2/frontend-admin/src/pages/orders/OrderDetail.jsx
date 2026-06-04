@@ -198,6 +198,11 @@ const OrderDetail = () => {
     await runUpdate(() => orderService.fulfill(id));
   };
 
+  const handleConfirmPayment = async (paymentId) => {
+    if (!window.confirm('Xác nhận đã nhận được khoản chuyển khoản này? Đơn sẽ chuyển sang đã thanh toán.')) return;
+    await runUpdate(() => paymentService.confirm(paymentId));
+  };
+
   const openEditModal = () => {
     setEditForm({
       recipient: order.shippingRecipient || order.hoTenNhanHang || '',
@@ -549,6 +554,42 @@ const OrderDetail = () => {
                     <tr><td><strong>Số tiền:</strong></td><td>{formatCurrency(payment.soTien || payment.amount || totalAmount)}</td></tr>
                     <tr><td><strong>Trạng thái:</strong></td><td>{renderBadge(getPaymentStatusMeta(paymentStatus))}</td></tr>
                     <tr><td><strong>Ngày thanh toán:</strong></td><td>{formatDate(payment.ngayThanhToan || payment.paidAt || order.ngayThanhToanThanhCong)}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {payments.some((p) => (p.status || p.paymentRecordStatus || p.trangThai) === 'Pending') && (
+            <div className="card">
+              <div className="card-header">
+                <h3 className="card-title">Chuyển khoản chờ xác nhận</h3>
+              </div>
+              <div className="card-body p-0">
+                <table className="table table-bordered mb-0">
+                  <thead>
+                    <tr>
+                      <th className="table-col-code">Mã phiếu</th>
+                      <th className="table-col-text">Phương thức</th>
+                      <th className="table-col-money">Số tiền</th>
+                      <th className="table-col-date">Thời gian</th>
+                      <th className="table-col-action"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payments.filter((p) => (p.status || p.paymentRecordStatus || p.trangThai) === 'Pending').map((p) => (
+                      <tr key={p.id || p.maThanhToan}>
+                        <td className="table-col-code">{p.code || p.maThanhToan || p.id}</td>
+                        <td className="table-col-text">{PAYMENT_METHODS[p.method || p.phuongThuc] || p.method || p.phuongThuc || 'Chuyển khoản'}</td>
+                        <td className="table-col-money">{formatCurrency(p.amount || p.soTien || 0)}</td>
+                        <td className="table-col-date">{formatDate(p.createdAt || p.ngayTao || p.paidAt)}</td>
+                        <td className="table-col-action text-right">
+                          <button className="btn btn-sm btn-success" disabled={updating} onClick={() => handleConfirmPayment(p.id)}>
+                            Xác nhận thanh toán
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>

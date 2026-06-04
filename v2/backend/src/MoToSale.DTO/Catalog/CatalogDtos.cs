@@ -19,7 +19,7 @@ public class ProductSearchRequest : PagingRequest
     public bool SortDescending { get; set; } = true;
 }
 
-public record SkuDto(int Id, string SkuCode, string? VariantName, string? Color, string? Version, decimal ListPrice, decimal? SalePrice, string? Barcode, int Status);
+public record SkuDto(int Id, string SkuCode, string? VariantName, string? Color, string? Version, decimal ListPrice, decimal? SalePrice, string? Barcode, int Status, int Available = 0);
 
 public record SkuLookupDto(int Id, string SkuCode, string ProductName, decimal ListPrice, decimal? SalePrice);
 
@@ -61,6 +61,14 @@ public record UpdateCategoryRequest(int? ParentId, string Name, string? Slug, in
 
 public record ReviewDto(int Id, int ProductId, string ProductName, int UserId, string UserName, int Rating, string? Title, string? Comment, string? ImageUrl, string ReviewStatus, DateTime CreatedDate);
 public record UpdateReviewStatusRequest(string Status);
+
+// ===== Storefront (khách hàng) =====
+public record ProductReviewItem(int Id, int Rating, string? Title, string? Comment, string UserName, DateTime CreatedDate);
+public record ProductReviewSummary(int ProductId, int TotalReviews, double AverageRating);
+public record MyReviewState(int ProductId, bool IsAuthenticated, bool HasPurchased, bool CanReview, int? EligibleOrderId, string? Reason, ProductReviewItem? MyReview);
+public record CreateReviewRequest(int Rating, string? Title, string? Comment, int? OrderId);
+
+public record FavoriteDto(int Id, int UserId, int ProductId, DateTime CreatedDate, object? Product);
 
 public record CompatibilityDto(int Id, int PartProductId, int? BrandId, string? BrandName, int? VehicleModelId, string? VehicleModelName, short? YearFrom, short? YearTo, bool AppliesToAll, string? Note, int Status);
 public record SaveCompatibilityRequest(int? BrandId, int? VehicleModelId, short? YearFrom, short? YearTo, bool AppliesToAll, string? Note);

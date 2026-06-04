@@ -40,4 +40,12 @@ public class PaymentsController : ControllerBase
         try { await _payments.CancelAsync(id, request.Reason); return Ok(new { message = "Đã hủy phiếu thanh toán." }); }
         catch (PaymentException ex) { return BadRequest(new { message = ex.Message }); }
     }
+
+    /// <summary>Admin/staff xác nhận phiếu chuyển khoản khách báo (đang chờ xác nhận).</summary>
+    [HttpPost("{id:int}/confirm")]
+    public async Task<IActionResult> Confirm(int id)
+    {
+        try { await _payments.ConfirmPaymentAsync(id, CurrentUserId); return Ok(new { message = "Đã xác nhận thanh toán." }); }
+        catch (PaymentException ex) { return BadRequest(new { message = ex.Message }); }
+    }
 }

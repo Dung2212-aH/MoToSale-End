@@ -18,6 +18,7 @@ public interface IBusinessOperationsService
     Task<int> ReverseCashTransactionAsync(int id, int? userId);
     Task<object> GetRepairsAsync();
     Task<int> CreateRepairAsync(CreateRepairOrderRequest request);
+    Task UpdateRepairAsync(int id, CreateRepairOrderRequest request);
     Task UpdateRepairStatusAsync(int id, UpdateRepairStatusRequest request);
     Task<object> GetInteractionsAsync();
     Task<int> CreateInteractionAsync(CustomerInteractionRequest request);

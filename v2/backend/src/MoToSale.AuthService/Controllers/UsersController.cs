@@ -49,8 +49,14 @@ public class UsersController : ControllerBase
         var user = await _users.GetByIdWithRolesAsync(CurrentUserId);
         if (user is null) return NotFound();
 
-        user.FullName = request.FullName.Trim();
-        user.PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
+        var fullName = (request.FullName ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(fullName)) return BadRequest(new { message = "Họ tên là bắt buộc." });
+        if (fullName.Length > 150) return BadRequest(new { message = "Họ tên không được vượt quá 150 ký tự." });
+        var phone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
+        if (phone != null && phone.Length > 20) return BadRequest(new { message = "Số điện thoại không hợp lệ (tối đa 20 ký tự)." });
+
+        user.FullName = fullName;
+        user.PhoneNumber = phone;
         user.UpdatedDate = DateTime.UtcNow;
         await _users.SaveChangesAsync();
 

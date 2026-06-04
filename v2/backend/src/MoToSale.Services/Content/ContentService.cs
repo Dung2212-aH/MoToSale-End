@@ -34,6 +34,15 @@ public class ContentService : IContentService
         return new PagingResponse<PostListItem> { Items = items, Page = r.Page, PageSize = r.PageSize, TotalItems = ordered.Count };
     }
 
+    public async Task<List<PostListItem>> GetPublishedPostsAsync()
+    {
+        var all = await _posts.GetAllAsync();
+        return all.Where(p => p.PostStatus == "Published")
+            .OrderByDescending(p => p.PublishedAt ?? p.CreatedDate)
+            .Select(p => new PostListItem(p.Id, p.Title, p.Slug, p.Category, p.PostStatus, p.PublishedAt, p.CreatedDate))
+            .ToList();
+    }
+
     public async Task<PostDto?> GetPostAsync(int id)
     {
         var p = await _posts.GetByIdAsync(id);
@@ -119,6 +128,28 @@ public class ContentService : IContentService
         var items = ordered.Skip((r.Page - 1) * r.PageSize).Take(r.PageSize)
             .Select(c => new ContactDto(c.Id, c.FullName, c.Phone, c.Email, c.Subject, c.Body, c.Type, c.ProductId, c.ContactStatus, c.CreatedDate, c.HandledAt)).ToList();
         return new PagingResponse<ContactDto> { Items = items, Page = r.Page, PageSize = r.PageSize, TotalItems = ordered.Count };
+    }
+
+    public async Task<int> CreateContactAsync(CreateContactRequest r)
+    {
+        if (string.IsNullOrWhiteSpace(r.FullName)) throw new ContentException("Họ tên là bắt buộc.");
+        if (string.IsNullOrWhiteSpace(r.Phone)) throw new ContentException("Số điện thoại là bắt buộc.");
+        var c = new ContactRequest
+        {
+            FullName = r.FullName.Trim(),
+            Phone = r.Phone.Trim(),
+            Email = r.Email,
+            Subject = r.Subject,
+            Body = r.Body ?? "",
+            Type = string.IsNullOrWhiteSpace(r.Type) ? "Consultation" : r.Type!,
+            ProductId = r.ProductId,
+            ContactStatus = "New",
+            CreatedDate = DateTime.UtcNow,
+            Status = (int)EntityStatus.Active,
+        };
+        _contacts.Add(c);
+        await _contacts.SaveChangesAsync();
+        return c.Id;
     }
 
     public async Task MarkContactProcessedAsync(int id)

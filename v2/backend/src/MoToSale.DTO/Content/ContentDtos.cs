@@ -13,6 +13,7 @@ public record SaveFaqRequest(string Question, string Answer, string? Category, i
 
 // Liên hệ
 public record ContactDto(int Id, string FullName, string Phone, string? Email, string? Subject, string Body, string Type, int? ProductId, string ContactStatus, DateTime CreatedDate, DateTime? HandledAt);
+public record CreateContactRequest(string FullName, string Phone, string? Email, string? Subject, string? Body, string? Type, int? ProductId);
 
 // Banner
 public record BannerDto(int Id, string Position, string? Title, string ImageUrl, string? Link, int SortOrder, int Status);

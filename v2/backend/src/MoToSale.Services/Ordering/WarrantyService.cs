@@ -81,6 +81,32 @@ public class WarrantyService : IWarrantyService
         return w.Id;
     }
 
+    public async Task UpdateAsync(int id, SaveWarrantyRequest r)
+    {
+        var w = await _warranties.GetByIdAsync(id) ?? throw new WarrantyException("Không tìm thấy phiếu bảo hành.");
+        if (w.WarrantyStatus != "Received")
+            throw new WarrantyException("Chỉ sửa được thông tin khi phiếu đang ở trạng thái mới tiếp nhận.");
+        if (string.IsNullOrWhiteSpace(r.ProductSnapshot)) throw new WarrantyException("Tên sản phẩm là bắt buộc.");
+        if (r.Months <= 0) throw new WarrantyException("Số tháng bảo hành phải lớn hơn 0.");
+        w.OrderId = r.OrderId;
+        w.SkuId = r.SkuId;
+        w.CustomerId = r.CustomerId;
+        w.ProductSnapshot = r.ProductSnapshot.Trim();
+        w.SerialNumber = r.SerialNumber;
+        w.CustomerName = r.CustomerName;
+        w.CustomerPhone = r.CustomerPhone;
+        w.FrameNumber = r.FrameNumber;
+        w.EngineNumber = r.EngineNumber;
+        w.ReportedIssue = r.ReportedIssue ?? "";
+        w.EstimatedCost = r.EstimatedCost;
+        if (r.StartAt.HasValue) w.StartAt = r.StartAt.Value;
+        w.Months = r.Months;
+        w.Note = r.Note;
+        w.UpdatedDate = DateTime.UtcNow;
+        _warranties.Update(w);
+        await _warranties.SaveChangesAsync();
+    }
+
     public async Task UpdateStatusAsync(int id, UpdateWarrantyStatusRequest request, int? userId)
     {
         if (!Allowed.Contains(request.Status)) throw new WarrantyException("Invalid warranty status.");

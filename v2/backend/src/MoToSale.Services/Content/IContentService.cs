@@ -7,6 +7,7 @@ public interface IContentService
 {
     // Bài viết
     Task<PagingResponse<PostListItem>> SearchPostsAsync(PagingRequest request, string? status);
+    Task<List<PostListItem>> GetPublishedPostsAsync();
     Task<PostDto?> GetPostAsync(int id);
     Task<int> CreatePostAsync(SavePostRequest request, int? authorId);
     Task UpdatePostAsync(int id, SavePostRequest request);
@@ -20,6 +21,7 @@ public interface IContentService
 
     // Liên hệ
     Task<PagingResponse<ContactDto>> SearchContactsAsync(PagingRequest request, string? status);
+    Task<int> CreateContactAsync(CreateContactRequest request);
     Task MarkContactProcessedAsync(int id);
 
     // Banner

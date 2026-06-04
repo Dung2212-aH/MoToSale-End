@@ -71,6 +71,7 @@ public class AppDbContext : DbContext
     public DbSet<HomeBanner> HomeBanners => Set<HomeBanner>();
 
     public DbSet<Review> Reviews => Set<Review>();
+    public DbSet<Favorite> Favorites => Set<Favorite>();
     public DbSet<Warranty> Warranties => Set<Warranty>();
     public DbSet<WarrantyHistory> WarrantyHistories => Set<WarrantyHistory>();
     public DbSet<SalesReturn> SalesReturns => Set<SalesReturn>();

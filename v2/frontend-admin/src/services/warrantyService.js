@@ -34,6 +34,23 @@ const mapHistory = (item = {}) => ({
   ngayTao: item.createdDate,
 });
 
+const mapSavePayload = (data) => ({
+  orderId: data.maDonHang || null,
+  skuId: data.maBienSanPham || null,
+  customerId: data.maNguoiDung || null,
+  productSnapshot: data.tenSanPham,
+  serialNumber: data.sku || null,
+  startAt: data.ngayMua || null,
+  months: data.ngayMua && data.hetHanBaoHanh ? Math.max(1, Math.round((new Date(data.hetHanBaoHanh) - new Date(data.ngayMua)) / 2629800000)) : 12,
+  note: data.ghiChu || null,
+  customerName: data.tenKhachHang,
+  customerPhone: data.soDienThoai,
+  frameNumber: data.soKhung || null,
+  engineNumber: data.soMay || null,
+  reportedIssue: data.loiKhachBao,
+  estimatedCost: data.chiPhiDuKien || null,
+});
+
 const warrantyService = {
   getAll: async (params) => {
     const res = await api.get('/warranties', { params: { keyword: params?.search, status: params?.status, page: params?.page || 1, pageSize: params?.pageSize || 100 } });
@@ -43,22 +60,8 @@ const warrantyService = {
     const res = await api.get(`/warranties/${id}`);
     return { ...res, data: { warranty: mapWarranty(res.data.warranty), histories: (res.data.histories || []).map(mapHistory) } };
   },
-  create: (data) => api.post('/warranties', {
-    orderId: data.maDonHang || null,
-    skuId: data.maBienSanPham || null,
-    customerId: data.maNguoiDung || null,
-    productSnapshot: data.tenSanPham,
-    serialNumber: data.sku || null,
-    startAt: data.ngayMua || null,
-    months: data.ngayMua && data.hetHanBaoHanh ? Math.max(1, Math.round((new Date(data.hetHanBaoHanh) - new Date(data.ngayMua)) / 2629800000)) : 12,
-    note: data.ghiChu || null,
-    customerName: data.tenKhachHang,
-    customerPhone: data.soDienThoai,
-    frameNumber: data.soKhung || null,
-    engineNumber: data.soMay || null,
-    reportedIssue: data.loiKhachBao,
-    estimatedCost: data.chiPhiDuKien || null,
-  }),
+  create: (data) => api.post('/warranties', mapSavePayload(data)),
+  update: (id, data) => api.put(`/warranties/${id}`, mapSavePayload(data)),
   updateStatus: (id, data) => api.patch(`/warranties/${id}/status`, {
     status: data.trangThai,
     note: data.ghiChu || null,

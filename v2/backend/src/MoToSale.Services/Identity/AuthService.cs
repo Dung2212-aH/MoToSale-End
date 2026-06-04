@@ -33,12 +33,19 @@ public class AuthService : IAuthService
             throw new AuthException("Email đã được sử dụng.");
         }
 
+        var fullName = (request.FullName ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(fullName)) throw new AuthException("Họ tên là bắt buộc.");
+        if (fullName.Length > 150) throw new AuthException("Họ tên không được vượt quá 150 ký tự.");
+        if (email.Length > 255) throw new AuthException("Email không được vượt quá 255 ký tự.");
+        var phone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
+        if (phone != null && phone.Length > 20) throw new AuthException("Số điện thoại không hợp lệ (tối đa 20 ký tự).");
+
         var role = await _users.GetRoleByCodeAsync(RoleConstant.Customer);
         var user = new User
         {
-            FullName = request.FullName.Trim(),
+            FullName = fullName,
             Email = email,
-            PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim(),
+            PhoneNumber = phone,
             PasswordHash = _hasher.Hash(request.Password),
             CreatedDate = DateTime.UtcNow,
             Status = (int)EntityStatus.Active,
