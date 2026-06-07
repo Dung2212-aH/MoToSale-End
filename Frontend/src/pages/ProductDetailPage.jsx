@@ -57,6 +57,13 @@ function ProductDetailPage() {
   const { data: product, loading, error, run } = useAsync(() => productApi.getProductById(id), [id]);
 
   const options = useMemo(() => normalizeProductOptions(product), [product]);
+  const detailImages = useMemo(() => {
+    const hasVariantImages = options.images.some((image) => image.productVariantId);
+
+    return hasVariantImages
+      ? options.images.filter((image) => image.productVariantId || !image.isPrimary)
+      : options.images;
+  }, [options.images]);
 
   useEffect(() => {
     async function loadCollections() {
@@ -134,16 +141,16 @@ function ProductDetailPage() {
       .filter(Boolean);
     const defaultColor = candidateColors[0] || options.colors[0] || '';
     const firstImage =
-      options.images.find((image) => {
+      detailImages.find((image) => {
         const colorMatches = defaultColor ? image.color === defaultColor : true;
         const versionMatches = defaultVersion && image.version ? image.version === defaultVersion : true;
         return colorMatches && versionMatches;
-      }) || options.images[0] || null;
+      }) || detailImages[0] || null;
 
     setSelectedVersion(defaultVersion);
     setSelectedColor(defaultColor);
     setSelectedImage(firstImage);
-  }, [product, options]);
+  }, [product, options, detailImages]);
 
   const selectedVariant = useMemo(() => {
     if (!options.variants.length) {
@@ -188,11 +195,11 @@ function ProductDetailPage() {
   }, [availableColorOptions, selectedColor]);
 
   const visibleImages = useMemo(() => {
-    if (!options.images.length) {
+    if (!detailImages.length) {
       return [];
     }
 
-    const byColor = selectedColor ? options.images.filter((image) => image.color === selectedColor) : [];
+    const byColor = selectedColor ? detailImages.filter((image) => image.color === selectedColor) : [];
     const byColorAndVersion =
       selectedColor && selectedVersion
         ? byColor.filter((image) => !image.version || image.version === selectedVersion)
@@ -207,23 +214,23 @@ function ProductDetailPage() {
     }
 
     if (selectedVersion) {
-      const byVersion = options.images.filter((image) => image.version === selectedVersion);
+      const byVersion = detailImages.filter((image) => image.version === selectedVersion);
       if (byVersion.length) {
         return byVersion;
       }
     }
 
-    return options.images;
-  }, [options.images, selectedColor, selectedVersion]);
+    return detailImages;
+  }, [detailImages, selectedColor, selectedVersion]);
 
   const galleryImages = useMemo(() => {
-    if (!options.images.length) {
+    if (!detailImages.length) {
       return [];
     }
 
     // Giữ nguyên thứ tự ảnh như ban đầu để không bị nhảy vị trí thumbnail khi click (theo yêu cầu user)
-    return options.images;
-  }, [options.images]);
+    return detailImages;
+  }, [detailImages]);
 
   useEffect(() => {
     if (!visibleImages.length) {
@@ -255,13 +262,13 @@ function ProductDetailPage() {
     }
 
     const nextImage =
-      options.images.find((image) => {
+      detailImages.find((image) => {
         const versionMatches = image.version ? image.version === version : true;
         const colorTarget = matchedVariant?.color || fallbackVariant?.color || selectedColor;
         const colorMatches = colorTarget ? image.color === colorTarget : true;
         return versionMatches && colorMatches;
       }) ||
-      options.images.find((image) => (image.version ? image.version === version : false)) ||
+      detailImages.find((image) => (image.version ? image.version === version : false)) ||
       null;
 
     if (nextImage) {
@@ -278,14 +285,14 @@ function ProductDetailPage() {
     }
 
     // Always jump to the FIRST image of the chosen color for a clean carousel reset
-    const colorImages = options.images.filter((image) => image.color === color);
+    const colorImages = detailImages.filter((image) => image.color === color);
     const nextImage =
       colorImages.find((image) => {
         const versionMatches = selectedVersion && image.version ? image.version === selectedVersion : true;
         return versionMatches;
       }) ||
       colorImages[0] ||
-      (matchedVariant?.imageUrl ? options.images.find((image) => image.imageUrl === matchedVariant.imageUrl) : null);
+      (matchedVariant?.imageUrl ? detailImages.find((image) => image.imageUrl === matchedVariant.imageUrl) : null);
 
     if (nextImage) {
       setSelectedImage(nextImage);
@@ -419,7 +426,7 @@ function ProductDetailPage() {
     <>
       <Breadcrumb
         items={[
-          { label: 'Sản phẩm bán chạy', to: '/products' },
+          { label: 'Sản phẩm', to: '/products' },
           { label: product?.name || 'Chi tiết sản phẩm' },
         ]}
       />

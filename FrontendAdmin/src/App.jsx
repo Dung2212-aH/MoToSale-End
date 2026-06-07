@@ -23,6 +23,8 @@ import ReportsPage from './pages/reports/ReportsPage';
 import AuditLogList from './pages/audit/AuditLogList';
 import WarrantyList from './pages/warranties/WarrantyList';
 import OperationsSettings from './pages/settings/OperationsSettings';
+import PaymentSettings from './pages/settings/PaymentSettings';
+import InstallmentTermList from './pages/installments/InstallmentTermList';
 
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -72,6 +74,7 @@ function AppRoutes() {
       {/* Orders & Payments */}
       <Route path="/orders" element={<ProtectedRoute><MainLayout><OrderList /></MainLayout></ProtectedRoute>} />
       <Route path="/orders/:id" element={<ProtectedRoute><MainLayout><OrderDetail /></MainLayout></ProtectedRoute>} />
+      <Route path="/installments" element={<ProtectedRoute><MainLayout><InstallmentTermList /></MainLayout></ProtectedRoute>} />
       <Route path="/vouchers" element={<ProtectedRoute><MainLayout><VoucherList /></MainLayout></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><MainLayout><InventoryView /></MainLayout></ProtectedRoute>} />
       <Route path="/stock-documents" element={<ProtectedRoute><MainLayout><StockDocumentList /></MainLayout></ProtectedRoute>} />
@@ -89,6 +92,7 @@ function AppRoutes() {
       <Route path="/reports" element={<ProtectedRoute><MainLayout><ReportsPage /></MainLayout></ProtectedRoute>} />
       <Route path="/audit-logs" element={<ProtectedRoute roles={['Admin']}><MainLayout><AuditLogList /></MainLayout></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><MainLayout><OperationsSettings /></MainLayout></ProtectedRoute>} />
+      <Route path="/settings/payment" element={<ProtectedRoute roles={['Admin']}><MainLayout><PaymentSettings /></MainLayout></ProtectedRoute>} />
 
       {/* Catch all */}
       <Route path="*" element={<Navigate to="/" replace />} />

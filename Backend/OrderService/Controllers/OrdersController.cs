@@ -13,24 +13,22 @@ namespace OrderService.Controllers;
 [Route("api/orders")]
 public class OrdersController : ControllerBase
 {
+    // Simplified order lifecycle: an order is either waiting for the customer's payment,
+    // confirmed (admin will use shippingStatus to track preparation/shipping/delivery), or cancelled.
     private static readonly HashSet<string> AllowedAdminOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
         "AwaitingPayment",
         "Confirmed",
-        "Processing",
-        "Shipping",
-        "Delivered",
-        "Completed",
         "Cancelled"
     };
 
+    // Aligned with CK_DONHANG_PaymentStatus: order-level payment status can never be Pending or
+    // Failed (those are per-transaction concepts tracked on THANHTOAN.TrangThai instead).
     private static readonly HashSet<string> AllowedAdminPaymentStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
         "Unpaid",
-        "Pending",
         "Paid",
         "PartiallyPaid",
-        "Failed",
         "Refunded",
         "Cancelled"
     };
@@ -44,7 +42,6 @@ public class OrdersController : ControllerBase
 
     private static readonly HashSet<string> LockedOrderStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Completed",
         "Cancelled"
     };
 
@@ -57,8 +54,6 @@ public class OrdersController : ControllerBase
 
     private static readonly HashSet<string> CancelBlockedStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Delivered",
-        "Completed",
         "Cancelled"
     };
 
@@ -72,10 +67,7 @@ public class OrdersController : ControllerBase
     private static readonly Dictionary<string, string[]> AllowedOrderTransitions = new(StringComparer.OrdinalIgnoreCase)
     {
         ["AwaitingPayment"] = new[] { "Confirmed", "Cancelled" },
-        ["Confirmed"] = new[] { "Processing", "Cancelled" },
-        ["Processing"] = new[] { "Shipping", "Cancelled" },
-        ["Shipping"] = new[] { "Delivered" },
-        ["Delivered"] = new[] { "Completed" },
+        ["Confirmed"] = new[] { "Cancelled" },
         ["Pending"] = new[] { "AwaitingPayment", "Confirmed", "Cancelled" },
         ["Checkout"] = new[] { "AwaitingPayment", "Confirmed", "Cancelled" }
     };
@@ -174,6 +166,155 @@ public class OrdersController : ControllerBase
     }
 
     [Authorize(Roles = "Admin,Staff")]
+    [HttpGet("installments")]
+    public async Task<IActionResult> GetInstallmentSchedule([FromQuery] string? status = "Pending")
+    {
+        try
+        {
+            var query = _dbContext.InstallmentTerms
+                .Include(t => t.Plan!)
+                .ThenInclude(p => p.Order!)
+                .AsNoTracking()
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(status) && !status.Equals("all", StringComparison.OrdinalIgnoreCase))
+            {
+                var normalized = status.Trim();
+                query = query.Where(t => t.TrangThai == normalized);
+            }
+
+            var rows = await query
+                .OrderBy(t => t.NgayDenHan)
+                .Take(500)
+                .Select(t => new
+                {
+                    maKyTraGop = t.MaKyTraGop,
+                    maHoSoTraGop = t.MaHoSoTraGop,
+                    kyThu = t.KyThu,
+                    ngayDenHan = t.NgayDenHan,
+                    soTienGoc = t.SoTienGoc,
+                    soTienLai = t.SoTienLai,
+                    tongTien = t.TongTien,
+                    trangThai = t.TrangThai,
+                    ngayThanhToan = t.NgayThanhToan,
+                    maDonHang = t.Plan!.MaDonHang,
+                    maDonHangKinhDoanh = t.Plan!.Order!.MaDonHangKinhDoanh,
+                    hoTenNguoiVay = t.Plan!.HoTenNguoiVay,
+                    soCCCD = t.Plan!.SoCCCD,
+                    soDienThoai = t.Plan!.SoDienThoai,
+                    soKy = t.Plan!.SoKy
+                })
+                .ToListAsync();
+
+            return Ok(new { items = rows, count = rows.Count });
+        }
+        catch (Exception ex)
+        {
+            return this.ToErrorResult(ex);
+        }
+    }
+
+    [HttpGet("{id:int}/payment-info")]
+    public async Task<IActionResult> GetPaymentInfo(int id)
+    {
+        try
+        {
+            return Ok(await _orderService.GetPaymentInfoAsync(id, this.GetCurrentUserId(), this.CanManageOrders()));
+        }
+        catch (Exception ex)
+        {
+            return this.ToErrorResult(ex);
+        }
+    }
+
+    [HttpPost("{id:int}/request-refund")]
+    public async Task<IActionResult> RequestRefund(int id, CreateRefundRequestDto request)
+    {
+        try
+        {
+            await EnsureOrderHistoryTableAsync();
+            var before = await _dbContext.Orders.AsNoTracking().FirstOrDefaultAsync(o => o.MaDonHang == id);
+            var result = await _orderService.RequestRefundAsync(id, this.GetCurrentUserId(), request);
+            if (before is not null)
+            {
+                var now = DateTime.UtcNow;
+                AddHistory(id, "OrderStatus", before.TrangThaiDonHang, result.TrangThaiDonHang, "Khach yeu cau hoan tien", now);
+                await _dbContext.SaveChangesAsync();
+                await _auditLog.WriteAsync(this, "Order", id.ToString(), "RequestRefund",
+                    new { before.TrangThaiDonHang, before.TrangThaiThanhToan },
+                    new { result.TrangThaiDonHang, result.TrangThaiThanhToan },
+                    request.LyDo);
+            }
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return this.ToErrorResult(ex);
+        }
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPost("{id:int}/refunds/{refundId:int}/confirm")]
+    public async Task<IActionResult> ConfirmRefund(int id, int refundId, ConfirmRefundRequest request)
+    {
+        try
+        {
+            await EnsureOrderHistoryTableAsync();
+            var before = await _dbContext.Orders.AsNoTracking().FirstOrDefaultAsync(o => o.MaDonHang == id);
+            var result = await _orderService.ConfirmRefundAsync(id, refundId, request);
+            if (before is not null)
+            {
+                var now = DateTime.UtcNow;
+                AddHistory(id, "PaymentStatus", before.TrangThaiThanhToan, result.TrangThaiThanhToan, "Admin xac nhan da hoan tien", now);
+                await _dbContext.SaveChangesAsync();
+                await _auditLog.WriteAsync(this, "Order", id.ToString(), "ConfirmRefund",
+                    new { before.TrangThaiThanhToan, refundId },
+                    new { result.TrangThaiThanhToan },
+                    request.MaGiaoDichHoan ?? request.GhiChuAdmin);
+            }
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return this.ToErrorResult(ex);
+        }
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPost("{id:int}/confirm-payment")]
+    public async Task<IActionResult> ConfirmPayment(int id, ConfirmOrderPaymentRequest request)
+    {
+        try
+        {
+            await EnsureOrderHistoryTableAsync();
+            var before = await _dbContext.Orders.AsNoTracking().FirstOrDefaultAsync(o => o.MaDonHang == id);
+            var result = await _orderService.ConfirmOrderPaymentAsync(id, request);
+
+            if (before is not null)
+            {
+                var now = DateTime.UtcNow;
+                var note = request.MaKyTraGop.HasValue
+                    ? $"Xac nhan ky tra gop #{request.MaKyTraGop}"
+                    : "Xac nhan da nhan thanh toan";
+                AddHistory(id, "OrderStatus", before.TrangThaiDonHang, result.TrangThaiDonHang, note, now);
+                AddHistory(id, "PaymentStatus", before.TrangThaiThanhToan, result.TrangThaiThanhToan, request.GhiChu ?? note, now);
+                await _dbContext.SaveChangesAsync();
+                await _auditLog.WriteAsync(this, "Order", id.ToString(), "ConfirmPayment",
+                    new { before.TrangThaiDonHang, before.TrangThaiThanhToan },
+                    new { result.TrangThaiDonHang, result.TrangThaiThanhToan },
+                    request.MaGiaoDich ?? request.GhiChu);
+                result = await _orderService.GetOrderByIdAsync(id, this.GetCurrentUserId(), true);
+            }
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return this.ToErrorResult(ex);
+        }
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
     [HttpPut("{id:int}/status")]
     [HttpPatch("{id:int}/status")]
     public async Task<IActionResult> UpdateStatus(int id, UpdateOrderStatusRequest request)
@@ -228,10 +369,6 @@ public class OrdersController : ControllerBase
 
                 await ApplyOrderCancellationAsync(order, request.LyDoHuyDon.Trim(), now);
             }
-            else
-            {
-                ApplyShippingSyncForOrderStatus(order, normalizedStatus);
-            }
 
             order.TrangThaiDonHang = normalizedStatus;
         }
@@ -277,9 +414,11 @@ public class OrdersController : ControllerBase
                 order.NgayThanhToanThanhCong = now;
             }
 
-            if (normalizedPaymentStatus.Equals("Paid", StringComparison.OrdinalIgnoreCase) &&
-                normalizedStatus is null &&
-                InitialPaymentOrderStatuses.Contains(order.TrangThaiDonHang))
+            // Both Paid and PartiallyPaid (e.g. deposit received, first instalment received) auto-
+            // confirm an AwaitingPayment order so shipping can proceed.
+            var triggersConfirm = normalizedPaymentStatus.Equals("Paid", StringComparison.OrdinalIgnoreCase)
+                || normalizedPaymentStatus.Equals("PartiallyPaid", StringComparison.OrdinalIgnoreCase);
+            if (triggersConfirm && normalizedStatus is null && InitialPaymentOrderStatuses.Contains(order.TrangThaiDonHang))
             {
                 var confirmError = await TryConfirmOrderAndDeductStockAsync(order, now);
                 if (confirmError is not null)
@@ -295,7 +434,6 @@ public class OrdersController : ControllerBase
             }
         }
 
-        ReconcileShippingWithOrderStatus(order);
         await EnsureOrderHistoryTableAsync();
         AddHistory(id, "OrderStatus", oldOrderStatus, order.TrangThaiDonHang, request.LyDoHuyDon, now);
         AddHistory(id, "PaymentStatus", oldPaymentStatus, order.TrangThaiThanhToan, request.GhiChuThanhToan ?? request.PaymentNote, now);
@@ -407,38 +545,8 @@ public class OrdersController : ControllerBase
         return null;
     }
 
-    private static void ApplyShippingSyncForOrderStatus(OrderService.Entities.Order order, string nextStatus)
-    {
-        if (nextStatus.Equals("Processing", StringComparison.OrdinalIgnoreCase))
-        {
-            order.TrangThaiVanChuyen = "Preparing";
-        }
-        else if (nextStatus.Equals("Shipping", StringComparison.OrdinalIgnoreCase))
-        {
-            order.TrangThaiVanChuyen = "Shipping";
-        }
-        else if (nextStatus.Equals("Delivered", StringComparison.OrdinalIgnoreCase))
-        {
-            order.TrangThaiVanChuyen = "Delivered";
-        }
-    }
-
-    private static void ReconcileShippingWithOrderStatus(OrderService.Entities.Order order)
-    {
-        if (order.TrangThaiDonHang.Equals("Processing", StringComparison.OrdinalIgnoreCase))
-        {
-            order.TrangThaiVanChuyen = "Preparing";
-        }
-        else if (order.TrangThaiDonHang.Equals("Shipping", StringComparison.OrdinalIgnoreCase))
-        {
-            order.TrangThaiVanChuyen = "Shipping";
-        }
-        else if (order.TrangThaiDonHang.Equals("Delivered", StringComparison.OrdinalIgnoreCase) ||
-                 order.TrangThaiDonHang.Equals("Completed", StringComparison.OrdinalIgnoreCase))
-        {
-            order.TrangThaiVanChuyen = "Delivered";
-        }
-    }
+    // Shipping is fully decoupled from orderStatus now (orderStatus ∈ AwaitingPayment/Confirmed/Cancelled).
+    // Admin updates shippingStatus independently via the modal in OrderDetail.
 
     private async Task ApplyOrderCancellationAsync(OrderService.Entities.Order order, string reason, DateTime now)
     {

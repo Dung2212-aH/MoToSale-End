@@ -46,6 +46,20 @@ export function getProductDiscountPercent(product) {
 }
 
 export function getProductImage(product) {
+  const variantImages = (product?.variants || [])
+    .flatMap((variant) => variant?.images || [])
+    .map((image) => image?.imageUrl)
+    .filter(Boolean);
+  const linkedVariantImage = product?.images?.find((image) => image?.productVariantId && image?.imageUrl)?.imageUrl;
   const primaryImage = product?.images?.find((image) => image?.isPrimary)?.imageUrl;
-  return normalizeImageUrl(primaryImage || product?.images?.[0]?.imageUrl || product?.mainImageUrl || product?.imageUrl || '');
+
+  return normalizeImageUrl(
+    variantImages[0] ||
+      linkedVariantImage ||
+      primaryImage ||
+      product?.images?.[0]?.imageUrl ||
+      product?.mainImageUrl ||
+      product?.imageUrl ||
+      '',
+  );
 }

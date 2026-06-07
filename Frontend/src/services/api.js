@@ -83,7 +83,6 @@ const normalizeOrder = (raw = {}) => {
     id: field(raw, 'id', 'Id', 'maDonHang', 'MaDonHang'),
     orderCode: field(raw, 'orderCode', 'OrderCode', 'maDonHangKinhDoanh', 'MaDonHangKinhDoanh'),
     userId: field(raw, 'userId', 'UserId', 'maNguoiDung', 'MaNguoiDung'),
-    showroomId: field(raw, 'showroomId', 'ShowroomId', 'maShowroom', 'MaShowroom'),
     cartId: field(raw, 'cartId', 'CartId', 'maGioHang', 'MaGioHang'),
     shippingFullName: field(raw, 'shippingFullName', 'ShippingFullName', 'hoTenNhanHang', 'HoTenNhanHang'),
     shippingPhoneNumber: field(raw, 'shippingPhoneNumber', 'ShippingPhoneNumber', 'soDienThoaiNhanHang', 'SoDienThoaiNhanHang'),
@@ -225,7 +224,6 @@ const cleanParams = (params = {}) => {
     brandId: 'MaHangXe',
     carModelId: 'MaDongXe',
     compatibleCarModelId: 'MaDongXeTuongThich',
-    showroomId: 'MaShowroom',
     productType: 'LoaiSanPham',
     status: 'TrangThaiSanPham',
     minPrice: 'GiaTu',
@@ -660,7 +658,6 @@ export const orderApi = {
 
   async createOrder(data) {
     const response = await api.post('/orders', {
-      maShowroom: data.showroomId ?? data.MaShowroom ?? null,
       maDiaChiNhanHang: data.shippingAddressId ?? data.maDiaChiNhanHang ?? null,
       hoTenNhanHang: data.shippingFullName,
       soDienThoaiNhanHang: data.shippingPhoneNumber,
@@ -671,12 +668,20 @@ export const orderApi = {
       ghiChu: data.note,
       phuongThucNhanHang: data.receivingMethod,
       loaiDonHang: data.orderType,
+      phuongThucThanhToan: data.paymentMethod,
+      soKyTraGop: data.soKyTraGop ?? null,
+      hoSoTraGop: data.installmentApplication ?? null,
       tienDatCoc: data.depositAmount ?? 0,
       ngayHenNhanXe: data.pickupAppointmentAt,
       ghiChuGiaoNhan: data.fulfillmentNote,
       soPhutGiuCho: data.holdMinutes ?? 15,
     });
     return normalizeOrder(responseData(response));
+  },
+
+  async getPaymentInfo(id) {
+    const response = await api.get(`/orders/${id}/payment-info`);
+    return responseData(response);
   },
 
   async getShippingQuote(data) {
@@ -691,6 +696,16 @@ export const orderApi = {
 
   async cancelOrder(id, reason) {
     const response = await api.put(`/orders/${id}/cancel`, { lyDoHuyDon: reason });
+    return normalizeOrder(responseData(response));
+  },
+
+  async requestRefund(id, data) {
+    const response = await api.post(`/orders/${id}/request-refund`, {
+      tenNganHang: data.bankName,
+      soTaiKhoan: data.accountNo,
+      chuTaiKhoan: data.accountName,
+      lyDo: data.reason,
+    });
     return normalizeOrder(responseData(response));
   },
 };
@@ -924,7 +939,6 @@ export const contentApi = {
     noiDung: data.message ?? data.noiDung,
     loaiYeuCau: data.inquiryType ?? data.loaiYeuCau,
     maSanPham: data.productId ?? data.maSanPham,
-    maShowroom: data.showroomId ?? data.maShowroom,
   }),
   getVoucher: (code) => api.get(`/content/vouchers/${code}`),
 };

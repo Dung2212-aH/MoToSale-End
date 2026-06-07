@@ -23,11 +23,10 @@ public interface IOrderRepository
     Task CleanupExpiredInventoryHoldsAsync();
     Task AddOrderAsync(Order order);
     Task<Order?> GetOrderByIdAsync(int maDonHang);
-    Task<List<Order>> GetOrdersAsync(OrderSearchDto search, int? maNguoiDung);
-    Task<int> CountOrdersAsync(OrderSearchDto search, int? maNguoiDung);
+    Task<List<Order>> GetOrdersAsync(OrderSearchDto search, int? maNguoiDung, bool hideAwaitingPayment = false);
+    Task<int> CountOrdersAsync(OrderSearchDto search, int? maNguoiDung, bool hideAwaitingPayment = false);
     Task<VoucherValidationResult?> ValidateVoucherAsync(int maNguoiDung, int maGioHang, string maVoucherCode, decimal phiVanChuyen);
     Task<bool> UserHasSavedVoucherAsync(int maNguoiDung, string maVoucherCode);
-    Task<List<string>> GetActiveStoreLocationTextsAsync();
     Task RecordVoucherUseAsync(int maNguoiDung, int maDonHang, string maVoucherCode, decimal soTienGiam);
     Task CancelVoucherUseAsync(int maDonHang);
     Task SaveChangesAsync();

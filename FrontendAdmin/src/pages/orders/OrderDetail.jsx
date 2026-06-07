@@ -5,16 +5,19 @@ import {
   DELIVERY_SHIPPING_STATUS_OPTIONS,
   ORDER_NEXT_STATUS,
   ORDER_STATUS_OPTIONS,
+  ORDER_TYPE_LABELS,
   PAYMENT_METHODS,
   PAYMENT_STATUS_OPTIONS,
   PICKUP_SHIPPING_STATUS_OPTIONS,
   SHIPPING_STATUS_OPTIONS,
   getOrderStatusMeta,
+  getPaymentStatusContextual,
   getPaymentStatusMeta,
   getShippingStatusMeta,
 } from '../../utils/constants';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { formatDate } from '../../utils/formatDate';
+import { printInstallmentApplication } from '../../utils/printInstallmentApplication';
 
 const isLockedOrder = (status) => ['Cancelled', 'Completed'].includes(status);
 const canCancelOrder = (status) => !['Cancelled', 'Delivered', 'Completed'].includes(status);
@@ -76,6 +79,7 @@ const OrderDetail = () => {
   const [paymentNote, setPaymentNote] = useState('');
   const [shippingNote, setShippingNote] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [paymentInfo, setPaymentInfo] = useState(null);
 
   const fetchOrder = async () => {
     setLoading(true);
@@ -83,10 +87,32 @@ const OrderDetail = () => {
     try {
       const res = await orderService.getById(id);
       setOrder(res.data);
+      try {
+        const infoRes = await orderService.getPaymentInfo(id);
+        setPaymentInfo(infoRes.data);
+      } catch {
+        setPaymentInfo(null);
+      }
     } catch (err) {
       setError('Không thể tải thông tin đơn hàng.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConfirmPayment = async (maKyTraGop) => {
+    const message = maKyTraGop
+      ? 'Xác nhận đã nhận thanh toán cho kỳ trả góp này?'
+      : 'Xác nhận đã nhận thanh toán (chuyển khoản) cho đơn này?';
+    if (!window.confirm(message)) return;
+    setUpdating(true);
+    try {
+      await orderService.confirmPayment(id, maKyTraGop ? { maKyTraGop } : {});
+      await fetchOrder();
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Xác nhận thanh toán thất bại. Vui lòng thử lại.');
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -226,7 +252,7 @@ const OrderDetail = () => {
 
   const items = order.chiTiet || order.items || [];
   const histories = order.lichSu || order.histories || order.orderHistories || [];
-  const payment = order.thanhToan || order.payment || null;
+  const payments = order.danhSachThanhToan || order.thanhToan || [];
   const voucher = order.voucher || null;
   const inventoryHolds = order.tonKhoGiuCho || order.inventoryHolds || [];
   const totalAmount = order.tongThanhToan ?? order.tongTien ?? order.totalAmount ?? 0;
@@ -236,6 +262,26 @@ const OrderDetail = () => {
   const email = order.emailNhanHang || order.email;
   const actionsLocked = isLockedOrder(orderStatus);
   const orderCode = order.maDonHangKinhDoanh || order.maDonHang || order.orderCode || order.id;
+  const installment = order.traGop || order.TraGop || null;
+  const amountDue = Number(paymentInfo?.soTienCanThanhToan ?? paymentInfo?.SoTienCanThanhToan ?? 0);
+  const canConfirmPayment = orderStatus !== 'Cancelled' && paymentStatus !== 'Paid' && amountDue > 0;
+  const refunds = order.yeuCauHoanTien || order.YeuCauHoanTien || [];
+  const pendingRefund = refunds.find((r) => r.trangThai === 'Pending');
+
+  const handleConfirmRefund = async (refundId) => {
+    const txnRef = window.prompt('Mã giao dịch hoàn tiền (tùy chọn):', '');
+    if (txnRef === null) return; // cancelled
+    const note = window.prompt('Ghi chú (tùy chọn):', '') || undefined;
+    setUpdating(true);
+    try {
+      await orderService.confirmRefund(id, refundId, { maGiaoDichHoan: txnRef || undefined, ghiChuAdmin: note });
+      await fetchOrder();
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Xác nhận hoàn tiền thất bại.');
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   const handlePrintOrder = () => {
     const rows = items.map((item, idx) => `
@@ -367,8 +413,8 @@ const OrderDetail = () => {
               onClick={() => setShowStatusModal(true)}
             />
             <StatusCard
-              title="Thanh toán"
-              badge={renderBadge(getPaymentStatusMeta(paymentStatus))}
+              title={`Thanh toán (${ORDER_TYPE_LABELS[order.loaiDonHang] || ORDER_TYPE_LABELS[order.orderType] || 'Đơn hàng'})`}
+              badge={renderBadge(getPaymentStatusContextual(paymentStatus, order.loaiDonHang || order.orderType))}
               buttonText="Cập nhật thanh toán"
               disabled={orderStatus === 'Cancelled'}
               onClick={() => setShowPaymentModal(true)}
@@ -381,6 +427,137 @@ const OrderDetail = () => {
               onClick={() => setShowShippingModal(true)}
             />
           </div>
+
+          {refunds.length > 0 && (
+            <div className="card card-outline card-warning">
+              <div className="card-header"><h3 className="card-title">Yêu cầu hoàn tiền của khách hàng</h3></div>
+              <div className="card-body p-0">
+                <table className="table table-bordered table-striped mb-0">
+                  <thead>
+                    <tr>
+                      <th>Ngày gửi</th>
+                      <th className="table-col-money">Số tiền</th>
+                      <th>Ngân hàng</th>
+                      <th>Số tài khoản</th>
+                      <th>Chủ tài khoản</th>
+                      <th>Lý do</th>
+                      <th>Trạng thái</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {refunds.map((r) => (
+                      <tr key={r.maYeuCauHoanTien}>
+                        <td>{formatDate(r.ngayTao)}</td>
+                        <td className="table-col-money"><strong className="text-danger">{formatCurrency(r.soTien)}</strong></td>
+                        <td>{r.tenNganHang}</td>
+                        <td><code>{r.soTaiKhoan}</code></td>
+                        <td>{r.chuTaiKhoan}</td>
+                        <td>{r.lyDo || '-'}</td>
+                        <td>
+                          <span className={`badge badge-${r.trangThai === 'Completed' ? 'success' : r.trangThai === 'Rejected' ? 'secondary' : 'warning'}`}>
+                            {r.trangThai === 'Completed' ? 'Đã hoàn tiền' : r.trangThai === 'Rejected' ? 'Từ chối' : 'Đang xử lý'}
+                          </span>
+                          {r.maGiaoDichHoan && <div className="small text-muted mt-1">GD: {r.maGiaoDichHoan}</div>}
+                        </td>
+                        <td>
+                          {r.trangThai === 'Pending' && (
+                            <button className="btn btn-sm btn-success" onClick={() => handleConfirmRefund(r.maYeuCauHoanTien)} disabled={updating}>
+                              <i className="fas fa-check"></i> Đã hoàn tiền
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {pendingRefund && (
+                <div className="card-footer text-muted small">
+                  Sau khi chuyển khoản tổng <strong>{formatCurrency(pendingRefund.soTien)}</strong> đến tài khoản trên, bấm <em>Đã hoàn tiền</em> để cập nhật trạng thái đơn.
+                </div>
+              )}
+            </div>
+          )}
+
+          {canConfirmPayment && (
+            <div className="card card-outline card-success">
+              <div className="card-header"><h3 className="card-title">Xác nhận thanh toán (chuyển khoản)</h3></div>
+              <div className="card-body">
+                <p className="mb-2">
+                  Số tiền cần thu hiện tại: <strong className="text-primary">{formatCurrency(amountDue)}</strong>
+                  {paymentInfo?.noiDungChuyenKhoan && <> — Nội dung CK: <strong>{paymentInfo.noiDungChuyenKhoan}</strong></>}
+                </p>
+                <p className="text-muted">Khi đã nhận được tiền chuyển khoản của khách, bấm nút bên dưới để xác nhận thanh toán{installment ? ' tiền trả trước' : ''}. Hệ thống sẽ trừ tồn kho và chuyển đơn sang "Đã xác nhận".</p>
+                <button className="btn btn-success" onClick={() => handleConfirmPayment()} disabled={updating}>
+                  <i className="fas fa-check"></i> {updating ? 'Đang xử lý...' : 'Đã nhận thanh toán'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {installment && (
+            <div className="card">
+              <div className="card-header"><h3 className="card-title">Hồ sơ trả góp</h3></div>
+              <div className="card-body">
+                <table className="table table-sm">
+                  <tbody>
+                    <tr><td><strong>Trả trước:</strong></td><td>{formatCurrency(installment.tienTraTruoc)}</td><td><strong>Số kỳ:</strong></td><td>{installment.soKy} tháng</td></tr>
+                    <tr><td><strong>Lãi suất:</strong></td><td>{installment.laiSuatNam}% /năm</td><td><strong>Tổng lãi:</strong></td><td>{formatCurrency(installment.tongTienLai)}</td></tr>
+                    <tr><td><strong>Tổng phải trả (gốc + lãi):</strong></td><td colSpan="3">{formatCurrency(installment.tongPhaiTra)}</td></tr>
+                  </tbody>
+                </table>
+                {installment.hoTenNguoiVay && (
+                  <div className="mb-3 p-3 bg-light rounded">
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <strong>Hồ sơ vay</strong>
+                      <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => printInstallmentApplication(order, installment)}>
+                        <i className="fas fa-file-pdf"></i> Xuất PDF
+                      </button>
+                    </div>
+                    <table className="table table-sm mb-0">
+                      <tbody>
+                        <tr><td><strong>Họ tên:</strong></td><td>{installment.hoTenNguoiVay}</td><td><strong>CCCD/CMND:</strong></td><td>{installment.soCCCD}</td></tr>
+                        <tr><td><strong>Ngày cấp CCCD:</strong></td><td>{installment.ngayCapCCCD ? formatDate(installment.ngayCapCCCD) : '-'}</td><td><strong>Nơi cấp CCCD:</strong></td><td>{installment.noiCapCCCD || '-'}</td></tr>
+                        <tr><td><strong>Ngày sinh:</strong></td><td>{installment.ngaySinh ? formatDate(installment.ngaySinh) : '-'}</td><td><strong>SĐT:</strong></td><td>{installment.soDienThoai || '-'}</td></tr>
+                        <tr><td><strong>Địa chỉ TT:</strong></td><td colSpan="3">{installment.diaChiThuongTru || '-'}</td></tr>
+                        <tr><td><strong>Nghề nghiệp:</strong></td><td>{installment.ngheNghiep || '-'}</td><td><strong>Công ty:</strong></td><td>{installment.tenCongTy || '-'}</td></tr>
+                        <tr><td><strong>Thâm niên:</strong></td><td>{installment.thoiGianLamViecThang ? `${installment.thoiGianLamViecThang} tháng` : '-'}</td><td><strong>Thu nhập/tháng:</strong></td><td>{installment.thuNhapHangThang ? formatCurrency(installment.thuNhapHangThang) : '-'}</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <table className="table table-bordered table-striped mb-0">
+                  <thead>
+                    <tr><th>Kỳ</th><th>Đến hạn</th><th className="table-col-money">Gốc</th><th className="table-col-money">Lãi</th><th className="table-col-money">Tổng</th><th>Trạng thái</th><th></th></tr>
+                  </thead>
+                  <tbody>
+                    {(installment.terms || []).map((t) => (
+                      <tr key={t.maKyTraGop}>
+                        <td>Kỳ {t.kyThu}</td>
+                        <td>{formatDate(t.ngayDenHan)}</td>
+                        <td className="table-col-money">{formatCurrency(t.soTienGoc)}</td>
+                        <td className="table-col-money">{formatCurrency(t.soTienLai)}</td>
+                        <td className="table-col-money">{formatCurrency(t.tongTien)}</td>
+                        <td>
+                          <span className={`badge badge-${t.trangThai === 'Paid' ? 'success' : t.trangThai === 'Cancelled' ? 'secondary' : 'warning'}`}>
+                            {t.trangThai === 'Paid' ? 'Đã trả' : t.trangThai === 'Cancelled' ? 'Đã hủy' : 'Chờ trả'}
+                          </span>
+                        </td>
+                        <td>
+                          {t.trangThai === 'Pending' && orderStatus !== 'Cancelled' && (
+                            <button className="btn btn-sm btn-outline-success" onClick={() => handleConfirmPayment(t.maKyTraGop)} disabled={updating}>
+                              Xác nhận
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           <div className="card">
             <div className="card-header"><h3 className="card-title">Lịch sử đơn hàng</h3></div>
@@ -423,16 +600,32 @@ const OrderDetail = () => {
             </div>
           </div>
 
-          {payment && (
+          {payments.length > 0 && (
             <div className="card">
-              <div className="card-header"><h3 className="card-title">Thông tin thanh toán</h3></div>
-              <div className="card-body">
-                <table className="table table-sm">
+              <div className="card-header"><h3 className="card-title">Lịch sử thanh toán</h3></div>
+              <div className="card-body p-0">
+                <table className="table table-bordered table-striped mb-0">
+                  <thead>
+                    <tr>
+                      <th>Mã GD</th>
+                      <th>Phương thức</th>
+                      <th>Loại</th>
+                      <th className="table-col-money">Số tiền</th>
+                      <th>Trạng thái</th>
+                      <th>Thời gian</th>
+                    </tr>
+                  </thead>
                   <tbody>
-                    <tr><td><strong>Phương thức:</strong></td><td>{PAYMENT_METHODS[payment.phuongThuc || payment.method] || payment.phuongThuc || payment.method || '-'}</td></tr>
-                    <tr><td><strong>Số tiền:</strong></td><td>{formatCurrency(payment.soTien || payment.amount || totalAmount)}</td></tr>
-                    <tr><td><strong>Trạng thái:</strong></td><td>{renderBadge(getPaymentStatusMeta(paymentStatus))}</td></tr>
-                    <tr><td><strong>Ngày thanh toán:</strong></td><td>{formatDate(payment.ngayThanhToan || payment.paidAt || order.ngayThanhToanThanhCong)}</td></tr>
+                    {payments.map((p, idx) => (
+                      <tr key={p.maThanhToan || p.maThanhToanKinhDoanh || idx}>
+                        <td>{p.maThanhToanKinhDoanh || p.maThanhToan}</td>
+                        <td>{PAYMENT_METHODS[p.phuongThuc] || p.phuongThuc || '-'}</td>
+                        <td>{p.loaiThanhToan || '-'}</td>
+                        <td className="table-col-money">{formatCurrency(p.soTien || 0)}</td>
+                        <td><span className={`badge badge-${p.trangThai === 'Paid' ? 'success' : p.trangThai === 'Cancelled' ? 'secondary' : p.trangThai === 'Failed' ? 'danger' : 'warning'}`}>{p.trangThai}</span></td>
+                        <td>{formatDate(p.daThanhToanLuc || p.ngayTao)}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>

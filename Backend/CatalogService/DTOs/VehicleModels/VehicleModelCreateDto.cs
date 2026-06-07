@@ -14,5 +14,9 @@ public class VehicleModelCreateDto
     [MaxLength(160)]
     public string Slug { get; set; } = string.Empty;
 
+    // XeSo / TayGa / ConTay / XeDien / Khac (rỗng -> Khac)
+    [MaxLength(20)]
+    public string? LoaiXe { get; set; }
+
     public bool DangHoatDong { get; set; } = true;
 }

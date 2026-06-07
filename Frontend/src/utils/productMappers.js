@@ -65,8 +65,6 @@ export function normalizeProduct(raw) {
     brandName: brand?.name || brand?.Name || valueOf(raw, 'brandName', 'BrandName', 'tenHang', 'TenHang'),
     carModelId: valueOf(raw, 'carModelId', 'CarModelId', 'maDongXe', 'MaDongXe'),
     carModelName: valueOf(raw, 'carModelName', 'CarModelName', 'tenDongXe', 'TenDongXe') || valueOf(valueOf(raw, 'carModel'), 'name'),
-    showroomId: valueOf(raw, 'showroomId', 'ShowroomId', 'maShowroom', 'MaShowroom'),
-    showroomName: valueOf(raw, 'showroomName', 'ShowroomName', 'tenShowroom', 'TenShowroom') || valueOf(valueOf(raw, 'showroom'), 'name'),
     productType: valueOf(raw, 'productType', 'ProductType', 'loaiSanPham', 'LoaiSanPham'),
     shortDescription: valueOf(raw, 'shortDescription', 'ShortDescription', 'moTaNgan', 'MoTaNgan'),
     description: valueOf(raw, 'description', 'Description', 'moTa', 'MoTa'),
@@ -155,7 +153,6 @@ export function normalizeFilters(response) {
       name: valueOf(brand, 'name', 'Name', 'tenHang', 'TenHang') || '',
     })),
     carModels: response?.carModels || response?.CarModels || [],
-    showrooms: response?.showrooms || response?.Showrooms || [],
     partCompatibleTypes: (response?.partCompatibleTypes || response?.PartCompatibleTypes || []).map((item) => ({
       id: valueOf(item, 'id', 'Id', 'maDongXe', 'MaDongXe'),
       name: valueOf(item, 'name', 'Name', 'tenDongXe', 'TenDongXe') || '',

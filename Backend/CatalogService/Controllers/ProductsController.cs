@@ -638,11 +638,11 @@ public class ProductsController : ControllerBase
             foreach (var o in others) o.LaAnhChinh = false;
 
             existingImg.LaAnhChinh = true;
-            var product = await _dbContext.Products.FirstOrDefaultAsync(p => p.MaSanPham == productId);
-            if (product != null)
+            var owningProduct = await _dbContext.Products.FirstOrDefaultAsync(p => p.MaSanPham == productId);
+            if (owningProduct != null && existingImg.MaBienSanPham == null)
             {
-                product.AnhChinhUrl = existingImg.UrlAnh;
-                product.NgayCapNhat = DateTime.UtcNow;
+                owningProduct.AnhChinhUrl = existingImg.UrlAnh;
+                owningProduct.NgayCapNhat = DateTime.UtcNow;
             }
             await _dbContext.SaveChangesAsync();
             await _auditLog.WriteAsync(this, "ProductImage", existingImg.MaAnhSanPham.ToString(), "SetMain", null, new { existingImg.MaAnhSanPham, existingImg.UrlAnh, existingImg.MaBienSanPham });
@@ -654,11 +654,22 @@ public class ProductsController : ControllerBase
             return BadRequest(new { message = "Vui lòng chọn file ảnh." });
         }
 
-        // Verify product exists
-        var productExists = await _dbContext.Products.AnyAsync(p => p.MaSanPham == productId);
-        if (!productExists)
+        // Verify product exists (and grab it for AltText + main-image update)
+        var product = await _dbContext.Products.FirstOrDefaultAsync(p => p.MaSanPham == productId);
+        if (product == null)
         {
             return NotFound(new { message = "Sản phẩm không tồn tại." });
+        }
+
+        ProductVariant? variant = null;
+        if (maBienSanPham.HasValue)
+        {
+            variant = await _dbContext.ProductVariants
+                .FirstOrDefaultAsync(v => v.MaBienSanPham == maBienSanPham.Value && v.MaSanPham == productId);
+            if (variant == null)
+            {
+                return BadRequest(new { message = "Biến thể không thuộc sản phẩm này." });
+            }
         }
 
         // Save file
@@ -672,46 +683,57 @@ public class ProductsController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
 
-        // If setting as main, unset other main images for same product+variant
-        if (isMain)
+        ProductImage image;
+        try
         {
-            var existingMain = await _dbContext.ProductImages
-                .Where(i => i.MaSanPham == productId && i.MaBienSanPham == maBienSanPham && i.LaAnhChinh)
-                .ToListAsync();
-            foreach (var img in existingMain)
+            // If setting as main, unset other main images for same product+variant
+            if (isMain)
             {
-                img.LaAnhChinh = false;
+                var existingMain = await _dbContext.ProductImages
+                    .Where(i => i.MaSanPham == productId && i.MaBienSanPham == maBienSanPham && i.LaAnhChinh)
+                    .ToListAsync();
+                foreach (var img in existingMain)
+                {
+                    img.LaAnhChinh = false;
+                }
             }
-        }
 
-        var maxOrder = await _dbContext.ProductImages
-            .Where(i => i.MaSanPham == productId)
-            .MaxAsync(i => (int?)i.ThuTuHienThi) ?? 0;
+            var maxOrder = await _dbContext.ProductImages
+                .Where(i => i.MaSanPham == productId)
+                .MaxAsync(i => (int?)i.ThuTuHienThi) ?? 0;
 
-        var image = new ProductImage
-        {
-            MaSanPham = productId,
-            MaBienSanPham = maBienSanPham,
-            UrlAnh = url,
-            AltText = file.FileName,
-            LaAnhChinh = isMain,
-            ThuTuHienThi = maxOrder + 1,
-            NgayTao = DateTime.UtcNow
-        };
+            var altText = variant != null
+                ? $"{product.TenSanPham} - {variant.TenBienThe}"
+                : product.TenSanPham;
 
-        _dbContext.ProductImages.Add(image);
+            image = new ProductImage
+            {
+                MaSanPham = productId,
+                MaBienSanPham = maBienSanPham,
+                UrlAnh = url,
+                AltText = altText,
+                LaAnhChinh = isMain,
+                ThuTuHienThi = maxOrder + 1,
+                NgayTao = DateTime.UtcNow
+            };
 
-        if (isMain)
-        {
-            var product = await _dbContext.Products.FirstOrDefaultAsync(p => p.MaSanPham == productId);
-            if (product != null)
+            _dbContext.ProductImages.Add(image);
+
+            if (isMain && maBienSanPham == null)
             {
                 product.AnhChinhUrl = image.UrlAnh;
                 product.NgayCapNhat = DateTime.UtcNow;
             }
+
+            await _dbContext.SaveChangesAsync();
+        }
+        catch
+        {
+            // Rollback the file we just wrote so we don't leak orphans.
+            _imageStorage.DeleteImage(url);
+            throw;
         }
 
-        await _dbContext.SaveChangesAsync();
         await _auditLog.WriteAsync(this, "ProductImage", image.MaAnhSanPham.ToString(), "Create", null, new { image.MaAnhSanPham, image.MaSanPham, image.MaBienSanPham, image.UrlAnh, image.LaAnhChinh });
 
         return Ok(new
@@ -738,24 +760,39 @@ public class ProductsController : ControllerBase
         var oldValue = new { image.MaAnhSanPham, image.MaSanPham, image.MaBienSanPham, image.UrlAnh, image.LaAnhChinh };
 
         var product = await _dbContext.Products.FirstOrDefaultAsync(p => p.MaSanPham == productId);
-        var shouldReplaceProductMainImage = product?.AnhChinhUrl == image.UrlAnh;
+        var deletedImageWasMain = image.LaAnhChinh;
+        var shouldReplaceProductMainImage = product?.AnhChinhUrl == image.UrlAnh || (image.MaBienSanPham == null && image.LaAnhChinh);
+        var deletedVariantId = image.MaBienSanPham;
 
         _dbContext.ProductImages.Remove(image);
 
-        if (shouldReplaceProductMainImage && product != null)
+        if (deletedImageWasMain)
         {
             var replacementImage = await _dbContext.ProductImages
-                .Where(i => i.MaSanPham == productId && i.MaAnhSanPham != imageId)
+                .Where(i => i.MaSanPham == productId && i.MaAnhSanPham != imageId && i.MaBienSanPham == deletedVariantId)
                 .OrderByDescending(i => i.LaAnhChinh)
-                .ThenBy(i => i.MaBienSanPham.HasValue)
                 .ThenBy(i => i.ThuTuHienThi)
+                .ThenBy(i => i.MaAnhSanPham)
                 .FirstOrDefaultAsync();
 
-            product.AnhChinhUrl = replacementImage?.UrlAnh;
-            product.NgayCapNhat = DateTime.UtcNow;
+            if (replacementImage != null)
+            {
+                replacementImage.LaAnhChinh = true;
+            }
+
+            if (shouldReplaceProductMainImage && product != null)
+            {
+                product.AnhChinhUrl = replacementImage?.UrlAnh;
+                product.NgayCapNhat = DateTime.UtcNow;
+            }
         }
 
         await _dbContext.SaveChangesAsync();
+
+        // Best-effort cleanup of the physical file. DB is the source of truth — leftover files are
+        // recoverable via a janitor, but a missing DB row with a live URL is worse than a leftover file.
+        _imageStorage.DeleteImage(oldValue.UrlAnh);
+
         await _auditLog.WriteAsync(this, "ProductImage", imageId.ToString(), "Delete", oldValue, null);
 
         return NoContent();
@@ -792,7 +829,7 @@ public class ProductsController : ControllerBase
     {
         if (!string.IsNullOrWhiteSpace(productType)
             && !string.Equals(productType, "XeMay", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(productType, "PhuTung", StringComparison.OrdinalIgnoreCase))
+            && !IsPartProductType(productType))
         {
             return "Loai san pham khong hop le.";
         }
@@ -821,7 +858,7 @@ public class ProductsController : ControllerBase
             var model = await _dbContext.VehicleModels
                 .AsNoTracking()
                 .Where(m => m.MaDongXe == modelId.Value)
-                .Select(m => new { m.MaHangXe })
+                .Select(m => new { m.MaHangXe, m.LoaiXe })
                 .FirstOrDefaultAsync();
             if (model is null)
             {
@@ -831,6 +868,52 @@ public class ProductsController : ControllerBase
             {
                 return "Dong xe khong thuoc hang xe da chon.";
             }
+
+            // Ràng buộc nhất quán: nếu danh mục xác định được loại xe (xe số/tay ga/côn tay/điện)
+            // và dòng xe đã có loại xe cụ thể thì hai bên phải khớp nhau.
+            var categoryLoaiXe = await GetCategoryVehicleTypeAsync(categoryId.Value);
+            if (categoryLoaiXe is not null
+                && !string.Equals(model.LoaiXe, "Khac", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(categoryLoaiXe, model.LoaiXe, StringComparison.OrdinalIgnoreCase))
+            {
+                return $"Danh muc khong khop loai xe cua dong xe (dong xe thuoc loai {model.LoaiXe}).";
+            }
+        }
+
+        return null;
+    }
+
+    private static readonly Dictionary<string, string> CategorySlugToLoaiXe = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["xe-so"] = "XeSo",
+        ["xe-tay-ga"] = "TayGa",
+        ["xe-con-tay"] = "ConTay",
+        ["xe-dien"] = "XeDien",
+    };
+
+    // Suy ra loại xe (XeSo/TayGa/ConTay/XeDien) từ danh mục hoặc danh mục cha gần nhất.
+    // Trả null nếu danh mục không thuộc nhóm loại xe nào (không ràng buộc).
+    private async Task<string?> GetCategoryVehicleTypeAsync(int categoryId)
+    {
+        var categories = await _dbContext.Categories
+            .AsNoTracking()
+            .Select(c => new { c.MaDanhMuc, c.MaDanhMucCha, c.Slug })
+            .ToListAsync();
+
+        var current = categories.FirstOrDefault(c => c.MaDanhMuc == categoryId);
+        var guard = 0;
+        while (current is not null && guard++ < 50)
+        {
+            if (!string.IsNullOrWhiteSpace(current.Slug)
+                && CategorySlugToLoaiXe.TryGetValue(current.Slug.Trim(), out var loaiXe))
+            {
+                return loaiXe;
+            }
+            if (!current.MaDanhMucCha.HasValue)
+            {
+                break;
+            }
+            current = categories.FirstOrDefault(c => c.MaDanhMuc == current.MaDanhMucCha.Value);
         }
 
         return null;
@@ -943,21 +1026,28 @@ public class ProductsController : ControllerBase
     {
         var categories = await _dbContext.Categories
             .AsNoTracking()
-            .Select(c => new { c.MaDanhMuc, c.MaDanhMucCha, c.TenDanhMuc })
+            .Select(c => new { c.MaDanhMuc, c.MaDanhMucCha, c.TenDanhMuc, c.Slug })
             .ToListAsync();
+
+        var rootSlugs = productType == "XeMay"
+            ? new[] { "xe-may" }
+            : new[] { "phu-tung", "phu-kien" };
 
         var rootNames = productType == "XeMay"
             ? new[] { "xe may" }
             : new[] { "phu tung", "phu kien" };
 
         var rootIds = categories
-            .Where(c => c.MaDanhMucCha == null && rootNames.Contains(NormalizeText(c.TenDanhMuc)))
+            .Where(c => c.MaDanhMucCha == null
+                && (rootSlugs.Contains((c.Slug ?? string.Empty).Trim().ToLowerInvariant())
+                    || rootNames.Contains(NormalizeText(c.TenDanhMuc))))
             .Select(c => c.MaDanhMuc)
             .ToHashSet();
 
+        // Không tìm thấy danh mục gốc cho loại sản phẩm -> coi như không hợp lệ (thay vì bỏ qua âm thầm).
         if (rootIds.Count == 0)
         {
-            return true;
+            return false;
         }
 
         var current = categories.FirstOrDefault(c => c.MaDanhMuc == categoryId);
@@ -979,9 +1069,9 @@ public class ProductsController : ControllerBase
 
     private static string NormalizeProductType(string? productType)
     {
-        return string.Equals(productType, "PhuTung", StringComparison.OrdinalIgnoreCase)
-            ? "PhuTung"
-            : "XeMay";
+        // Nhận diện mọi biến thể "phụ tùng/phụ kiện" -> 'PhuTung'.
+        // Tránh việc giá trị hợp lệ như 'PhuKien'/'PhuTungXeMay' bị ép sai thành 'XeMay'.
+        return IsPartProductType(productType) ? "PhuTung" : "XeMay";
     }
 
     private static bool IsPartProductType(string? productType)

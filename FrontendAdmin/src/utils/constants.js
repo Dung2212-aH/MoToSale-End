@@ -1,22 +1,22 @@
+// Đơn hàng chỉ còn 3 trạng thái sau khi đơn giản hóa. Tiến trình vận chuyển dùng SHIPPING_STATUS riêng.
 export const ORDER_STATUS_LABELS = {
-  Pending: { label: 'Legacy: chờ xử lý', color: 'secondary' },
-  Checkout: { label: 'Đang checkout', color: 'secondary' },
-  AwaitingPayment: { label: 'Chờ thanh toán / xác nhận', color: 'warning' },
+  AwaitingPayment: { label: 'Chờ thanh toán', color: 'warning' },
   Confirmed: { label: 'Đã xác nhận', color: 'primary' },
-  Processing: { label: 'Đang chuẩn bị hàng', color: 'info' },
-  Shipping: { label: 'Đang giao', color: 'info' },
-  Delivered: { label: 'Đã giao', color: 'success' },
-  Completed: { label: 'Hoàn tất', color: 'success' },
   Cancelled: { label: 'Đã hủy', color: 'danger' },
+  // Legacy giá trị cũ — vẫn map để khỏi vỡ UI khi còn data
+  Pending: { label: 'Chờ thanh toán', color: 'warning' },
+  Checkout: { label: 'Chờ thanh toán', color: 'warning' },
+  Processing: { label: 'Đã xác nhận', color: 'primary' },
+  Shipping: { label: 'Đã xác nhận', color: 'primary' },
+  Delivered: { label: 'Đã xác nhận', color: 'primary' },
+  Completed: { label: 'Đã xác nhận', color: 'primary' },
 };
 
+// Simplified: order is either AwaitingPayment, Confirmed, or Cancelled.
+// Preparation → shipping → delivery is tracked separately in TrangThaiVanChuyen.
 export const ORDER_STATUS_OPTIONS = [
   { value: 'AwaitingPayment', label: 'Chờ thanh toán / xác nhận' },
   { value: 'Confirmed', label: 'Đã xác nhận' },
-  { value: 'Processing', label: 'Đang chuẩn bị hàng' },
-  { value: 'Shipping', label: 'Đang giao' },
-  { value: 'Delivered', label: 'Đã giao' },
-  { value: 'Completed', label: 'Hoàn tất' },
   { value: 'Cancelled', label: 'Đã hủy' },
 ];
 
@@ -24,11 +24,7 @@ export const ORDER_NEXT_STATUS = {
   Pending: ['AwaitingPayment', 'Confirmed', 'Cancelled'],
   Checkout: ['AwaitingPayment', 'Confirmed', 'Cancelled'],
   AwaitingPayment: ['Confirmed', 'Cancelled'],
-  Confirmed: ['Processing', 'Cancelled'],
-  Processing: ['Shipping', 'Cancelled'],
-  Shipping: ['Delivered'],
-  Delivered: ['Completed'],
-  Completed: [],
+  Confirmed: ['Cancelled'],
   Cancelled: [],
 };
 
@@ -40,20 +36,46 @@ export const getOrderStatusMeta = (status) => (
 
 export const PAYMENT_STATUS = {
   Unpaid: { label: 'Chưa thanh toán', color: 'secondary' },
-  Pending: { label: 'Chờ xác nhận thanh toán', color: 'warning' },
-  PartiallyPaid: { label: 'Thanh toán một phần / đã đặt cọc', color: 'info' },
-  Paid: { label: 'Đã thanh toán', color: 'success' },
-  Failed: { label: 'Thanh toán thất bại', color: 'danger' },
+  PartiallyPaid: { label: 'Đã thanh toán một phần', color: 'info' },
+  Paid: { label: 'Đã thanh toán đủ', color: 'success' },
   Refunded: { label: 'Đã hoàn tiền', color: 'dark' },
   Cancelled: { label: 'Đã hủy thanh toán', color: 'secondary' },
+  // Legacy values still shown if data is old
+  Pending: { label: 'Chờ xác nhận thanh toán', color: 'warning' },
+  Failed: { label: 'Thanh toán thất bại', color: 'danger' },
 };
 
+export const ORDER_TYPE_LABELS = {
+  FullPayment: 'Thanh toán toàn bộ',
+  Deposit: 'Đặt cọc trước',
+  Installment: 'Trả góp',
+};
+
+/**
+ * Cùng 'PartiallyPaid' nghĩa khác nhau theo orderType:
+ *   Deposit     → "Đã đặt cọc"
+ *   Installment → "Đang trả góp"
+ *   FullPayment → "Đã thanh toán một phần"
+ */
+export const getPaymentStatusContextual = (paymentStatus, orderType) => {
+  if (paymentStatus === 'PartiallyPaid') {
+    if (orderType === 'Deposit') return { label: 'Đã đặt cọc', color: 'info' };
+    if (orderType === 'Installment') return { label: 'Đang trả góp', color: 'info' };
+    return { label: 'Đã thanh toán một phần', color: 'info' };
+  }
+  if (paymentStatus === 'Paid' && orderType === 'Installment') {
+    return { label: 'Đã trả góp xong', color: 'success' };
+  }
+  return PAYMENT_STATUS[paymentStatus] || { label: paymentStatus || 'Khác', color: 'secondary' };
+};
+
+// Aligned with backend CK_DONHANG_PaymentStatus (Unpaid/PartiallyPaid/Paid/Refunded/Cancelled).
+// 'Pending' and 'Failed' belong to per-transaction status, not order-level — keep their labels in
+// PAYMENT_STATUS map for displaying legacy/transaction values, but don't expose as admin options.
 export const PAYMENT_STATUS_OPTIONS = [
   { value: 'Unpaid', label: 'Chưa thanh toán' },
-  { value: 'Pending', label: 'Chờ xác nhận thanh toán' },
   { value: 'PartiallyPaid', label: 'Thanh toán một phần / đã đặt cọc' },
   { value: 'Paid', label: 'Đã thanh toán' },
-  { value: 'Failed', label: 'Thanh toán thất bại' },
   { value: 'Refunded', label: 'Đã hoàn tiền' },
   { value: 'Cancelled', label: 'Đã hủy thanh toán' },
 ];

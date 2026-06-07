@@ -177,24 +177,28 @@ public class OrderRepository : IOrderRepository
             .Include(o => o.InventoryHolds)
             .Include(o => o.Vouchers)
             .Include(o => o.Histories)
+            .Include(o => o.Payments)
+            .Include(o => o.InstallmentPlan!)
+            .ThenInclude(p => p.Terms)
+            .Include(o => o.RefundRequests)
             .FirstOrDefaultAsync(o => o.MaDonHang == maDonHang);
     }
 
-    public async Task<List<Order>> GetOrdersAsync(OrderSearchDto search, int? maNguoiDung)
+    public async Task<List<Order>> GetOrdersAsync(OrderSearchDto search, int? maNguoiDung, bool hideAwaitingPayment = false)
     {
         var page = search.Page <= 0 ? 1 : search.Page;
         var pageSize = search.PageSize <= 0 ? 20 : Math.Min(search.PageSize, 100);
 
-        return await ApplyOrderSearch(search, maNguoiDung)
+        return await ApplyOrderSearch(search, maNguoiDung, hideAwaitingPayment)
             .OrderByDescending(o => o.NgayTao)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync();
     }
 
-    public async Task<int> CountOrdersAsync(OrderSearchDto search, int? maNguoiDung)
+    public async Task<int> CountOrdersAsync(OrderSearchDto search, int? maNguoiDung, bool hideAwaitingPayment = false)
     {
-        return await ApplyOrderSearch(search, maNguoiDung).CountAsync();
+        return await ApplyOrderSearch(search, maNguoiDung, hideAwaitingPayment).CountAsync();
     }
 
     public async Task<VoucherValidationResult?> ValidateVoucherAsync(
@@ -222,45 +226,19 @@ public class OrderRepository : IOrderRepository
                 vu.TrangThai == "Saved");
     }
 
-    public async Task<List<string>> GetActiveStoreLocationTextsAsync()
-    {
-        return await _dbContext.Database.SqlQueryRaw<string>(
-            """
-            DECLARE @Locations TABLE (LocationText NVARCHAR(700) NOT NULL);
-
-            IF OBJECT_ID(N'dbo.SHOWROOM', N'U') IS NOT NULL
-            BEGIN
-                INSERT INTO @Locations (LocationText)
-                SELECT CONCAT(TenShowroom, N' ', DiaChi)
-                FROM dbo.SHOWROOM
-                WHERE DangHoatDong = 1;
-            END;
-
-            IF OBJECT_ID(N'dbo.CUAHANG_KHO', N'U') IS NOT NULL
-            BEGIN
-                INSERT INTO @Locations (LocationText)
-                SELECT CONCAT(TenKho, N' ', DiaChi)
-                FROM dbo.CUAHANG_KHO
-                WHERE DangHoatDong = 1
-                  AND LoaiKho IN ('Showroom', 'Store');
-            END;
-
-            SELECT LocationText AS [Value]
-            FROM @Locations;
-            """)
-            .ToListAsync();
-    }
-
     public async Task RecordVoucherUseAsync(int maNguoiDung, int maDonHang, string maVoucherCode, decimal soTienGiam)
     {
-        // Call the SP to record voucher usage (inserts VOUCHER_NGUOIDUNG + DONHANG_VOUCHER + increments SoLanDaDung)
+        // SP ghi nhận sử dụng voucher (canonical): chèn 1 dòng VOUCHER_NGUOIDUNG (TrangThai='Used'),
+        // upsert DONHANG_VOUCHER và tăng VOUCHER.SoLanDaDung (idempotent theo từng đơn).
         await _dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"EXEC dbo.sp_Voucher_GhiNhanSuDung @MaNguoiDung={maNguoiDung}, @MaDonHang={maDonHang}, @MaVoucherCode={maVoucherCode}, @SoTienGiam={soTienGiam}");
 
-        // Mark the user's "Saved" record as "Used" so the voucher count in header decreases
+        // SP đã tạo bản ghi 'Used'. Xóa bản 'Saved' cũ (đã được thay thế) để nó biến mất khỏi
+        // danh sách voucher đã lưu của khách, MÀ KHÔNG tạo thêm dòng 'Used' thứ hai.
+        // (Trước đây ở đây UPDATE bản 'Saved' -> 'Used' gây ghi nhận trùng: mỗi đơn dùng voucher
+        //  sinh 2 dòng 'Used' -> đếm sai giới hạn mỗi người và làm lệch SoLanDaDung khi hủy đơn.)
         await _dbContext.Database.ExecuteSqlInterpolatedAsync(
-            $@"UPDATE TOP(1) dbo.VOUCHER_NGUOIDUNG
-               SET TrangThai = 'Used', MaDonHang = {maDonHang}, NgaySuDung = SYSDATETIME()
+            $@"DELETE FROM dbo.VOUCHER_NGUOIDUNG
                WHERE MaNguoiDung = {maNguoiDung}
                  AND MaVoucherCodeSnapshot = {maVoucherCode}
                  AND TrangThai = 'Saved'");
@@ -277,7 +255,7 @@ public class OrderRepository : IOrderRepository
         await _dbContext.SaveChangesAsync();
     }
 
-    private IQueryable<Order> ApplyOrderSearch(OrderSearchDto search, int? maNguoiDung)
+    private IQueryable<Order> ApplyOrderSearch(OrderSearchDto search, int? maNguoiDung, bool hideAwaitingPayment = false)
     {
         var query = _dbContext.Orders
             .Include(o => o.Items)
@@ -296,6 +274,12 @@ public class OrderRepository : IOrderRepository
         if (!string.IsNullOrWhiteSpace(search.TrangThaiDonHang))
         {
             query = query.Where(o => o.TrangThaiDonHang == search.TrangThaiDonHang);
+        }
+        else if (hideAwaitingPayment)
+        {
+            // Customer-facing "My orders" list hides orders that still need to be paid for —
+            // they're parked on /checkout/payment instead and only show up here after admin confirms.
+            query = query.Where(o => o.TrangThaiDonHang != "AwaitingPayment");
         }
 
         if (!string.IsNullOrWhiteSpace(search.TrangThaiThanhToan))

@@ -24,7 +24,7 @@ using (var ctx = new AuthDbContext(authOptions))
     Console.WriteLine("      done");
 }
 
-// ----- Phase 2: Catalog (canonical SANPHAM, BIENSANPHAM, SHOWROOM + many) -----
+// ----- Phase 2: Catalog (canonical SANPHAM, BIENSANPHAM + many) -----
 ApplyCreateScript("CatalogDbContext", new DbContextOptionsBuilder<CatalogDbContext>()
     .UseSqlServer(ConnectionString)
     .Options, opts => new CatalogDbContext(opts));

@@ -2,6 +2,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import brandService from '../../services/brandService';
 import { useAuth } from '../../contexts/AuthContext';
 
+const LOAI_XE_LABELS = {
+  XeSo: 'Xe số',
+  TayGa: 'Xe tay ga',
+  ConTay: 'Xe côn tay',
+  XeDien: 'Xe điện',
+  Khac: 'Khác',
+};
+const loaiXeLabel = (value) => LOAI_XE_LABELS[value] || 'Khác';
+
 /**
  * Tạo slug từ chuỗi tiếng Việt
  */
@@ -53,6 +62,7 @@ const BrandList = () => {
     hangXeId: '',
     tenDongXe: '',
     slug: '',
+    loaiXe: 'Khac',
     dangHoatDong: true,
   });
 
@@ -202,7 +212,7 @@ const BrandList = () => {
   // === MODEL HANDLERS ===
   const openAddModel = () => {
     setEditModel(null);
-    setModelForm({ hangXeId: '', tenDongXe: '', slug: '', dangHoatDong: true });
+    setModelForm({ hangXeId: '', tenDongXe: '', slug: '', loaiXe: 'Khac', dangHoatDong: true });
     setShowModelModal(true);
   };
 
@@ -212,6 +222,7 @@ const BrandList = () => {
       hangXeId: String(item.maHangXe || item.hangXeId || item.brandId || ''),
       tenDongXe: item.tenDongXe || item.name || '',
       slug: item.slug || '',
+      loaiXe: item.loaiXe || 'Khac',
       dangHoatDong: item.dangHoatDong !== undefined ? item.dangHoatDong : true,
     });
     setShowModelModal(true);
@@ -242,6 +253,7 @@ const BrandList = () => {
         maHangXe: Number(modelForm.hangXeId),
         tenDongXe: modelForm.tenDongXe,
         slug: modelForm.slug,
+        loaiXe: modelForm.loaiXe,
         dangHoatDong: modelForm.dangHoatDong,
       };
       if (editModel) {
@@ -434,6 +446,7 @@ const BrandList = () => {
                             <th className="table-col-code">ID</th>
                             <th className="table-col-text">Hãng xe</th>
                             <th className="table-col-text">Tên dòng xe</th>
+                            <th className="table-col-text">Loại xe</th>
                             <th className="table-col-code">Slug</th>
                             <th className="table-col-status">Trạng thái</th>
                             <th className="table-col-actions">Thao tác</th>
@@ -445,6 +458,7 @@ const BrandList = () => {
                               <td className="table-col-code">{m.id}</td>
                               <td className="table-col-text">{getBrandName(m.maHangXe || m.hangXeId || m.brandId) || m.tenHang || m.brandName || ''}</td>
                               <td className="table-col-text">{m.tenDongXe || m.name}</td>
+                              <td className="table-col-text">{loaiXeLabel(m.loaiXe)}</td>
                               <td className="table-col-code"><code>{m.slug}</code></td>
                               <td className="table-col-status">
                                 <span className={`badge badge-${m.dangHoatDong ? 'success' : 'secondary'}`}>
@@ -591,6 +605,16 @@ const BrandList = () => {
                   <div className="form-group">
                     <label>Slug</label>
                     <input type="text" className="form-control" name="slug" value={modelForm.slug} onChange={handleModelChange} />
+                  </div>
+                  <div className="form-group">
+                    <label>Loại xe <span className="text-danger">*</span></label>
+                    <select className="form-control" name="loaiXe" value={modelForm.loaiXe} onChange={handleModelChange}>
+                      <option value="XeSo">Xe số</option>
+                      <option value="TayGa">Xe tay ga</option>
+                      <option value="ConTay">Xe côn tay</option>
+                      <option value="XeDien">Xe điện</option>
+                      <option value="Khac">Khác</option>
+                    </select>
                   </div>
                   <div className="form-group">
                     <div className="custom-control custom-switch">

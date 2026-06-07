@@ -214,6 +214,14 @@ public class CatalogDbContext : DbContext
             e.Property(e => e.NgayTao).HasColumnType("datetime2(0)");
 
             e.HasIndex(e => new { e.MaSanPham, e.ThuTuHienThi });
+            e.HasIndex(e => e.MaBienSanPham)
+                .IsUnique()
+                .HasDatabaseName("UX_ANHSANPHAM_OneMainImage_PerVariant")
+                .HasFilter("[MaBienSanPham] IS NOT NULL AND [LaAnhChinh] = 1");
+            e.HasIndex(e => e.MaSanPham)
+                .IsUnique()
+                .HasDatabaseName("UX_ANHSANPHAM_Primary")
+                .HasFilter("[MaBienSanPham] IS NULL AND [LaAnhChinh] = 1");
         });
     }
 
@@ -315,6 +323,7 @@ public class CatalogDbContext : DbContext
             e.Property(e => e.MaDongXe).ValueGeneratedOnAdd();
             e.Property(e => e.TenDongXe).HasMaxLength(120).IsRequired();
             e.Property(e => e.Slug).HasMaxLength(160).IsRequired();
+            e.Property(e => e.LoaiXe).HasMaxLength(20).IsUnicode(false).IsRequired();
             e.Property(e => e.DangHoatDong).IsRequired();
             e.Property(e => e.NgayTao).HasColumnType("datetime2(0)");
             e.Property(e => e.NgayCapNhat).HasColumnType("datetime2(0)");

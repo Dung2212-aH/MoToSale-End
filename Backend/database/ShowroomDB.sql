@@ -1,4 +1,4 @@
-USE [ShowroomDB]
+﻿USE [ShowroomDB]
 GO
 /****** Object:  Table [dbo].[BIENSANPHAM]    Script Date: 5/14/2026 5:11:47 PM ******/
 SET ANSI_NULLS ON
@@ -60,7 +60,6 @@ CREATE TABLE [dbo].[SANPHAM](
 	[MaDanhMuc] [int] NOT NULL,
 	[MaHangXe] [int] NULL,
 	[MaDongXe] [int] NULL,
-	[MaShowroom] [int] NULL,
 	[MoTaNgan] [nvarchar](500) NULL,
 	[MoTa] [nvarchar](max) NULL,
 	[GiaGoc] [decimal](18, 2) NOT NULL,
@@ -93,19 +92,19 @@ SET QUOTED_IDENTIFIER ON
 GO
 
 /*
-    FIX 10: Dọn lỗi còn sót sau khi xóa ANHSANPHAM.MauSac và ANHSANPHAM.PhienBan
+    FIX 10: Dá»n lá»—i cÃ²n sÃ³t sau khi xÃ³a ANHSANPHAM.MauSac vÃ  ANHSANPHAM.PhienBan
 
-    Vấn đề:
-    - Bảng ANHSANPHAM hiện đã không còn cột MauSac, PhienBan.
-    - Nhưng view dbo.v_SANPHAM_BIENTHE_ANH vẫn còn tham chiếu:
+    Váº¥n Ä‘á»:
+    - Báº£ng ANHSANPHAM hiá»‡n Ä‘Ã£ khÃ´ng cÃ²n cá»™t MauSac, PhienBan.
+    - NhÆ°ng view dbo.v_SANPHAM_BIENTHE_ANH váº«n cÃ²n tham chiáº¿u:
         a.MauSac
         a.PhienBan
-    - Khi query view này sẽ lỗi Invalid column name 'MauSac' / 'PhienBan'.
+    - Khi query view nÃ y sáº½ lá»—i Invalid column name 'MauSac' / 'PhienBan'.
 
-    Cách sửa:
-    - Tạo lại view v_SANPHAM_BIENTHE_ANH.
-    - Chỉ lấy ảnh theo MaBienSanPham.
-    - Nếu biến thể chưa có ảnh riêng, fallback sang ảnh chung của sản phẩm.
+    CÃ¡ch sá»­a:
+    - Táº¡o láº¡i view v_SANPHAM_BIENTHE_ANH.
+    - Chá»‰ láº¥y áº£nh theo MaBienSanPham.
+    - Náº¿u biáº¿n thá»ƒ chÆ°a cÃ³ áº£nh riÃªng, fallback sang áº£nh chung cá»§a sáº£n pháº©m.
 */
 
 CREATE   VIEW [dbo].[v_SANPHAM_BIENTHE_ANH]
@@ -276,7 +275,7 @@ SET QUOTED_IDENTIFIER ON
 GO
 
 --------------------------------------------------------------------------------
--- 4) View kiểm tra tồn kho sản phẩm và biến thể
+-- 4) View kiá»ƒm tra tá»“n kho sáº£n pháº©m vÃ  biáº¿n thá»ƒ
 --------------------------------------------------------------------------------
 
 CREATE   VIEW [dbo].[v_SANPHAM_TONKHO_KIEMTRA]
@@ -289,9 +288,9 @@ SELECT
     COUNT(bsp.MaBienSanPham) AS SoBienThe,
     ISNULL(SUM(ISNULL(bsp.SoLuongTon, 0)), 0) AS TongSoLuongTon_BienThe,
     CASE
-        WHEN COUNT(bsp.MaBienSanPham) = 0 THEN N'Không có biến thể - dùng tồn kho SANPHAM'
-        WHEN sp.SoLuongTon = ISNULL(SUM(ISNULL(bsp.SoLuongTon, 0)), 0) THEN N'Đã đồng bộ'
-        ELSE N'Lệch tồn kho'
+        WHEN COUNT(bsp.MaBienSanPham) = 0 THEN N'KhÃ´ng cÃ³ biáº¿n thá»ƒ - dÃ¹ng tá»“n kho SANPHAM'
+        WHEN sp.SoLuongTon = ISNULL(SUM(ISNULL(bsp.SoLuongTon, 0)), 0) THEN N'ÄÃ£ Ä‘á»“ng bá»™'
+        ELSE N'Lá»‡ch tá»“n kho'
     END AS TrangThaiKiemTra
 FROM dbo.SANPHAM sp
 LEFT JOIN dbo.BIENSANPHAM bsp
@@ -310,7 +309,7 @@ SET QUOTED_IDENTIFIER ON
 GO
 
 --------------------------------------------------------------------------------
--- 2) Tạo/Sửa view ảnh theo biến thể để lấy MauSac/PhienBan từ BIENSANPHAM
+-- 2) Táº¡o/Sá»­a view áº£nh theo biáº¿n thá»ƒ Ä‘á»ƒ láº¥y MauSac/PhienBan tá»« BIENSANPHAM
 --------------------------------------------------------------------------------
 
 CREATE   VIEW [dbo].[v_ANHSANPHAM_THEO_BIENTHE]
@@ -365,8 +364,8 @@ SET QUOTED_IDENTIFIER ON
 GO
 
 ----------------------------------------------------------------------
--- 3) View tính tồn kho khả dụng theo sản phẩm / biến thể
---    Lưu ý: giữ chỗ hết hạn tự động không bị tính vào tồn kho đang giữ.
+-- 3) View tÃ­nh tá»“n kho kháº£ dá»¥ng theo sáº£n pháº©m / biáº¿n thá»ƒ
+--    LÆ°u Ã½: giá»¯ chá»— háº¿t háº¡n tá»± Ä‘á»™ng khÃ´ng bá»‹ tÃ­nh vÃ o tá»“n kho Ä‘ang giá»¯.
 ----------------------------------------------------------------------
 CREATE   VIEW [dbo].[v_TONKHO_KHADUNG]
 AS
@@ -580,7 +579,6 @@ CREATE TABLE [dbo].[DONHANG](
 	[MaDonHang] [int] IDENTITY(1,1) NOT NULL,
 	[MaDonHangKinhDoanh] [nvarchar](50) NOT NULL,
 	[MaNguoiDung] [int] NOT NULL,
-	[MaShowroom] [int] NULL,
 	[HoTenNhanHang] [nvarchar](150) NOT NULL,
 	[SoDienThoaiNhanHang] [nvarchar](20) NOT NULL,
 	[EmailNhanHang] [nvarchar](255) NULL,
@@ -737,7 +735,6 @@ CREATE TABLE [dbo].[LIENHE_YEUCAU](
 	[NoiDung] [nvarchar](max) NOT NULL,
 	[LoaiYeuCau] [varchar](30) NOT NULL,
 	[MaSanPham] [int] NULL,
-	[MaShowroom] [int] NULL,
 	[TrangThai] [varchar](20) NOT NULL,
 	[NgayTao] [datetime2](0) NOT NULL,
 	[DaXuLyLuc] [datetime2](0) NULL,
@@ -809,32 +806,6 @@ CREATE TABLE [dbo].[NGUOIDUNG_VAITRO](
 (
 	[MaNguoiDung] ASC,
 	[MaVaiTro] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
-) ON [PRIMARY]
-GO
-/****** Object:  Table [dbo].[SHOWROOM]    Script Date: 5/14/2026 5:11:48 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-CREATE TABLE [dbo].[SHOWROOM](
-	[MaShowroom] [int] IDENTITY(1,1) NOT NULL,
-	[TenShowroom] [nvarchar](180) NOT NULL,
-	[Slug] [nvarchar](220) NOT NULL,
-	[DiaChi] [nvarchar](255) NOT NULL,
-	[SoDienThoai] [nvarchar](20) NULL,
-	[Email] [nvarchar](255) NULL,
-	[GioMoCua] [nvarchar](255) NULL,
-	[DangHoatDong] [bit] NOT NULL,
-	[NgayTao] [datetime2](0) NOT NULL,
-	[NgayCapNhat] [datetime2](0) NOT NULL,
- CONSTRAINT [PK_SHOWROOM] PRIMARY KEY CLUSTERED 
-(
-	[MaShowroom] ASC
-)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
- CONSTRAINT [UQ_SHOWROOM_Slug] UNIQUE NONCLUSTERED 
-(
-	[Slug] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
 GO
@@ -974,7 +945,7 @@ CREATE UNIQUE NONCLUSTERED INDEX [UX_ANHSANPHAM_Primary] ON [dbo].[ANHSANPHAM]
 (
 	[MaSanPham] ASC
 )
-WHERE ([LaAnhChinh]=(1))
+WHERE ([MaBienSanPham] IS NULL AND [LaAnhChinh]=(1))
 WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 GO
 SET ANSI_PADDING ON
@@ -1389,12 +1360,6 @@ ALTER TABLE [dbo].[SANPHAM] ADD  CONSTRAINT [DF_SANPHAM_NgayCapNhat]  DEFAULT (s
 GO
 ALTER TABLE [dbo].[SANPHAM] ADD  DEFAULT ('XeMay') FOR [LoaiSanPham]
 GO
-ALTER TABLE [dbo].[SHOWROOM] ADD  CONSTRAINT [DF_SHOWROOM_DangHoatDong]  DEFAULT ((1)) FOR [DangHoatDong]
-GO
-ALTER TABLE [dbo].[SHOWROOM] ADD  CONSTRAINT [DF_SHOWROOM_NgayTao]  DEFAULT (sysutcdatetime()) FOR [NgayTao]
-GO
-ALTER TABLE [dbo].[SHOWROOM] ADD  CONSTRAINT [DF_SHOWROOM_NgayCapNhat]  DEFAULT (sysutcdatetime()) FOR [NgayCapNhat]
-GO
 ALTER TABLE [dbo].[TONKHO_GIUCHO] ADD  CONSTRAINT [DF_TONKHO_GIUCHO_TrangThai]  DEFAULT ('Active') FOR [TrangThai]
 GO
 ALTER TABLE [dbo].[TONKHO_GIUCHO] ADD  CONSTRAINT [DF_TONKHO_GIUCHO_NgayTao]  DEFAULT (sysdatetime()) FOR [NgayTao]
@@ -1514,11 +1479,6 @@ REFERENCES [dbo].[NGUOIDUNG] ([MaNguoiDung])
 GO
 ALTER TABLE [dbo].[DONHANG] CHECK CONSTRAINT [FK_DONHANG_NGUOIDUNG]
 GO
-ALTER TABLE [dbo].[DONHANG]  WITH NOCHECK ADD  CONSTRAINT [FK_DONHANG_SHOWROOM] FOREIGN KEY([MaShowroom])
-REFERENCES [dbo].[SHOWROOM] ([MaShowroom])
-GO
-ALTER TABLE [dbo].[DONHANG] CHECK CONSTRAINT [FK_DONHANG_SHOWROOM]
-GO
 ALTER TABLE [dbo].[DONHANG_LICHSU_TRANGTHAI]  WITH CHECK ADD  CONSTRAINT [FK_DONHANG_LICHSU_TRANGTHAI_DONHANG] FOREIGN KEY([MaDonHang])
 REFERENCES [dbo].[DONHANG] ([MaDonHang])
 GO
@@ -1562,11 +1522,6 @@ REFERENCES [dbo].[SANPHAM] ([MaSanPham])
 GO
 ALTER TABLE [dbo].[LIENHE_YEUCAU] CHECK CONSTRAINT [FK_LIENHE_SANPHAM]
 GO
-ALTER TABLE [dbo].[LIENHE_YEUCAU]  WITH NOCHECK ADD  CONSTRAINT [FK_LIENHE_SHOWROOM] FOREIGN KEY([MaShowroom])
-REFERENCES [dbo].[SHOWROOM] ([MaShowroom])
-GO
-ALTER TABLE [dbo].[LIENHE_YEUCAU] CHECK CONSTRAINT [FK_LIENHE_SHOWROOM]
-GO
 ALTER TABLE [dbo].[NGUOIDUNG_VAITRO]  WITH NOCHECK ADD  CONSTRAINT [FK_NGUOIDUNG_VAITRO_NGUOIDUNG] FOREIGN KEY([MaNguoiDung])
 REFERENCES [dbo].[NGUOIDUNG] ([MaNguoiDung])
 ON DELETE CASCADE
@@ -1607,11 +1562,6 @@ ALTER TABLE [dbo].[SANPHAM]  WITH NOCHECK ADD  CONSTRAINT [FK_SANPHAM_HANGXE] FO
 REFERENCES [dbo].[HANGXE] ([MaHangXe])
 GO
 ALTER TABLE [dbo].[SANPHAM] CHECK CONSTRAINT [FK_SANPHAM_HANGXE]
-GO
-ALTER TABLE [dbo].[SANPHAM]  WITH NOCHECK ADD  CONSTRAINT [FK_SANPHAM_SHOWROOM] FOREIGN KEY([MaShowroom])
-REFERENCES [dbo].[SHOWROOM] ([MaShowroom])
-GO
-ALTER TABLE [dbo].[SANPHAM] CHECK CONSTRAINT [FK_SANPHAM_SHOWROOM]
 GO
 ALTER TABLE [dbo].[TONKHO_GIUCHO]  WITH NOCHECK ADD  CONSTRAINT [FK_TONKHO_GIUCHO_BIENSANPHAM] FOREIGN KEY([MaBienSanPham])
 REFERENCES [dbo].[BIENSANPHAM] ([MaBienSanPham])
@@ -1813,10 +1763,6 @@ ALTER TABLE [dbo].[PHUTUNG_TUONGTHICH]  WITH NOCHECK ADD  CONSTRAINT [CK_PHUTUNG
 GO
 ALTER TABLE [dbo].[PHUTUNG_TUONGTHICH] CHECK CONSTRAINT [CK_PHUTUNG_TUONGTHICH_PhamVi]
 GO
-ALTER TABLE [dbo].[SHOWROOM]  WITH NOCHECK ADD  CONSTRAINT [CK_SHOWROOM_Email] CHECK  (([Email] IS NULL OR [Email] like N'%_@_%._%'))
-GO
-ALTER TABLE [dbo].[SHOWROOM] CHECK CONSTRAINT [CK_SHOWROOM_Email]
-GO
 ALTER TABLE [dbo].[TONKHO_GIUCHO]  WITH NOCHECK ADD  CONSTRAINT [CK_TONKHO_GIUCHO_SoLuong] CHECK  (([SoLuong]>(0)))
 GO
 ALTER TABLE [dbo].[TONKHO_GIUCHO] CHECK CONSTRAINT [CK_TONKHO_GIUCHO_SoLuong]
@@ -1868,8 +1814,8 @@ SET QUOTED_IDENTIFIER ON
 GO
 
 ----------------------------------------------------------------------
--- 5) Bắt đầu checkout: kiểm tra tồn khả dụng và tạo giữ chỗ tạm
---    Backend nên gọi procedure này ngay sau khi tạo DONHANG + CHITIET_DONHANG.
+-- 5) Báº¯t Ä‘áº§u checkout: kiá»ƒm tra tá»“n kháº£ dá»¥ng vÃ  táº¡o giá»¯ chá»— táº¡m
+--    Backend nÃªn gá»i procedure nÃ y ngay sau khi táº¡o DONHANG + CHITIET_DONHANG.
 ----------------------------------------------------------------------
 CREATE   PROCEDURE [dbo].[sp_DonHang_BatDauCheckout]
     @MaDonHang INT,
@@ -1889,15 +1835,15 @@ BEGIN
         EXEC dbo.sp_TonKho_DonGiuChoHetHan;
 
         IF NOT EXISTS (SELECT 1 FROM dbo.DONHANG WITH (UPDLOCK, HOLDLOCK) WHERE MaDonHang = @MaDonHang)
-            THROW 51000, N'Không tìm thấy đơn hàng.', 1;
+            THROW 51000, N'KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng.', 1;
 
         IF EXISTS (SELECT 1 FROM dbo.TONKHO_GIUCHO WHERE MaDonHang = @MaDonHang AND TrangThai = 'Active' AND HetHanLuc > SYSDATETIME())
-            THROW 51001, N'Đơn hàng này đang có giữ chỗ tồn kho còn hiệu lực.', 1;
+            THROW 51001, N'ÄÆ¡n hÃ ng nÃ y Ä‘ang cÃ³ giá»¯ chá»— tá»“n kho cÃ²n hiá»‡u lá»±c.', 1;
 
         IF NOT EXISTS (SELECT 1 FROM dbo.CHITIET_DONHANG WHERE MaDonHang = @MaDonHang)
-            THROW 51002, N'Đơn hàng chưa có chi tiết sản phẩm.', 1;
+            THROW 51002, N'ÄÆ¡n hÃ ng chÆ°a cÃ³ chi tiáº¿t sáº£n pháº©m.', 1;
 
-        -- Khóa các dòng tồn kho liên quan để tránh 2 khách checkout vượt tồn cùng lúc.
+        -- KhÃ³a cÃ¡c dÃ²ng tá»“n kho liÃªn quan Ä‘á»ƒ trÃ¡nh 2 khÃ¡ch checkout vÆ°á»£t tá»“n cÃ¹ng lÃºc.
         SELECT bt.MaBienSanPham
         FROM dbo.CHITIET_DONHANG ct
         INNER JOIN dbo.BIENSANPHAM bt WITH (UPDLOCK, HOLDLOCK)
@@ -1911,7 +1857,7 @@ BEGIN
             ON sp.MaSanPham = ct.MaSanPham
         WHERE ct.MaDonHang = @MaDonHang;
 
-        -- Kiểm tra biến thể có thuộc đúng sản phẩm không.
+        -- Kiá»ƒm tra biáº¿n thá»ƒ cÃ³ thuá»™c Ä‘Ãºng sáº£n pháº©m khÃ´ng.
         IF EXISTS
         (
             SELECT 1
@@ -1921,9 +1867,9 @@ BEGIN
               AND ct.MaBienSanPham IS NOT NULL
               AND bt.MaSanPham <> ct.MaSanPham
         )
-            THROW 51003, N'Biến thể không thuộc đúng sản phẩm trong chi tiết đơn hàng.', 1;
+            THROW 51003, N'Biáº¿n thá»ƒ khÃ´ng thuá»™c Ä‘Ãºng sáº£n pháº©m trong chi tiáº¿t Ä‘Æ¡n hÃ ng.', 1;
 
-        -- Kiểm tra tồn kho khả dụng.
+        -- Kiá»ƒm tra tá»“n kho kháº£ dá»¥ng.
         IF EXISTS
         (
             SELECT 1
@@ -1949,7 +1895,7 @@ BEGIN
             WHERE ct.MaDonHang = @MaDonHang
               AND ct.SoLuong > (tk.TonKhoThucTe - tk.DangGiu)
         )
-            THROW 51004, N'Số lượng tồn kho khả dụng không đủ để checkout.', 1;
+            THROW 51004, N'Sá»‘ lÆ°á»£ng tá»“n kho kháº£ dá»¥ng khÃ´ng Ä‘á»§ Ä‘á»ƒ checkout.', 1;
 
         INSERT INTO dbo.TONKHO_GIUCHO
         (
@@ -1974,7 +1920,7 @@ BEGIN
             @HetHanLuc,
             SYSDATETIME(),
             SYSDATETIME(),
-            N'Giữ tồn kho khi khách bắt đầu checkout'
+            N'Giá»¯ tá»“n kho khi khÃ¡ch báº¯t Ä‘áº§u checkout'
         FROM dbo.CHITIET_DONHANG ct
         WHERE ct.MaDonHang = @MaDonHang;
 
@@ -1989,7 +1935,7 @@ BEGIN
         SELECT
             @MaDonHang AS MaDonHang,
             @HetHanLuc AS CheckoutHetHanLuc,
-            N'Đã giữ tồn kho tạm thời cho đơn hàng.' AS ThongBao;
+            N'ÄÃ£ giá»¯ tá»“n kho táº¡m thá»i cho Ä‘Æ¡n hÃ ng.' AS ThongBao;
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
@@ -2005,7 +1951,7 @@ SET QUOTED_IDENTIFIER ON
 GO
 
 ----------------------------------------------------------------------
--- 7) Hủy đơn khi chưa thanh toán: nhả giữ chỗ, không trừ tồn kho
+-- 7) Há»§y Ä‘Æ¡n khi chÆ°a thanh toÃ¡n: nháº£ giá»¯ chá»—, khÃ´ng trá»« tá»“n kho
 ----------------------------------------------------------------------
 CREATE   PROCEDURE [dbo].[sp_DonHang_HuyVaNhaGiuCho]
     @MaDonHang INT,
@@ -2021,21 +1967,21 @@ BEGIN
         UPDATE dbo.TONKHO_GIUCHO
         SET TrangThai = 'Cancelled',
             NgayCapNhat = SYSDATETIME(),
-            GhiChu = ISNULL(GhiChu + N' | ', N'') + N'Hủy đơn, nhả giữ chỗ'
+            GhiChu = ISNULL(GhiChu + N' | ', N'') + N'Há»§y Ä‘Æ¡n, nháº£ giá»¯ chá»—'
         WHERE MaDonHang = @MaDonHang
           AND TrangThai = 'Active';
 
         UPDATE dbo.DONHANG
         SET TrangThaiDonHang = 'Cancelled',
             NgayHuyDon = SYSDATETIME(),
-            LyDoHuyDon = ISNULL(@LyDoHuyDon, N'Khách hủy hoặc thanh toán thất bại'),
+            LyDoHuyDon = ISNULL(@LyDoHuyDon, N'KhÃ¡ch há»§y hoáº·c thanh toÃ¡n tháº¥t báº¡i'),
             NgayCapNhat = SYSDATETIME()
         WHERE MaDonHang = @MaDonHang
           AND TrangThaiDonHang <> 'Confirmed';
 
         COMMIT TRANSACTION;
 
-        SELECT @MaDonHang AS MaDonHang, N'Đã hủy đơn và nhả giữ chỗ tồn kho.' AS ThongBao;
+        SELECT @MaDonHang AS MaDonHang, N'ÄÃ£ há»§y Ä‘Æ¡n vÃ  nháº£ giá»¯ chá»— tá»“n kho.' AS ThongBao;
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
@@ -2161,13 +2107,13 @@ SET QUOTED_IDENTIFIER ON
 GO
 
 --------------------------------------------------------------------------------
--- 3) Chuẩn hóa tồn kho: BIENSANPHAM là nguồn chính, SANPHAM là tổng đồng bộ
+-- 3) Chuáº©n hÃ³a tá»“n kho: BIENSANPHAM lÃ  nguá»“n chÃ­nh, SANPHAM lÃ  tá»•ng Ä‘á»“ng bá»™
 --------------------------------------------------------------------------------
 
 /*
-    Procedure đồng bộ tồn kho của 1 sản phẩm:
-    - Nếu sản phẩm có biến thể: SANPHAM.SoLuongTon = SUM(BIENSANPHAM.SoLuongTon)
-    - Nếu sản phẩm không có biến thể: giữ nguyên SANPHAM.SoLuongTon
+    Procedure Ä‘á»“ng bá»™ tá»“n kho cá»§a 1 sáº£n pháº©m:
+    - Náº¿u sáº£n pháº©m cÃ³ biáº¿n thá»ƒ: SANPHAM.SoLuongTon = SUM(BIENSANPHAM.SoLuongTon)
+    - Náº¿u sáº£n pháº©m khÃ´ng cÃ³ biáº¿n thá»ƒ: giá»¯ nguyÃªn SANPHAM.SoLuongTon
 */
 CREATE   PROCEDURE [dbo].[sp_SANPHAM_DongBoSoLuongTon]
     @MaSanPham INT
@@ -2200,7 +2146,7 @@ SET QUOTED_IDENTIFIER ON
 GO
 
 /*
-    Procedure đồng bộ tất cả sản phẩm có biến thể.
+    Procedure Ä‘á»“ng bá»™ táº¥t cáº£ sáº£n pháº©m cÃ³ biáº¿n thá»ƒ.
 */
 CREATE   PROCEDURE [dbo].[sp_SANPHAM_DongBoTatCaSoLuongTon]
 AS
@@ -2231,7 +2177,7 @@ SET QUOTED_IDENTIFIER ON
 GO
 
 ----------------------------------------------------------------------
--- 4) Dọn giữ chỗ hết hạn
+-- 4) Dá»n giá»¯ chá»— háº¿t háº¡n
 ----------------------------------------------------------------------
 CREATE   PROCEDURE [dbo].[sp_TonKho_DonGiuChoHetHan]
 AS
@@ -2241,14 +2187,14 @@ BEGIN
     UPDATE dbo.TONKHO_GIUCHO
     SET TrangThai = 'Expired',
         NgayCapNhat = SYSDATETIME(),
-        GhiChu = ISNULL(GhiChu + N' | ', N'') + N'Tự động hết hạn giữ chỗ'
+        GhiChu = ISNULL(GhiChu + N' | ', N'') + N'Tá»± Ä‘á»™ng háº¿t háº¡n giá»¯ chá»—'
     WHERE TrangThai = 'Active'
       AND HetHanLuc <= SYSDATETIME();
 
     UPDATE dh
     SET TrangThaiDonHang = 'Cancelled',
         NgayHuyDon = ISNULL(dh.NgayHuyDon, SYSDATETIME()),
-        LyDoHuyDon = ISNULL(dh.LyDoHuyDon, N'Hết thời gian thanh toán'),
+        LyDoHuyDon = ISNULL(dh.LyDoHuyDon, N'Háº¿t thá»i gian thanh toÃ¡n'),
         NgayCapNhat = SYSDATETIME()
     FROM dbo.DONHANG dh
     WHERE dh.TrangThaiDonHang IN ('Pending', 'Checkout', 'AwaitingPayment')
@@ -2512,7 +2458,7 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 
--- Trigger đảm bảo ảnh gắn MaBienSanPham đúng với MaSanPham của sản phẩm.
+-- Trigger Ä‘áº£m báº£o áº£nh gáº¯n MaBienSanPham Ä‘Ãºng vá»›i MaSanPham cá»§a sáº£n pháº©m.
 CREATE   TRIGGER [dbo].[trg_ANHSANPHAM_Validate_MaBienSanPham]
 ON [dbo].[ANHSANPHAM]
 AFTER INSERT, UPDATE
@@ -2529,7 +2475,7 @@ BEGIN
           AND bt.MaSanPham <> i.MaSanPham
     )
     BEGIN
-        THROW 53001, N'MaBienSanPham của ảnh không thuộc đúng MaSanPham.', 1;
+        THROW 53001, N'MaBienSanPham cá»§a áº£nh khÃ´ng thuá»™c Ä‘Ãºng MaSanPham.', 1;
     END
 END
 
@@ -2602,7 +2548,7 @@ BEGIN
     )
     BEGIN
         RAISERROR (
-            N'Lỗi dữ liệu: CHITIET_DONHANG.MaBienSanPham không thuộc đúng CHITIET_DONHANG.MaSanPham.',
+            N'Lá»—i dá»¯ liá»‡u: CHITIET_DONHANG.MaBienSanPham khÃ´ng thuá»™c Ä‘Ãºng CHITIET_DONHANG.MaSanPham.',
             16,
             1
         );
@@ -2637,7 +2583,7 @@ BEGIN
     )
     BEGIN
         RAISERROR (
-            N'Lỗi dữ liệu: CHITIET_GIOHANG.MaBienSanPham không thuộc đúng CHITIET_GIOHANG.MaSanPham.',
+            N'Lá»—i dá»¯ liá»‡u: CHITIET_GIOHANG.MaBienSanPham khÃ´ng thuá»™c Ä‘Ãºng CHITIET_GIOHANG.MaSanPham.',
             16,
             1
         );
@@ -2663,20 +2609,20 @@ BEGIN
     SET NOCOUNT ON;
 
     /*
-        2.1. Chặn MaPhuTung trỏ vào sản phẩm không phải phụ tùng/phụ kiện.
+        2.1. Cháº·n MaPhuTung trá» vÃ o sáº£n pháº©m khÃ´ng pháº£i phá»¥ tÃ¹ng/phá»¥ kiá»‡n.
 
-        Các giá trị được coi là phụ tùng/phụ kiện:
+        CÃ¡c giÃ¡ trá»‹ Ä‘Æ°á»£c coi lÃ  phá»¥ tÃ¹ng/phá»¥ kiá»‡n:
         - 'Part'
         - 'Accessory'
         - 'SparePart'
         - 'PhuTung'
         - 'PhuKien'
         - 'PhuTungXeMay'
-        - 'PhụTùng'
-        - 'PhụKiện'
+        - 'Phá»¥TÃ¹ng'
+        - 'Phá»¥Kiá»‡n'
 
-        Nếu database của bạn đang dùng giá trị khác cho LoaiSanPham,
-        hãy bổ sung giá trị đó vào danh sách bên dưới.
+        Náº¿u database cá»§a báº¡n Ä‘ang dÃ¹ng giÃ¡ trá»‹ khÃ¡c cho LoaiSanPham,
+        hÃ£y bá»• sung giÃ¡ trá»‹ Ä‘Ã³ vÃ o danh sÃ¡ch bÃªn dÆ°á»›i.
     */
     IF EXISTS
     (
@@ -2692,13 +2638,13 @@ BEGIN
             'PhuTung',
             'PhuKien',
             'PhuTungXeMay',
-            N'PhụTùng',
-            N'PhụKiện'
+            N'Phá»¥TÃ¹ng',
+            N'Phá»¥Kiá»‡n'
         )
     )
     BEGIN
         RAISERROR (
-            N'Lỗi dữ liệu: PHUTUNG_TUONGTHICH.MaPhuTung phải trỏ tới sản phẩm loại phụ tùng/phụ kiện, không được trỏ tới xe máy.',
+            N'Lá»—i dá»¯ liá»‡u: PHUTUNG_TUONGTHICH.MaPhuTung pháº£i trá» tá»›i sáº£n pháº©m loáº¡i phá»¥ tÃ¹ng/phá»¥ kiá»‡n, khÃ´ng Ä‘Æ°á»£c trá» tá»›i xe mÃ¡y.',
             16,
             1
         );
@@ -2707,9 +2653,9 @@ BEGIN
     END;
 
     /*
-        2.2. Chặn lỗi:
+        2.2. Cháº·n lá»—i:
         PHUTUNG_TUONGTHICH.MaHangXe = Honda
-        PHUTUNG_TUONGTHICH.MaDongXe = Exciter, trong khi Exciter thuộc Yamaha
+        PHUTUNG_TUONGTHICH.MaDongXe = Exciter, trong khi Exciter thuá»™c Yamaha
     */
     IF EXISTS
     (
@@ -2723,7 +2669,7 @@ BEGIN
     )
     BEGIN
         RAISERROR (
-            N'Lỗi dữ liệu: PHUTUNG_TUONGTHICH.MaDongXe không thuộc đúng PHUTUNG_TUONGTHICH.MaHangXe.',
+            N'Lá»—i dá»¯ liá»‡u: PHUTUNG_TUONGTHICH.MaDongXe khÃ´ng thuá»™c Ä‘Ãºng PHUTUNG_TUONGTHICH.MaHangXe.',
             16,
             1
         );
@@ -2732,7 +2678,7 @@ BEGIN
     END;
 
     /*
-        2.3. Giữ lại logic cũ: cập nhật NgayCapNhat khi thêm/sửa tương thích.
+        2.3. Giá»¯ láº¡i logic cÅ©: cáº­p nháº­t NgayCapNhat khi thÃªm/sá»­a tÆ°Æ¡ng thÃ­ch.
     */
     UPDATE ptt
     SET NgayCapNhat = SYSUTCDATETIME()
@@ -2758,9 +2704,9 @@ BEGIN
     SET NOCOUNT ON;
 
     /*
-        Chặn lỗi:
+        Cháº·n lá»—i:
         SANPHAM.MaHangXe = Honda
-        SANPHAM.MaDongXe = Exciter, trong khi Exciter thuộc Yamaha
+        SANPHAM.MaDongXe = Exciter, trong khi Exciter thuá»™c Yamaha
     */
     IF EXISTS
     (
@@ -2774,7 +2720,7 @@ BEGIN
     )
     BEGIN
         RAISERROR (
-            N'Lỗi dữ liệu: SANPHAM.MaDongXe không thuộc đúng SANPHAM.MaHangXe.',
+            N'Lá»—i dá»¯ liá»‡u: SANPHAM.MaDongXe khÃ´ng thuá»™c Ä‘Ãºng SANPHAM.MaHangXe.',
             16,
             1
         );
@@ -2809,7 +2755,7 @@ BEGIN
     )
     BEGIN
         RAISERROR (
-            N'Lỗi dữ liệu: TONKHO_GIUCHO.MaBienSanPham không thuộc đúng TONKHO_GIUCHO.MaSanPham.',
+            N'Lá»—i dá»¯ liá»‡u: TONKHO_GIUCHO.MaBienSanPham khÃ´ng thuá»™c Ä‘Ãºng TONKHO_GIUCHO.MaSanPham.',
             16,
             1
         );
@@ -2821,3 +2767,7 @@ END;
 GO
 ALTER TABLE [dbo].[TONKHO_GIUCHO] ENABLE TRIGGER [trg_TONKHO_GIUCHO_Validate_MaBienSanPham]
 GO
+
+
+
+

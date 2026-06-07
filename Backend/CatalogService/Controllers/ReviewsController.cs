@@ -206,22 +206,23 @@ public class ReviewsController : ControllerBase
                 return StatusCode(StatusCodes.Status403Forbidden, new { message = "Chi khach hang da mua va hoan tat don hang moi duoc danh gia san pham." });
             }
 
-            var now = DateTime.UtcNow;
-            var review = await _dbContext.ProductReviews
+            var existingReview = await _dbContext.ProductReviews
                 .FirstOrDefaultAsync(r => r.MaSanPham == requestedProductId && r.MaNguoiDung == userId.Value);
 
-            if (review is null)
+            if (existingReview is not null)
             {
-                review = new ProductReview
-                {
-                    MaSanPham = requestedProductId,
-                    MaNguoiDung = userId.Value,
-                    NgayTao = now
-                };
-
-                _dbContext.ProductReviews.Add(review);
+                return Conflict(new { message = "Ban da danh gia san pham nay. Moi san pham chi duoc danh gia mot lan." });
             }
 
+            var now = DateTime.UtcNow;
+            var review = new ProductReview
+            {
+                MaSanPham = requestedProductId,
+                MaNguoiDung = userId.Value,
+                NgayTao = now
+            };
+
+            _dbContext.ProductReviews.Add(review);
             review.MaDonHang = eligibleOrderId;
             review.Diem = dto.Diem;
             review.TieuDe = TrimToNull(dto.TieuDe);
@@ -260,60 +261,9 @@ public class ReviewsController : ControllerBase
     [HttpPatch("~/api/products/{productId:int}/reviews/me")]
     [HttpPatch("product/{productId:int}/me")]
     [Consumes("multipart/form-data")]
-    public async Task<IActionResult> UpdateMyReview(int productId, [FromForm] ProductReviewUpdateDto dto)
+    public IActionResult UpdateMyReview(int productId, [FromForm] ProductReviewUpdateDto dto)
     {
-        var userId = this.GetCurrentUserId();
-        if (!userId.HasValue)
-        {
-            return Unauthorized(new { message = "Token khong hop le." });
-        }
-
-        var validationError = ValidateReviewContent(dto.Diem, dto.NoiDung);
-        if (validationError is not null)
-        {
-            return BadRequest(new { message = validationError });
-        }
-
-        var review = await _dbContext.ProductReviews
-            .FirstOrDefaultAsync(r => r.MaSanPham == productId && r.MaNguoiDung == userId.Value);
-
-        if (review is null)
-        {
-            return NotFound(new { message = "Ban chua danh gia san pham nay." });
-        }
-
-        var eligibleOrderId = await GetEligibleOrderIdAsync(userId.Value, productId, review.MaDonHang);
-        if (!eligibleOrderId.HasValue)
-        {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Chi khach hang da mua va hoan tat don hang moi duoc cap nhat danh gia." });
-        }
-
-        review.Diem = dto.Diem;
-        review.TieuDe = TrimToNull(dto.TieuDe);
-        review.NoiDung = TrimToNull(dto.NoiDung);
-        review.TrangThai = PendingReviewStatus;
-        review.NgayCapNhat = DateTime.UtcNow;
-
-        if (dto.Image != null && dto.Image.Length > 0)
-        {
-            try
-            {
-                review.HinhAnhUrl = await _imageStorage.SaveImageAsync(dto.Image, "reviews", HttpContext.RequestAborted);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-        }
-
-        await _dbContext.SaveChangesAsync();
-
-        var savedReview = await _dbContext.ProductReviews
-            .AsNoTracking()
-            .Include(r => r.User)
-            .FirstAsync(r => r.MaDanhGia == review.MaDanhGia);
-
-        return Ok(new { message = "Danh gia cua ban da duoc cap nhat va dang cho duyet lai.", review = ToReviewDto(savedReview) });
+        return StatusCode(StatusCodes.Status403Forbidden, new { message = "Danh gia chi duoc gui mot lan va khong the cap nhat lai." });
     }
 
     [Authorize(Roles = "Admin,Staff")]

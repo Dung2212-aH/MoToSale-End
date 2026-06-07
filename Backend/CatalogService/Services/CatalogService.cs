@@ -1,3 +1,4 @@
+using CatalogService.Data;
 using CatalogService.DTOs.Brands;
 using CatalogService.DTOs.Categories;
 using CatalogService.DTOs.Common;
@@ -12,6 +13,7 @@ using CatalogService.Repositories.ProductImages;
 using CatalogService.Repositories.Products;
 using CatalogService.Repositories.ProductVariants;
 using CatalogService.Repositories.VehicleModels;
+using Microsoft.EntityFrameworkCore;
 
 namespace CatalogService.Services;
 
@@ -23,6 +25,7 @@ public class CatalogService : ICatalogService
     private readonly IVehicleModelRepository _vehicleModelRepository;
     private readonly IProductImageRepository _productImageRepository;
     private readonly IProductVariantRepository _productVariantRepository;
+    private readonly CatalogDbContext _dbContext;
 
     public CatalogService(
         IProductRepository productRepository,
@@ -30,7 +33,8 @@ public class CatalogService : ICatalogService
         IBrandRepository brandRepository,
         IVehicleModelRepository vehicleModelRepository,
         IProductImageRepository productImageRepository,
-        IProductVariantRepository productVariantRepository)
+        IProductVariantRepository productVariantRepository,
+        CatalogDbContext dbContext)
     {
         _productRepository = productRepository;
         _categoryRepository = categoryRepository;
@@ -38,6 +42,7 @@ public class CatalogService : ICatalogService
         _vehicleModelRepository = vehicleModelRepository;
         _productImageRepository = productImageRepository;
         _productVariantRepository = productVariantRepository;
+        _dbContext = dbContext;
     }
 
     public async Task<List<CategoryDto>> GetCategoriesAsync(bool activeOnly = true)
@@ -78,10 +83,23 @@ public class CatalogService : ICatalogService
 
         var productIds = products.Select(p => p.MaSanPham).ToList();
         var imageMap = await _productImageRepository.GetPrimaryImageUrlsAsync(productIds);
+        var reviewSummaryMap = await _dbContext.ProductReviews
+            .AsNoTracking()
+            .Where(r => productIds.Contains(r.MaSanPham) && r.TrangThai == "Approved")
+            .GroupBy(r => r.MaSanPham)
+            .Select(g => new
+            {
+                MaSanPham = g.Key,
+                TongDanhGia = g.Count(),
+                DiemTrungBinh = g.Average(r => r.Diem)
+            })
+            .ToDictionaryAsync(
+                item => item.MaSanPham,
+                item => new ReviewSummary(item.TongDanhGia, item.DiemTrungBinh));
 
         return new PagedResultDto<ProductListItemDto>
         {
-            Items = products.Select(p => MapProductListItem(p, imageMap)).ToList(),
+            Items = products.Select(p => MapProductListItem(p, imageMap, reviewSummaryMap)).ToList(),
             Page = page,
             PageSize = pageSize,
             TotalItems = totalItems
@@ -120,9 +138,10 @@ public class CatalogService : ICatalogService
         };
     }
 
-    private static ProductListItemDto MapProductListItem(Product product, Dictionary<int, string> imageMap)
+    private static ProductListItemDto MapProductListItem(Product product, Dictionary<int, string> imageMap, IReadOnlyDictionary<int, ReviewSummary> reviewSummaryMap)
     {
         imageMap.TryGetValue(product.MaSanPham, out var anhChinhUrl);
+        reviewSummaryMap.TryGetValue(product.MaSanPham, out var reviewSummary);
 
         return new ProductListItemDto
         {
@@ -140,7 +159,9 @@ public class CatalogService : ICatalogService
             TyLeGiam = GetDiscountPercent(product),
             SoLuongTon = product.SoLuongTon,
             TrangThaiSanPham = product.TrangThaiSanPham,
-            AnhChinhUrl = anhChinhUrl
+            AnhChinhUrl = anhChinhUrl ?? product.AnhChinhUrl,
+            DiemTrungBinh = reviewSummary.AverageRating,
+            TongDanhGia = reviewSummary.TotalReviews
         };
     }
 
@@ -179,6 +200,7 @@ public class CatalogService : ICatalogService
             MaHangXe = vehicleModel.MaHangXe,
             TenDongXe = vehicleModel.TenDongXe,
             Slug = vehicleModel.Slug,
+            LoaiXe = vehicleModel.LoaiXe,
             DangHoatDong = vehicleModel.DangHoatDong
         };
     }
@@ -227,4 +249,6 @@ public class CatalogService : ICatalogService
 
         return (int)Math.Round((product.GiaGoc - product.GiaKhuyenMai.Value) * 100 / product.GiaGoc);
     }
+
+    private readonly record struct ReviewSummary(int TotalReviews, double AverageRating);
 }

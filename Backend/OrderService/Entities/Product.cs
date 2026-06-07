@@ -9,7 +9,6 @@ public class Product
     public int MaDanhMuc { get; set; }
     public int? MaHangXe { get; set; }
     public int? MaDongXe { get; set; }
-    public int? MaShowroom { get; set; }
     public string? MoTaNgan { get; set; }
     public string? MoTa { get; set; }
     public decimal GiaGoc { get; set; }

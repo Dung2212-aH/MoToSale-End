@@ -5,9 +5,6 @@ namespace OrderService.DTOs.Orders;
 public class CreateOrderFromCartRequest
 {
     [Range(1, int.MaxValue)]
-    public int? MaShowroom { get; set; }
-
-    [Range(1, int.MaxValue)]
     public int? MaDiaChiNhanHang { get; set; }
 
     [Required]
@@ -45,6 +42,16 @@ public class CreateOrderFromCartRequest
     [Required]
     [MaxLength(20)]
     public string LoaiDonHang { get; set; } = "FullPayment";
+
+    [MaxLength(30)]
+    public string? PhuongThucThanhToan { get; set; } = "BankTransfer";
+
+    /// <summary>Số kỳ trả góp (bắt buộc khi LoaiDonHang = Installment), ví dụ 6/9/12.</summary>
+    [Range(1, 60)]
+    public int? SoKyTraGop { get; set; }
+
+    /// <summary>Hồ sơ vay (bắt buộc khi LoaiDonHang = Installment).</summary>
+    public InstallmentApplicationDto? HoSoTraGop { get; set; }
 
     [Range(0, 999999999)]
     public decimal TienDatCoc { get; set; }

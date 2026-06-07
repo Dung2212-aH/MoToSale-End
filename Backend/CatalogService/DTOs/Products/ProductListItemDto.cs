@@ -17,4 +17,6 @@ public class ProductListItemDto
     public int SoLuongTon { get; set; }
     public string TrangThaiSanPham { get; set; } = string.Empty;
     public string? AnhChinhUrl { get; set; }
+    public double DiemTrungBinh { get; set; }
+    public int TongDanhGia { get; set; }
 }

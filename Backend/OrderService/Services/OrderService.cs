@@ -1,12 +1,12 @@
 using System.Data;
-using System.Globalization;
-using System.Text;
+using OrderService.Data;
 using OrderService.DTOs.Cart;
 using OrderService.DTOs.Common;
 using OrderService.DTOs.Orders;
 using OrderService.Entities;
 using OrderService.Exceptions;
 using OrderService.Repositories;
+using Microsoft.EntityFrameworkCore;
 
 namespace OrderService.Services;
 
@@ -23,8 +23,25 @@ public class OrderService : IOrderService
     private const string PaidPaymentStatus = "Paid";
     private const string CancelledPaymentStatus = "Cancelled";
     private const string PreparingShippingStatus = "Preparing";
-    private const decimal InProvinceShippingFee = 100000m;
-    private const decimal OutProvinceShippingFee = 300000m;
+    private const string PartiallyPaidStatus = "PartiallyPaid";
+    private const string PendingPaymentRecordStatus = "Pending";
+    private const decimal DefaultDeliveryShippingFee = 300000m;
+
+    // Config keys (dbo.HETHONG_CAUHINH)
+    private const string CfgBankBin = "BankBin";
+    private const string CfgBankAccountNo = "BankAccountNo";
+    private const string CfgBankAccountName = "BankAccountName";
+    private const string CfgInstallmentAnnualRate = "InstallmentAnnualRate";
+    private const string CfgInstallmentMinDownPercent = "InstallmentMinDownPaymentPercent";
+    private const string CfgInstallmentAllowedTerms = "InstallmentAllowedTerms";
+    private const string CfgPaymentHoldMinutes = "PaymentHoldMinutes";
+    private const string CfgDepositMinPercent = "DepositMinPercent";
+
+    private const decimal DefaultInstallmentAnnualRate = 12m;
+    private const decimal DefaultInstallmentMinDownPercent = 30m;
+    private const decimal DefaultDepositMinPercent = 20m;
+    private const int DefaultPaymentHoldMinutes = 1440;
+    private static readonly int[] DefaultInstallmentTerms = { 6, 9, 12 };
 
     private static readonly HashSet<string> AllowedReceiveMethods = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -37,6 +54,15 @@ public class OrderService : IOrderService
         "FullPayment",
         "Deposit",
         "Installment"
+    };
+
+    private static readonly HashSet<string> AllowedPaymentMethods = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "COD",
+        "BankTransfer",
+        "Card",
+        "Momo",
+        "VNPay"
     };
 
     private static readonly HashSet<string> CustomerCancelableStatuses = new(StringComparer.OrdinalIgnoreCase)
@@ -59,10 +85,14 @@ public class OrderService : IOrderService
     };
 
     private readonly IOrderRepository _orderRepository;
+    private readonly ISystemConfigService _config;
+    private readonly OrderDbContext _dbContext;
 
-    public OrderService(IOrderRepository orderRepository)
+    public OrderService(IOrderRepository orderRepository, ISystemConfigService config, OrderDbContext dbContext)
     {
         _orderRepository = orderRepository;
+        _dbContext = dbContext;
+        _config = config;
     }
 
     public async Task<CartDto> GetMyCartAsync(int maNguoiDung)
@@ -230,6 +260,8 @@ public class OrderService : IOrderService
 
         var subtotal = cart.Items.Sum(i => i.DonGia * i.SoLuong);
         var receiveMethod = NormalizeAllowedValue(request.PhuongThucNhanHang, AllowedReceiveMethods);
+        var orderType = NormalizeAllowedValue(request.LoaiDonHang, AllowedOrderTypes);
+        var paymentMethod = NormalizePaymentMethod(request.PhuongThucThanhToan);
         var selectedAddress = await GetSelectedDeliveryAddressAsync(maNguoiDung, receiveMethod, request);
         var shippingQuote = await BuildShippingQuoteAsync(
             maNguoiDung,
@@ -247,14 +279,28 @@ public class OrderService : IOrderService
         var itemDiscount = voucherDiscount.IsFreeShipping ? 0 : voucherDiscount.Amount;
         var discount = Math.Min(itemDiscount, subtotal);
         var total = subtotal + shippingQuote.ShippingFee - discount;
-        var deposit = GetDepositAmount(request.LoaiDonHang, request.TienDatCoc, total);
-        var remaining = GetRemainingAmount(request.LoaiDonHang, deposit, total);
+
+        var deposit = await GetDepositAmountAsync(orderType, request.TienDatCoc, total);
+        var installmentTerm = await ValidateInstallmentTermAsync(orderType, request.SoKyTraGop);
+
+        // Build installment schedule (flat interest on the financed principal) when applicable.
+        InstallmentPlan? installmentPlan = null;
+        if (orderType == "Installment")
+        {
+            ValidateInstallmentApplication(request.HoSoTraGop);
+            await EnsureInstallmentSchemaAsync();
+            var annualRate = await _config.GetDecimalAsync(CfgInstallmentAnnualRate, DefaultInstallmentAnnualRate);
+            installmentPlan = BuildInstallmentPlan(total, deposit, installmentTerm, annualRate, now, request.HoSoTraGop!);
+        }
+
+        var orderRemaining = CalculateInitialOrderRemaining(orderType, total, deposit);
+
+        var holdMinutes = Math.Max(15, await _config.GetIntAsync(CfgPaymentHoldMinutes, DefaultPaymentHoldMinutes));
 
         var order = new Order
         {
             MaDonHangKinhDoanh = GenerateOrderCode(),
             MaNguoiDung = maNguoiDung,
-            MaShowroom = request.MaShowroom,
             HoTenNhanHang = selectedAddress?.HoTenNhanHang.Trim() ?? request.HoTenNhanHang.Trim(),
             SoDienThoaiNhanHang = selectedAddress?.SoDienThoaiNhanHang.Trim() ?? request.SoDienThoaiNhanHang.Trim(),
             EmailNhanHang = string.IsNullOrWhiteSpace(request.EmailNhanHang) ? null : request.EmailNhanHang.Trim().ToLowerInvariant(),
@@ -264,16 +310,16 @@ public class OrderService : IOrderService
             PhiVanChuyen = shippingQuote.ShippingFee,
             TongThanhToan = total,
             TrangThaiDonHang = AwaitingPaymentStatus,
-            TrangThaiThanhToan = total == 0 ? "Paid" : UnpaidStatus,
+            TrangThaiThanhToan = total == 0 ? PaidPaymentStatus : UnpaidStatus,
             GhiChu = TrimToNull(request.GhiChu),
             NgayTao = now,
             NgayCapNhat = now,
             MaGioHang = cart.MaGioHang,
             PhuongThucNhanHang = receiveMethod,
             TrangThaiVanChuyen = PreparingShippingStatus,
-            LoaiDonHang = NormalizeAllowedValue(request.LoaiDonHang, AllowedOrderTypes),
+            LoaiDonHang = orderType,
             TienDatCoc = deposit,
-            SoTienConLai = remaining,
+            SoTienConLai = orderRemaining,
             NgayHenNhanXe = request.NgayHenNhanXe,
             GhiChuGiaoNhan = TrimToNull(request.GhiChuGiaoNhan),
             Items = cart.Items.Select(MapCartItemToOrderItem).ToList()
@@ -292,14 +338,33 @@ public class OrderService : IOrderService
                 MaBienSanPham = item.MaBienSanPham,
                 SoLuong = item.SoLuong,
                 TrangThai = "Active",
-                HetHanLuc = now.AddMinutes(request.SoPhutGiuCho),
+                HetHanLuc = now.AddMinutes(holdMinutes),
                 NgayTao = now,
                 NgayCapNhat = now,
-                GhiChu = "Giu ton kho khi tao don hang"
+                GhiChu = "Giu ton kho cho thanh toan"
             });
         }
 
-        await CompleteCheckoutPaymentAsync(order, now);
+        if (installmentPlan is not null)
+        {
+            installmentPlan.MaDonHang = order.MaDonHang;
+            order.InstallmentPlan = installmentPlan;
+        }
+
+        if (total == 0)
+        {
+            // Free order: nothing to collect, confirm immediately and deduct stock.
+            await DeductStockAndConfirmAsync(order, now);
+            order.SoTienConLai = 0;
+            order.NgayThanhToanThanhCong = now;
+        }
+        else
+        {
+            // Create the initial pending payment (the amount the customer must transfer now).
+            var initialAmount = orderType == "FullPayment" ? total : deposit;
+            var initialType = orderType == "FullPayment" ? "Full" : "Deposit";
+            order.Payments.Add(BuildPayment(order, initialAmount, paymentMethod, initialType, now));
+        }
 
         cart.TrangThai = CheckedOutCartStatus;
         cart.NgayCapNhat = now;
@@ -319,9 +384,28 @@ public class OrderService : IOrderService
         return MapOrder(createdOrder);
     }
 
-    private async Task CompleteCheckoutPaymentAsync(Order order, DateTime now)
+    /// <summary>
+    /// Deducts inventory for the order's active holds, marks the holds Confirmed and moves the
+    /// order to Confirmed. Does NOT touch the payment status — callers manage that separately.
+    /// Idempotent: if there are no active holds left (already deducted) it does nothing.
+    /// </summary>
+    private async Task DeductStockAndConfirmAsync(Order order, DateTime now)
     {
-        foreach (var group in order.InventoryHolds.Where(h => h.MaBienSanPham.HasValue).GroupBy(h => h.MaBienSanPham!.Value))
+        var activeHolds = order.InventoryHolds
+            .Where(h => h.TrangThai == "Active")
+            .ToList();
+
+        if (activeHolds.Count == 0)
+        {
+            if (IsInitialOrderStatus(order.TrangThaiDonHang))
+            {
+                order.TrangThaiDonHang = ConfirmedOrderStatus;
+                order.NgayCapNhat = now;
+            }
+            return;
+        }
+
+        foreach (var group in activeHolds.Where(h => h.MaBienSanPham.HasValue).GroupBy(h => h.MaBienSanPham!.Value))
         {
             var variant = await _orderRepository.GetVariantAsync(group.Key)
                 ?? throw new BusinessException("Bien the san pham trong don hang khong ton tai.");
@@ -337,7 +421,7 @@ public class OrderService : IOrderService
             variant.NgayCapNhat = now;
         }
 
-        foreach (var group in order.InventoryHolds.Where(h => !h.MaBienSanPham.HasValue).GroupBy(h => h.MaSanPham))
+        foreach (var group in activeHolds.Where(h => !h.MaBienSanPham.HasValue).GroupBy(h => h.MaSanPham))
         {
             var product = await _orderRepository.GetProductAsync(group.Key)
                 ?? throw new BusinessException("San pham trong don hang khong ton tai.");
@@ -352,18 +436,22 @@ public class OrderService : IOrderService
             product.NgayCapNhat = now;
         }
 
-        foreach (var hold in order.InventoryHolds)
+        foreach (var hold in activeHolds)
         {
             hold.TrangThai = ConfirmedOrderStatus;
             hold.NgayCapNhat = now;
-            hold.GhiChu = AppendNote(hold.GhiChu, "Da thanh toan checkout va tru ton kho");
+            hold.GhiChu = AppendNote(hold.GhiChu, "Da xac nhan thanh toan va tru ton kho");
         }
 
         order.TrangThaiDonHang = ConfirmedOrderStatus;
-        order.TrangThaiThanhToan = PaidPaymentStatus;
-        order.SoTienConLai = 0;
-        order.NgayThanhToanThanhCong = now;
         order.NgayCapNhat = now;
+    }
+
+    private static bool IsInitialOrderStatus(string status)
+    {
+        return status.Equals(AwaitingPaymentStatus, StringComparison.OrdinalIgnoreCase) ||
+               status.Equals("Pending", StringComparison.OrdinalIgnoreCase) ||
+               status.Equals("Checkout", StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<PagedResultDto<OrderSummaryDto>> GetOrdersAsync(OrderSearchDto search, int currentUserId, bool canViewAll)
@@ -372,8 +460,11 @@ public class OrderService : IOrderService
         var page = search.Page <= 0 ? 1 : search.Page;
         var pageSize = search.PageSize <= 0 ? 20 : Math.Min(search.PageSize, 100);
 
-        var orders = await _orderRepository.GetOrdersAsync(search, userFilter);
-        var totalItems = await _orderRepository.CountOrdersAsync(search, userFilter);
+        // Customers don't see "AwaitingPayment" orders in their order list — those are still
+        // pending checkout payment and are reached via /checkout/payment instead.
+        var hideAwaiting = !canViewAll;
+        var orders = await _orderRepository.GetOrdersAsync(search, userFilter, hideAwaiting);
+        var totalItems = await _orderRepository.CountOrdersAsync(search, userFilter, hideAwaiting);
 
         return new PagedResultDto<OrderSummaryDto>
         {
@@ -386,6 +477,10 @@ public class OrderService : IOrderService
 
     public async Task<OrderDto> GetOrderByIdAsync(int maDonHang, int currentUserId, bool canViewAll)
     {
+        // Defensive: if the user views an order whose installment plan was created before a schema
+        // upgrade (e.g. new columns added in a later release), make sure the columns exist before
+        // EF tries to SELECT them — otherwise the request fails with "Invalid column name".
+        await EnsureInstallmentSchemaAsync();
         var order = await GetOrderForUserAsync(maDonHang, currentUserId, canViewAll);
         return MapOrder(order);
     }
@@ -420,6 +515,24 @@ public class OrderService : IOrderService
 
         await ReleaseInventoryForCancelledOrderAsync(order, now, "Huy don, nha giu cho", "Huy don, hoan ton kho");
 
+        foreach (var pending in order.Payments.Where(p => p.TrangThai == PendingPaymentRecordStatus))
+        {
+            pending.TrangThai = CancelledPaymentStatus;
+            pending.NgayHuy = now;
+            pending.LyDoHuy = "Huy don hang";
+        }
+
+        if (order.InstallmentPlan is not null && order.InstallmentPlan.TrangThai != "Cancelled")
+        {
+            order.InstallmentPlan.TrangThai = "Cancelled";
+            order.InstallmentPlan.NgayCapNhat = now;
+            foreach (var term in order.InstallmentPlan.Terms.Where(t => t.TrangThai == "Pending"))
+            {
+                term.TrangThai = "Cancelled";
+                term.NgayCapNhat = now;
+            }
+        }
+
         await _orderRepository.SaveChangesAsync();
 
         if (order.Vouchers.Any())
@@ -433,6 +546,401 @@ public class OrderService : IOrderService
             ?? throw new NotFoundException("Khong tim thay don hang.");
 
         return MapOrder(updatedOrder);
+    }
+
+    public async Task<PaymentInfoDto> GetPaymentInfoAsync(int maDonHang, int currentUserId, bool canViewAll)
+    {
+        var order = await GetOrderForUserAsync(maDonHang, currentUserId, canViewAll);
+        var amountDue = ComputeAmountDueNow(order);
+        var content = order.MaDonHangKinhDoanh;
+
+        var bin = await _config.GetStringAsync(CfgBankBin);
+        var accountNo = await _config.GetStringAsync(CfgBankAccountNo);
+        var accountName = await _config.GetStringAsync(CfgBankAccountName);
+        var configured = !string.IsNullOrWhiteSpace(bin) && !string.IsNullOrWhiteSpace(accountNo);
+
+        return new PaymentInfoDto
+        {
+            MaDonHang = order.MaDonHang,
+            MaDonHangKinhDoanh = order.MaDonHangKinhDoanh,
+            TrangThaiDonHang = order.TrangThaiDonHang,
+            TrangThaiThanhToan = order.TrangThaiThanhToan,
+            LoaiDonHang = order.LoaiDonHang,
+            TongThanhToan = order.TongThanhToan,
+            SoTienCanThanhToan = amountDue,
+            NoiDungChuyenKhoan = content,
+            DaCauHinhNganHang = configured,
+            TenNganHang = bin,
+            SoTaiKhoan = accountNo,
+            ChuTaiKhoan = accountName,
+            QrImageUrl = configured && amountDue > 0
+                ? BuildVietQrUrl(bin!, accountNo!, accountName, amountDue, content)
+                : null
+        };
+    }
+
+    public async Task<OrderDto> ConfirmOrderPaymentAsync(int maDonHang, ConfirmOrderPaymentRequest request)
+    {
+        await using var transaction = await _orderRepository.BeginTransactionAsync(IsolationLevel.Serializable);
+
+        var order = await _orderRepository.GetOrderByIdAsync(maDonHang)
+            ?? throw new NotFoundException("Khong tim thay don hang.");
+
+        if (string.Equals(order.TrangThaiDonHang, CancelledOrderStatus, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("Don hang da huy, khong the xac nhan thanh toan.");
+        }
+
+        var now = DateTime.UtcNow;
+        var txnRef = TrimToNull(request.MaGiaoDich);
+        var method = PaymentMethodOf(order);
+
+        if (request.MaKyTraGop.HasValue)
+        {
+            var plan = order.InstallmentPlan
+                ?? throw new BusinessException("Don hang khong co ho so tra gop.");
+            var term = plan.Terms.FirstOrDefault(t => t.MaKyTraGop == request.MaKyTraGop.Value)
+                ?? throw new NotFoundException("Khong tim thay ky tra gop.");
+
+            if (string.Equals(term.TrangThai, "Paid", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BusinessException("Ky tra gop nay da duoc thanh toan.");
+            }
+
+            if (!DownPaymentPaid(order))
+            {
+                throw new BusinessException("Can xac nhan tien tra truoc truoc khi thu cac ky tra gop.");
+            }
+
+            term.TrangThai = "Paid";
+            term.NgayThanhToan = now;
+            term.NgayCapNhat = now;
+            order.Payments.Add(ConfirmedPayment(order, term.TongTien, method, "Installment", now, txnRef));
+        }
+        else
+        {
+            var pending = order.Payments
+                .Where(p => p.TrangThai == PendingPaymentRecordStatus)
+                .OrderBy(p => p.NgayTao)
+                .ThenBy(p => p.MaThanhToan)
+                .FirstOrDefault();
+
+            if (pending is not null)
+            {
+                pending.TrangThai = PaidPaymentStatus;
+                pending.DaThanhToanLuc = now;
+                if (txnRef is not null)
+                {
+                    pending.MaGiaoDich = txnRef;
+                }
+            }
+            else if (string.Equals(order.LoaiDonHang, "Installment", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BusinessException("Vui long chon ky tra gop de xac nhan.");
+            }
+            else
+            {
+                var remaining = ComputeOrderRemaining(order);
+                if (remaining <= 0)
+                {
+                    throw new BusinessException("Don hang da thanh toan du.");
+                }
+
+                order.Payments.Add(ConfirmedPayment(order, remaining, method, "Remaining", now, txnRef));
+            }
+        }
+
+        // The first successful payment confirms the order and deducts the reserved stock.
+        if (IsInitialOrderStatus(order.TrangThaiDonHang))
+        {
+            await DeductStockAndConfirmAsync(order, now);
+        }
+
+        RecomputeOrderPaymentState(order, now);
+
+        if (!string.IsNullOrWhiteSpace(request.GhiChu))
+        {
+            order.GhiChu = AppendNote(order.GhiChu, request.GhiChu.Trim());
+        }
+
+        order.NgayCapNhat = now;
+
+        await _orderRepository.SaveChangesAsync();
+        await transaction.CommitAsync();
+
+        var updated = await _orderRepository.GetOrderByIdAsync(maDonHang)
+            ?? throw new NotFoundException("Khong tim thay don hang.");
+
+        return MapOrder(updated);
+    }
+
+    /// <summary>
+    /// Customer-initiated refund request. Only valid for orders that have already received money
+    /// (PartiallyPaid / Paid) and haven't shipped yet. Cancels the order, releases inventory, and
+    /// records the customer's bank account so admin knows where to send the refund.
+    /// </summary>
+    public async Task<OrderDto> RequestRefundAsync(int maDonHang, int currentUserId, CreateRefundRequestDto request)
+    {
+        await using var transaction = await _orderRepository.BeginTransactionAsync(IsolationLevel.Serializable);
+
+        var order = await _orderRepository.GetOrderByIdAsync(maDonHang)
+            ?? throw new NotFoundException("Khong tim thay don hang.");
+
+        if (order.MaNguoiDung != currentUserId)
+        {
+            throw new ForbiddenException("Ban khong co quyen yeu cau hoan tien cho don hang nay.");
+        }
+
+        if (string.Equals(order.TrangThaiDonHang, CancelledOrderStatus, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("Don hang da huy.");
+        }
+
+        if (!SuccessfulPaymentStatuses.Contains(order.TrangThaiThanhToan))
+        {
+            throw new BusinessException("Don hang chua co giao dich thanh toan thanh cong de hoan tien.");
+        }
+
+        // Don't allow refund once the order has shipped or been delivered — that's a return, not a refund.
+        if (order.TrangThaiDonHang.Equals("Shipping", StringComparison.OrdinalIgnoreCase) ||
+            order.TrangThaiDonHang.Equals("Delivered", StringComparison.OrdinalIgnoreCase) ||
+            order.TrangThaiDonHang.Equals("Completed", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("Don hang da giao, vui long lien he cua hang de doi/tra.");
+        }
+
+        if (order.RefundRequests.Any(r => r.TrangThai == "Pending"))
+        {
+            throw new BusinessException("Don hang da co yeu cau hoan tien dang cho xu ly.");
+        }
+
+        var now = DateTime.UtcNow;
+        var refundAmount = order.Payments
+            .Where(p => p.TrangThai == PaidPaymentStatus)
+            .Sum(p => p.SoTien);
+
+        order.RefundRequests.Add(new RefundRequest
+        {
+            MaDonHang = order.MaDonHang,
+            SoTien = refundAmount,
+            TenNganHang = request.TenNganHang.Trim(),
+            SoTaiKhoan = request.SoTaiKhoan.Trim(),
+            ChuTaiKhoan = request.ChuTaiKhoan.Trim().ToUpperInvariant(),
+            LyDo = TrimToNull(request.LyDo),
+            TrangThai = "Pending",
+            NgayTao = now
+        });
+
+        // Cancel the order itself: release inventory holds, mark cancelled, keep payment status as
+        // Paid/PartiallyPaid until admin actually transfers money back (then it becomes Refunded).
+        order.TrangThaiDonHang = CancelledOrderStatus;
+        order.NgayHuyDon = now;
+        order.LyDoHuyDon = TrimToNull(request.LyDo) ?? "Khach yeu cau huy va hoan tien";
+        order.NgayCapNhat = now;
+
+        await ReleaseInventoryForCancelledOrderAsync(order, now, "Huy don, nha giu cho", "Huy don, hoan ton kho");
+
+        foreach (var pending in order.Payments.Where(p => p.TrangThai == PendingPaymentRecordStatus))
+        {
+            pending.TrangThai = CancelledPaymentStatus;
+            pending.NgayHuy = now;
+            pending.LyDoHuy = "Huy don va yeu cau hoan tien";
+        }
+
+        if (order.InstallmentPlan is not null && order.InstallmentPlan.TrangThai != "Cancelled")
+        {
+            order.InstallmentPlan.TrangThai = "Cancelled";
+            order.InstallmentPlan.NgayCapNhat = now;
+            foreach (var term in order.InstallmentPlan.Terms.Where(t => t.TrangThai == "Pending"))
+            {
+                term.TrangThai = "Cancelled";
+                term.NgayCapNhat = now;
+            }
+        }
+
+        await _orderRepository.SaveChangesAsync();
+
+        if (order.Vouchers.Any())
+        {
+            await _orderRepository.CancelVoucherUseAsync(order.MaDonHang);
+        }
+
+        await transaction.CommitAsync();
+
+        var updated = await _orderRepository.GetOrderByIdAsync(maDonHang)
+            ?? throw new NotFoundException("Khong tim thay don hang.");
+        return MapOrder(updated);
+    }
+
+    /// <summary>
+    /// Admin marks the refund as completed (after they've actually wired the money to the
+    /// customer's account). Moves the order's payment status to Refunded.
+    /// </summary>
+    public async Task<OrderDto> ConfirmRefundAsync(int maDonHang, int maYeuCauHoanTien, ConfirmRefundRequest request)
+    {
+        await using var transaction = await _orderRepository.BeginTransactionAsync(IsolationLevel.Serializable);
+
+        var order = await _orderRepository.GetOrderByIdAsync(maDonHang)
+            ?? throw new NotFoundException("Khong tim thay don hang.");
+
+        var refund = order.RefundRequests.FirstOrDefault(r => r.MaYeuCauHoanTien == maYeuCauHoanTien)
+            ?? throw new NotFoundException("Khong tim thay yeu cau hoan tien.");
+
+        if (refund.TrangThai != "Pending")
+        {
+            throw new BusinessException("Yeu cau hoan tien nay khong o trang thai cho xu ly.");
+        }
+
+        var now = DateTime.UtcNow;
+        refund.TrangThai = "Completed";
+        refund.NgayHoanTat = now;
+        refund.MaGiaoDichHoan = TrimToNull(request.MaGiaoDichHoan);
+        refund.GhiChuAdmin = TrimToNull(request.GhiChuAdmin);
+
+        order.TrangThaiThanhToan = "Refunded";
+        order.NgayCapNhat = now;
+
+        await _orderRepository.SaveChangesAsync();
+        await transaction.CommitAsync();
+
+        var updated = await _orderRepository.GetOrderByIdAsync(maDonHang)
+            ?? throw new NotFoundException("Khong tim thay don hang.");
+        return MapOrder(updated);
+    }
+
+    private void RecomputeOrderPaymentState(Order order, DateTime now)
+    {
+        // CK_DONHANG_DatCoc locks the relationship between LoaiDonHang / TienDatCoc / SoTienConLai
+        // (FullPayment ⇒ both = 0; Deposit ⇒ deposit ∈ (0,total); Installment ⇒ SoTienConLai > 0).
+        // So we DO NOT mutate SoTienConLai here — it was set correctly at order creation and is a
+        // structural value, not the real outstanding amount. The real outstanding amount is derived
+        // from Payments + InstallmentPlan via ComputeAmountDueNow / ComputeOrderRemaining at read time.
+        var total = order.TongThanhToan;
+
+        if (string.Equals(order.LoaiDonHang, "Installment", StringComparison.OrdinalIgnoreCase) && order.InstallmentPlan is not null)
+        {
+            var plan = order.InstallmentPlan;
+            var downPaid = DownPaymentPaid(order);
+            var allTermsPaid = plan.Terms.Count > 0 && plan.Terms.All(t => string.Equals(t.TrangThai, "Paid", StringComparison.OrdinalIgnoreCase));
+
+            if (downPaid && allTermsPaid)
+            {
+                order.TrangThaiThanhToan = PaidPaymentStatus;
+                plan.TrangThai = "Completed";
+                plan.NgayCapNhat = now;
+                order.NgayThanhToanThanhCong ??= now;
+            }
+            else if (downPaid)
+            {
+                order.TrangThaiThanhToan = PartiallyPaidStatus;
+            }
+            else
+            {
+                order.TrangThaiThanhToan = UnpaidStatus;
+            }
+
+            return;
+        }
+
+        var paid = order.Payments.Where(p => p.TrangThai == PaidPaymentStatus).Sum(p => p.SoTien);
+        if (total <= 0 || paid >= total)
+        {
+            order.TrangThaiThanhToan = PaidPaymentStatus;
+            order.NgayThanhToanThanhCong ??= now;
+        }
+        else if (paid > 0)
+        {
+            order.TrangThaiThanhToan = PartiallyPaidStatus;
+        }
+        else
+        {
+            order.TrangThaiThanhToan = UnpaidStatus;
+        }
+    }
+
+    private static decimal ComputeAmountDueNow(Order order)
+    {
+        if (string.Equals(order.TrangThaiDonHang, CancelledOrderStatus, StringComparison.OrdinalIgnoreCase))
+        {
+            return 0;
+        }
+
+        var pending = order.Payments
+            .Where(p => p.TrangThai == PendingPaymentRecordStatus)
+            .OrderBy(p => p.NgayTao)
+            .FirstOrDefault();
+        if (pending is not null)
+        {
+            return pending.SoTien;
+        }
+
+        if (string.Equals(order.LoaiDonHang, "Installment", StringComparison.OrdinalIgnoreCase) && order.InstallmentPlan is not null)
+        {
+            var nextTerm = order.InstallmentPlan.Terms
+                .Where(t => t.TrangThai == "Pending")
+                .OrderBy(t => t.KyThu)
+                .FirstOrDefault();
+            return nextTerm?.TongTien ?? 0;
+        }
+
+        return ComputeOrderRemaining(order);
+    }
+
+    private static decimal CalculateInitialOrderRemaining(string orderType, decimal total, decimal deposit)
+    {
+        return orderType switch
+        {
+            "FullPayment" => 0,
+            "Deposit" or "Installment" => Math.Max(0, total - deposit),
+            _ => Math.Max(0, total)
+        };
+    }
+
+    private static decimal ComputeOrderRemaining(Order order)
+    {
+        var paid = order.Payments.Where(p => p.TrangThai == PaidPaymentStatus).Sum(p => p.SoTien);
+        return Math.Max(0, order.TongThanhToan - paid);
+    }
+
+    private static bool DownPaymentPaid(Order order)
+    {
+        return order.Payments.Any(p =>
+            p.TrangThai == PaidPaymentStatus &&
+            (p.LoaiThanhToan == "Deposit" || p.LoaiThanhToan == "Full"));
+    }
+
+    private static string PaymentMethodOf(Order order)
+    {
+        return order.Payments
+            .OrderByDescending(p => p.NgayTao)
+            .ThenByDescending(p => p.MaThanhToan)
+            .Select(p => p.PhuongThuc)
+            .FirstOrDefault() ?? "BankTransfer";
+    }
+
+    private static Payment ConfirmedPayment(Order order, decimal amount, string method, string type, DateTime now, string? txnRef)
+    {
+        return new Payment
+        {
+            MaDonHang = order.MaDonHang,
+            MaThanhToanKinhDoanh = GeneratePaymentCode(),
+            SoTien = amount,
+            PhuongThuc = method,
+            TrangThai = PaidPaymentStatus,
+            LoaiThanhToan = type,
+            NoiDungChuyenKhoan = order.MaDonHangKinhDoanh,
+            MaGiaoDich = txnRef,
+            DaThanhToanLuc = now,
+            NgayTao = now
+        };
+    }
+
+    private static string BuildVietQrUrl(string bin, string accountNo, string? accountName, decimal amount, string content)
+    {
+        var amt = (long)Math.Round(amount, 0, MidpointRounding.AwayFromZero);
+        var info = Uri.EscapeDataString(content);
+        var name = Uri.EscapeDataString(accountName ?? string.Empty);
+        return $"https://img.vietqr.io/image/{bin}-{accountNo}-compact2.png?amount={amt}&addInfo={info}&accountName={name}";
     }
 
     private async Task EnsureActiveUserAsync(int maNguoiDung)
@@ -549,96 +1057,15 @@ public class OrderService : IOrderService
         return baseQuote;
     }
 
-    private async Task<ShippingQuoteResponse> GetBaseShippingQuoteAsync(string? province)
+    private static Task<ShippingQuoteResponse> GetBaseShippingQuoteAsync(string? province)
     {
-        var hasStoreInProvince = await HasActiveStoreInProvinceAsync(province);
-        var fee = hasStoreInProvince ? InProvinceShippingFee : OutProvinceShippingFee;
-
-        return new ShippingQuoteResponse
+        return Task.FromResult(new ShippingQuoteResponse
         {
-            ShippingFee = fee,
-            OriginalShippingFee = fee,
-            CarrierCode = hasStoreInProvince ? "IN_PROVINCE" : "OUT_PROVINCE",
-            CarrierName = hasStoreInProvince ? "Phí vận chuyển nội tỉnh" : "Phí vận chuyển khác tỉnh"
-        };
-    }
-
-    private async Task<bool> HasActiveStoreInProvinceAsync(string? province)
-    {
-        var destinationAliases = GetProvinceAliases(province);
-        if (destinationAliases.Count == 0)
-        {
-            return false;
-        }
-
-        var storeLocations = await _orderRepository.GetActiveStoreLocationTextsAsync();
-        return storeLocations
-            .Select(NormalizeProvinceText)
-            .Any(location => destinationAliases.Any(location.Contains));
-    }
-
-    private static HashSet<string> GetProvinceAliases(string? province)
-    {
-        var key = NormalizeProvinceText(province);
-        if (string.IsNullOrWhiteSpace(key))
-        {
-            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        }
-
-        var aliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { key };
-        if (key is "hochiminh" or "tphcm" or "hcm" or "saigon")
-        {
-            aliases.UnionWith(new[] { "hochiminh", "tphcm", "hcm", "saigon" });
-        }
-        else if (key is "hanoi")
-        {
-            aliases.UnionWith(new[] { "hanoi" });
-        }
-        else if (key is "danang")
-        {
-            aliases.UnionWith(new[] { "danang" });
-        }
-        else if (key is "cantho")
-        {
-            aliases.UnionWith(new[] { "cantho" });
-        }
-
-        return aliases;
-    }
-
-    private static string NormalizeProvinceText(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return string.Empty;
-        }
-
-        var formD = value.Trim().Normalize(NormalizationForm.FormD);
-        var builder = new StringBuilder(formD.Length);
-        foreach (var ch in formD)
-        {
-            var category = CharUnicodeInfo.GetUnicodeCategory(ch);
-            if (category == UnicodeCategory.NonSpacingMark)
-            {
-                continue;
-            }
-
-            if (char.IsLetterOrDigit(ch))
-            {
-                builder.Append(char.ToLowerInvariant(ch == 'đ' || ch == 'Đ' ? 'd' : ch));
-            }
-        }
-
-        var normalized = builder.ToString();
-        foreach (var prefix in new[] { "thanhpho", "tinh", "tp" })
-        {
-            if (normalized.StartsWith(prefix, StringComparison.Ordinal))
-            {
-                normalized = normalized[prefix.Length..];
-            }
-        }
-
-        return normalized;
+            ShippingFee = DefaultDeliveryShippingFee,
+            OriginalShippingFee = DefaultDeliveryShippingFee,
+            CarrierCode = "STANDARD",
+            CarrierName = "Phí vận chuyển mặc định"
+        });
     }
 
     private async Task<VoucherDiscountResult> GetVoucherDiscountResultAsync(int maNguoiDung, int maGioHang, string? maVoucherCode, decimal phiVanChuyen, bool strict)
@@ -763,32 +1190,275 @@ public class OrderService : IOrderService
         }.Where(part => !string.IsNullOrWhiteSpace(part)).Select(part => part!.Trim()));
     }
 
-    private static decimal GetDepositAmount(string orderType, decimal requestedDeposit, decimal total)
+    private async Task<decimal> GetDepositAmountAsync(string orderType, decimal requestedDeposit, decimal total)
     {
-        var normalizedType = NormalizeAllowedValue(orderType, AllowedOrderTypes);
-
-        if (normalizedType == "FullPayment")
+        if (orderType == "FullPayment")
         {
             return 0;
         }
 
-        if (normalizedType == "Deposit" && (requestedDeposit <= 0 || requestedDeposit >= total))
+        if (orderType == "Deposit")
         {
-            throw new BusinessException("Tien dat coc phai lon hon 0 va nho hon tong thanh toan.");
+            if (requestedDeposit <= 0)
+            {
+                throw new BusinessException("Vui long nhap so tien dat coc.");
+            }
+
+            var minPercent = await _config.GetDecimalAsync(CfgDepositMinPercent, DefaultDepositMinPercent);
+            var minDeposit = Math.Round(total * minPercent / 100m, 0, MidpointRounding.AwayFromZero);
+            if (requestedDeposit < minDeposit)
+            {
+                throw new BusinessException($"Tien dat coc phai it nhat {minPercent:0.#}% tong don ({minDeposit:#,##0} d).");
+            }
+
+            if (requestedDeposit >= total)
+            {
+                throw new BusinessException("Tien dat coc phai nho hon tong thanh toan.");
+            }
+
+            return requestedDeposit;
         }
 
-        if (normalizedType == "Installment" && (requestedDeposit < 0 || requestedDeposit >= total))
+        if (orderType == "Installment")
         {
-            throw new BusinessException("Tien tra truoc phai nho hon tong thanh toan.");
+            var minPercent = await _config.GetDecimalAsync(CfgInstallmentMinDownPercent, DefaultInstallmentMinDownPercent);
+            var minDeposit = Math.Round(total * minPercent / 100m, 0, MidpointRounding.AwayFromZero);
+            if (requestedDeposit < minDeposit)
+            {
+                throw new BusinessException($"Tien tra truoc phai it nhat {minPercent:0.#}% tong don ({minDeposit:#,##0} d).");
+            }
+
+            if (requestedDeposit >= total)
+            {
+                throw new BusinessException("Tien tra truoc phai nho hon tong thanh toan.");
+            }
+
+            return requestedDeposit;
         }
 
         return requestedDeposit;
     }
 
-    private static decimal GetRemainingAmount(string orderType, decimal deposit, decimal total)
+    private static void ValidateInstallmentApplication(InstallmentApplicationDto? application)
     {
-        var normalizedType = NormalizeAllowedValue(orderType, AllowedOrderTypes);
-        return normalizedType == "FullPayment" ? 0 : total - deposit;
+        if (application is null)
+        {
+            throw new BusinessException("Vui long dien ho so tra gop.");
+        }
+        if (string.IsNullOrWhiteSpace(application.HoTenNguoiVay))
+        {
+            throw new BusinessException("Vui long nhap ho ten nguoi vay.");
+        }
+        if (string.IsNullOrWhiteSpace(application.SoCCCD))
+        {
+            throw new BusinessException("Vui long nhap so CCCD/CMND.");
+        }
+        if (!application.NgayCapCCCD.HasValue)
+        {
+            throw new BusinessException("Vui long nhap ngay cap CCCD.");
+        }
+        if (string.IsNullOrWhiteSpace(application.NoiCapCCCD))
+        {
+            throw new BusinessException("Vui long nhap noi cap CCCD.");
+        }
+        if (string.IsNullOrWhiteSpace(application.SoDienThoai))
+        {
+            throw new BusinessException("Vui long nhap so dien thoai nguoi vay.");
+        }
+        if (string.IsNullOrWhiteSpace(application.DiaChiThuongTru))
+        {
+            throw new BusinessException("Vui long nhap dia chi thuong tru.");
+        }
+    }
+
+    /// <summary>
+    /// Ensure the installment-plan tables exist with the expected columns before any EF read or
+    /// write touches them. Idempotent and safe to call on startup or per-request. Keeps the
+    /// schema minimal: only the four columns actually consumed by the customer-facing application.
+    /// </summary>
+    private async Task EnsureInstallmentSchemaAsync()
+    {
+        await _dbContext.Database.ExecuteSqlRawAsync(
+            """
+            IF OBJECT_ID(N'dbo.HOSO_TRAGOP', N'U') IS NULL
+            BEGIN
+                CREATE TABLE dbo.HOSO_TRAGOP(
+                    MaHoSoTraGop INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                    MaDonHang INT NOT NULL,
+                    TienTraTruoc DECIMAL(18,2) NOT NULL,
+                    SoTienGoc DECIMAL(18,2) NOT NULL,
+                    SoKy INT NOT NULL,
+                    LaiSuatNam DECIMAL(9,4) NOT NULL,
+                    TongTienLai DECIMAL(18,2) NOT NULL,
+                    TongPhaiTra DECIMAL(18,2) NOT NULL,
+                    TrangThai VARCHAR(20) NOT NULL,
+                    NgayTao DATETIME2(0) NOT NULL,
+                    NgayCapNhat DATETIME2(0) NOT NULL,
+                    HoTenNguoiVay NVARCHAR(150) NOT NULL DEFAULT(N''),
+                    SoCCCD VARCHAR(20) NOT NULL DEFAULT(''),
+                    NgheNghiep NVARCHAR(100) NULL,
+                    ThuNhapHangThang DECIMAL(18,2) NULL,
+                    CONSTRAINT FK_HOSO_TRAGOP_DONHANG FOREIGN KEY (MaDonHang) REFERENCES dbo.DONHANG(MaDonHang),
+                    CONSTRAINT UQ_HOSO_TRAGOP_DONHANG UNIQUE (MaDonHang)
+                );
+            END
+            ELSE
+            BEGIN
+                IF COL_LENGTH('dbo.HOSO_TRAGOP','HoTenNguoiVay') IS NULL ALTER TABLE dbo.HOSO_TRAGOP ADD HoTenNguoiVay NVARCHAR(150) NOT NULL CONSTRAINT DF_HOSO_TRAGOP_HoTen DEFAULT(N'');
+                IF COL_LENGTH('dbo.HOSO_TRAGOP','SoCCCD') IS NULL ALTER TABLE dbo.HOSO_TRAGOP ADD SoCCCD VARCHAR(20) NOT NULL CONSTRAINT DF_HOSO_TRAGOP_CCCD DEFAULT('');
+                IF COL_LENGTH('dbo.HOSO_TRAGOP','NgheNghiep') IS NULL ALTER TABLE dbo.HOSO_TRAGOP ADD NgheNghiep NVARCHAR(100) NULL;
+                IF COL_LENGTH('dbo.HOSO_TRAGOP','ThuNhapHangThang') IS NULL ALTER TABLE dbo.HOSO_TRAGOP ADD ThuNhapHangThang DECIMAL(18,2) NULL;
+                IF COL_LENGTH('dbo.HOSO_TRAGOP','NgaySinh') IS NULL ALTER TABLE dbo.HOSO_TRAGOP ADD NgaySinh DATE NULL;
+                IF COL_LENGTH('dbo.HOSO_TRAGOP','SoDienThoai') IS NULL ALTER TABLE dbo.HOSO_TRAGOP ADD SoDienThoai VARCHAR(20) NULL;
+                IF COL_LENGTH('dbo.HOSO_TRAGOP','DiaChiThuongTru') IS NULL ALTER TABLE dbo.HOSO_TRAGOP ADD DiaChiThuongTru NVARCHAR(255) NULL;
+                IF COL_LENGTH('dbo.HOSO_TRAGOP','TenCongTy') IS NULL ALTER TABLE dbo.HOSO_TRAGOP ADD TenCongTy NVARCHAR(150) NULL;
+                IF COL_LENGTH('dbo.HOSO_TRAGOP','ThoiGianLamViecThang') IS NULL ALTER TABLE dbo.HOSO_TRAGOP ADD ThoiGianLamViecThang INT NULL;
+                IF COL_LENGTH('dbo.HOSO_TRAGOP','NgayCapCCCD') IS NULL ALTER TABLE dbo.HOSO_TRAGOP ADD NgayCapCCCD DATE NULL;
+                IF COL_LENGTH('dbo.HOSO_TRAGOP','NoiCapCCCD') IS NULL ALTER TABLE dbo.HOSO_TRAGOP ADD NoiCapCCCD NVARCHAR(150) NULL;
+                -- Legacy columns NguoiThamChieu/SDTThamChieu/QuanHeThamChieu left in place if present
+                -- (EF no longer reads them); safe to drop manually later if desired.
+            END;
+
+            IF OBJECT_ID(N'dbo.KY_TRAGOP', N'U') IS NULL
+            BEGIN
+                CREATE TABLE dbo.KY_TRAGOP(
+                    MaKyTraGop INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                    MaHoSoTraGop INT NOT NULL,
+                    KyThu INT NOT NULL,
+                    NgayDenHan DATETIME2(0) NOT NULL,
+                    SoTienGoc DECIMAL(18,2) NOT NULL,
+                    SoTienLai DECIMAL(18,2) NOT NULL,
+                    TongTien DECIMAL(18,2) NOT NULL,
+                    TrangThai VARCHAR(20) NOT NULL,
+                    NgayThanhToan DATETIME2(0) NULL,
+                    NgayTao DATETIME2(0) NOT NULL,
+                    NgayCapNhat DATETIME2(0) NOT NULL,
+                    CONSTRAINT FK_KY_TRAGOP_HOSO FOREIGN KEY (MaHoSoTraGop) REFERENCES dbo.HOSO_TRAGOP(MaHoSoTraGop) ON DELETE CASCADE
+                );
+                CREATE INDEX IX_KY_TRAGOP_HoSo ON dbo.KY_TRAGOP(MaHoSoTraGop, KyThu);
+            END;
+            """);
+    }
+
+    private async Task<int> ValidateInstallmentTermAsync(string orderType, int? requestedTerm)
+    {
+        if (orderType != "Installment")
+        {
+            return 0;
+        }
+
+        var allowed = await GetAllowedInstallmentTermsAsync();
+        if (!requestedTerm.HasValue || !allowed.Contains(requestedTerm.Value))
+        {
+            throw new BusinessException($"So ky tra gop khong hop le. Chi chap nhan: {string.Join(", ", allowed)} thang.");
+        }
+
+        return requestedTerm.Value;
+    }
+
+    private async Task<int[]> GetAllowedInstallmentTermsAsync()
+    {
+        var raw = await _config.GetStringAsync(CfgInstallmentAllowedTerms);
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return DefaultInstallmentTerms;
+        }
+
+        var parsed = raw
+            .Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => int.TryParse(x, out var v) ? v : 0)
+            .Where(v => v > 0)
+            .Distinct()
+            .OrderBy(v => v)
+            .ToArray();
+
+        return parsed.Length > 0 ? parsed : DefaultInstallmentTerms;
+    }
+
+    private static InstallmentPlan BuildInstallmentPlan(decimal total, decimal deposit, int term, decimal annualRate, DateTime now, InstallmentApplicationDto application)
+    {
+        var principal = Math.Max(0, total - deposit);
+        // Flat interest on the financed principal: principal * rate% * (months / 12).
+        var interestTotal = Math.Round(principal * annualRate / 100m * term / 12m, 0, MidpointRounding.AwayFromZero);
+        var totalPayable = principal + interestTotal;
+
+        var plan = new InstallmentPlan
+        {
+            TienTraTruoc = deposit,
+            SoTienGoc = principal,
+            SoKy = term,
+            LaiSuatNam = annualRate,
+            TongTienLai = interestTotal,
+            TongPhaiTra = totalPayable,
+            TrangThai = "Active",
+            NgayTao = now,
+            NgayCapNhat = now,
+            HoTenNguoiVay = application.HoTenNguoiVay.Trim(),
+            SoCCCD = application.SoCCCD.Trim(),
+            NgayCapCCCD = application.NgayCapCCCD,
+            NoiCapCCCD = application.NoiCapCCCD.Trim(),
+            NgaySinh = application.NgaySinh,
+            SoDienThoai = application.SoDienThoai.Trim(),
+            DiaChiThuongTru = application.DiaChiThuongTru.Trim(),
+            NgheNghiep = TrimToNull(application.NgheNghiep),
+            TenCongTy = TrimToNull(application.TenCongTy),
+            ThoiGianLamViecThang = application.ThoiGianLamViecThang,
+            ThuNhapHangThang = application.ThuNhapHangThang
+        };
+
+        var perPrincipal = Math.Round(principal / term, 0, MidpointRounding.AwayFromZero);
+        var perInterest = Math.Round(interestTotal / term, 0, MidpointRounding.AwayFromZero);
+        decimal accumulatedPrincipal = 0;
+        decimal accumulatedInterest = 0;
+
+        for (var k = 1; k <= term; k++)
+        {
+            // Last term absorbs rounding remainder so the schedule sums exactly.
+            var principalPart = k == term ? principal - accumulatedPrincipal : perPrincipal;
+            var interestPart = k == term ? interestTotal - accumulatedInterest : perInterest;
+            accumulatedPrincipal += principalPart;
+            accumulatedInterest += interestPart;
+
+            plan.Terms.Add(new InstallmentTerm
+            {
+                KyThu = k,
+                NgayDenHan = now.AddMonths(k),
+                SoTienGoc = principalPart,
+                SoTienLai = interestPart,
+                TongTien = principalPart + interestPart,
+                TrangThai = "Pending",
+                NgayTao = now,
+                NgayCapNhat = now
+            });
+        }
+
+        return plan;
+    }
+
+    private static Payment BuildPayment(Order order, decimal amount, string method, string type, DateTime now)
+    {
+        return new Payment
+        {
+            MaDonHang = order.MaDonHang,
+            MaThanhToanKinhDoanh = GeneratePaymentCode(),
+            SoTien = amount,
+            PhuongThuc = method,
+            TrangThai = PendingPaymentRecordStatus,
+            LoaiThanhToan = type,
+            NoiDungChuyenKhoan = order.MaDonHangKinhDoanh,
+            NgayTao = now
+        };
+    }
+
+    private static string NormalizePaymentMethod(string? value)
+    {
+        var match = AllowedPaymentMethods.FirstOrDefault(x => x.Equals(value?.Trim(), StringComparison.OrdinalIgnoreCase));
+        return match ?? "BankTransfer";
+    }
+
+    private static string GeneratePaymentCode()
+    {
+        return $"PAY{DateTime.UtcNow:yyyyMMddHHmmss}{Guid.NewGuid():N}"[..24].ToUpperInvariant();
     }
 
     private static OrderItem MapCartItemToOrderItem(CartItem item)
@@ -882,7 +1552,6 @@ public class OrderService : IOrderService
             MaDonHang = order.MaDonHang,
             MaDonHangKinhDoanh = order.MaDonHangKinhDoanh,
             MaNguoiDung = order.MaNguoiDung,
-            MaShowroom = order.MaShowroom,
             MaGioHang = order.MaGioHang,
             HoTenNhanHang = order.HoTenNhanHang,
             SoDienThoaiNhanHang = order.SoDienThoaiNhanHang,
@@ -908,12 +1577,105 @@ public class OrderService : IOrderService
             NgayHenNhanXe = order.NgayHenNhanXe,
             GhiChuGiaoNhan = order.GhiChuGiaoNhan,
             CheckoutHetHanLuc = activeHoldExpiry,
+            PhuongThucThanhToan = order.Payments
+                .OrderByDescending(p => p.NgayTao)
+                .ThenByDescending(p => p.MaThanhToan)
+                .Select(p => p.PhuongThuc)
+                .FirstOrDefault(),
             Items = order.Items.Select(MapOrderItem).ToList(),
             Vouchers = order.Vouchers.Select(MapOrderVoucher).ToList(),
             LichSu = order.Histories
                 .OrderBy(h => h.ThoiGian)
                 .ThenBy(h => h.MaLichSuDonHang)
                 .Select(MapOrderHistory)
+                .ToList(),
+            DanhSachThanhToan = order.Payments
+                .OrderByDescending(p => p.NgayTao)
+                .ThenByDescending(p => p.MaThanhToan)
+                .Select(MapPayment)
+                .ToList(),
+            TraGop = order.InstallmentPlan is null ? null : MapInstallmentPlan(order.InstallmentPlan),
+            YeuCauHoanTien = order.RefundRequests
+                .OrderByDescending(r => r.NgayTao)
+                .Select(MapRefundRequest)
+                .ToList()
+        };
+    }
+
+    private static RefundRequestDto MapRefundRequest(RefundRequest r)
+    {
+        return new RefundRequestDto
+        {
+            MaYeuCauHoanTien = r.MaYeuCauHoanTien,
+            MaDonHang = r.MaDonHang,
+            SoTien = r.SoTien,
+            TenNganHang = r.TenNganHang,
+            SoTaiKhoan = r.SoTaiKhoan,
+            ChuTaiKhoan = r.ChuTaiKhoan,
+            LyDo = r.LyDo,
+            TrangThai = r.TrangThai,
+            NgayTao = r.NgayTao,
+            NgayHoanTat = r.NgayHoanTat,
+            GhiChuAdmin = r.GhiChuAdmin,
+            MaGiaoDichHoan = r.MaGiaoDichHoan
+        };
+    }
+
+    private static PaymentDto MapPayment(Payment p)
+    {
+        return new PaymentDto
+        {
+            MaThanhToan = p.MaThanhToan,
+            MaThanhToanKinhDoanh = p.MaThanhToanKinhDoanh,
+            MaDonHang = p.MaDonHang,
+            SoTien = p.SoTien,
+            PhuongThuc = p.PhuongThuc,
+            TrangThai = p.TrangThai,
+            LoaiThanhToan = p.LoaiThanhToan,
+            MaGiaoDich = p.MaGiaoDich,
+            NoiDungChuyenKhoan = p.NoiDungChuyenKhoan,
+            DaThanhToanLuc = p.DaThanhToanLuc,
+            NgayTao = p.NgayTao
+        };
+    }
+
+    private static InstallmentPlanDto MapInstallmentPlan(InstallmentPlan plan)
+    {
+        return new InstallmentPlanDto
+        {
+            MaHoSoTraGop = plan.MaHoSoTraGop,
+            MaDonHang = plan.MaDonHang,
+            TienTraTruoc = plan.TienTraTruoc,
+            SoTienGoc = plan.SoTienGoc,
+            SoKy = plan.SoKy,
+            LaiSuatNam = plan.LaiSuatNam,
+            TongTienLai = plan.TongTienLai,
+            TongPhaiTra = plan.TongPhaiTra,
+            TrangThai = plan.TrangThai,
+            HoTenNguoiVay = plan.HoTenNguoiVay,
+            SoCCCD = plan.SoCCCD,
+            NgayCapCCCD = plan.NgayCapCCCD,
+            NoiCapCCCD = plan.NoiCapCCCD,
+            NgaySinh = plan.NgaySinh,
+            SoDienThoai = plan.SoDienThoai,
+            DiaChiThuongTru = plan.DiaChiThuongTru,
+            NgheNghiep = plan.NgheNghiep,
+            TenCongTy = plan.TenCongTy,
+            ThoiGianLamViecThang = plan.ThoiGianLamViecThang,
+            ThuNhapHangThang = plan.ThuNhapHangThang,
+            Terms = plan.Terms
+                .OrderBy(t => t.KyThu)
+                .Select(t => new InstallmentTermDto
+                {
+                    MaKyTraGop = t.MaKyTraGop,
+                    KyThu = t.KyThu,
+                    NgayDenHan = t.NgayDenHan,
+                    SoTienGoc = t.SoTienGoc,
+                    SoTienLai = t.SoTienLai,
+                    TongTien = t.TongTien,
+                    TrangThai = t.TrangThai,
+                    NgayThanhToan = t.NgayThanhToan
+                })
                 .ToList()
         };
     }

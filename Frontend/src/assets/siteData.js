@@ -1,16 +1,13 @@
-import {
-  FaFacebookF,
-  FaYoutube,
-  FaTwitter,
-  FaPinterestP,
-  FaInstagram
-} from "react-icons/fa";
+import { SiFacebook, SiGmail, SiMessenger, SiYoutube, SiZalo } from "react-icons/si";
 import banner1 from "./banners/banner1.png";
 import banner2 from "./banners/banner2.png";
 import banner3 from "./banners/banner3.png";
 import banner4 from "./banners/banner4.png";
 import banner5 from "./banners/banner5.png";
 import maintenanceService from "./services/maintenance.png";
+import genuinePartsService from "./services/phu-tung.png";
+import mobileRepairService from "./services/sua-chua-luu-dong.png";
+import combustionCleaningService from "./services/ve-sinh-buong-dot.png";
 import logoEuroMoto from "./logo.png";
 
 export const brandAssets = {
@@ -22,6 +19,12 @@ export const brandAssets = {
   productBanner: banner2,
   collectionBannerOne: banner3,
   collectionBannerTwo: banner5,
+};
+
+const featuredCategoryImages = {
+  scooter: 'https://cdn.honda.com.vn/motorbike-versions/Image360/November2025/1762149017/6.png',
+  manual: 'https://cdn.honda.com.vn/motorbike-strong-points/October2024/Hz1Ql8MYzIzGOaRTzkxH.png',
+  clutch: 'https://cdn.honda.com.vn/motorbike-versions/Image360/September2025/1757787378/0.png',
 };
 
 export const homeHeroSlides = [
@@ -62,7 +65,7 @@ export const homeCategoryReferences = [
     id: 'featured-scooter',
     name: 'Xe tay ga',
     slug: 'xe-tay-ga',
-    image: '',
+    image: featuredCategoryImages.scooter,
     to: '/products?categorySlug=xe-tay-ga',
     match: ['xe tay ga', 'tay ga', 'scooter'],
   },
@@ -70,7 +73,7 @@ export const homeCategoryReferences = [
     id: 'featured-manual',
     name: 'Xe số',
     slug: 'xe-so',
-    image: '',
+    image: featuredCategoryImages.manual,
     to: '/products?categorySlug=xe-so',
     match: ['xe so', 'xe số', 'so', 'underbone'],
   },
@@ -78,7 +81,7 @@ export const homeCategoryReferences = [
     id: 'featured-sport',
     name: 'Xe côn tay',
     slug: 'xe-con-tay',
-    image: '',
+    image: featuredCategoryImages.clutch,
     to: '/products?categorySlug=xe-con-tay',
     match: ['xe con tay', 'xe côn tay', 'con tay', 'sport'],
   },
@@ -86,7 +89,7 @@ export const homeCategoryReferences = [
     id: 'featured-pkl',
     name: 'Xe phân khối lớn',
     slug: 'xe-phan-khoi-lon',
-    image: '',
+    image: banner5,
     to: '/products?categorySlug=xe-phan-khoi-lon',
     match: ['xe phan khoi lon', 'xe phân khối lớn', 'phan khoi lon', 'pkl'],
   },
@@ -103,56 +106,59 @@ export const serviceHighlights = [
     id: 'phu-tung',
     title: 'Phụ tùng chính hãng',
     description: 'Cung cấp linh kiện và phụ tùng đúng tiêu chuẩn chính hãng cho các dòng xe phổ biến.',
-    image: banner3,
+    image: genuinePartsService,
   },
   {
     id: 'luu-dong',
     title: 'Sửa chữa lưu động',
     description: 'Hỗ trợ xử lý sự cố nhanh, tư vấn tại chỗ và sắp xếp kỹ thuật viên khi khách hàng cần gấp.',
-    image: banner4,
+    image: mobileRepairService,
   },
   {
     id: 've-sinh',
     title: 'Vệ sinh buồng đốt',
     description: 'Làm sạch hệ thống buồng đốt, kim phun và họng máy để cải thiện hiệu suất và tiết kiệm nhiên liệu.',
-    image: banner5,
+    image: combustionCleaningService,
   },
 ];
 
 export const navItems = [
   { label: 'Trang chủ', to: '/' },
   { label: 'Sản phẩm', to: '/products', hasCaret: true },
-  { label: 'Liên hệ', to: '/' },
-  { label: 'Hệ thống cửa hàng', to: '/he-thong-cua-hang' },
+  { label: 'Liên hệ', to: '/contact' },
   { label: 'Câu hỏi thường gặp', to: '/faq' },
 ];
 
 export const socialLinks = [
   {
-    icon: FaFacebookF,
+    icon: SiFacebook,
+    label: "Facebook",
     className: "bg-[#1877f2]",
-    href: "#"
+    href: "https://web.facebook.com/pham.dung.224360"
   },
   {
-    icon: FaYoutube,
+    icon: SiMessenger,
+    label: "Messenger",
+    className: "bg-[#0084ff]",
+    href: "https://m.me/pham.dung.224360"
+  },
+  {
+    icon: SiZalo,
+    label: "Zalo",
+    className: "bg-[#0068ff]",
+    href: "https://zalo.me/0392757286"
+  },
+  {
+    icon: SiGmail,
+    label: "Gmail",
+    className: "bg-[#ea4335]",
+    href: "mailto:phamtiendung2k5hc@gmail.com"
+  },
+  {
+    icon: SiYoutube,
+    label: "YouTube",
     className: "bg-[#ff0000]",
-    href: "#"
-  },
-  {
-    icon: FaTwitter,
-    className: "bg-[#1d9bf0]",
-    href: "#"
-  },
-  {
-    icon: FaPinterestP,
-    className: "bg-[#e60023]",
-    href: "#"
-  },
-  {
-    icon: FaInstagram,
-    className:
-      "bg-[linear-gradient(135deg,#ffb347,#fd1d1d_55%,#c13584)]",
-    href: "#"
+    href: "https://www.youtube.com/"
   }
 ];
 

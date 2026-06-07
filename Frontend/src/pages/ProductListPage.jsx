@@ -241,10 +241,13 @@ function ProductListPage() {
     queryValues.productType ||
     activeBrand?.name ||
     'Tất cả sản phẩm';
+  const breadcrumbItems = pageTitle === 'Tất cả sản phẩm'
+    ? [{ label: 'Sản phẩm' }]
+    : [{ label: 'Sản phẩm', to: '/products' }, { label: pageTitle }];
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Sản phẩm' }, { label: pageTitle }]} />
+      <Breadcrumb items={breadcrumbItems} />
 
       <section className="bg-[linear-gradient(180deg,#f5f6f8_0%,#ffffff_26%)] py-10">
         <div className="mx-auto grid w-full max-w-[1200px] gap-8 px-4 xl:grid-cols-[320px_minmax(0,1fr)]">

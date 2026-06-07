@@ -38,7 +38,7 @@ function buildFeaturedCategories(categories) {
       return category
         ? {
           ...category,
-          image: category.image || reference.image,
+          image: reference.image || category.image,
           to: category.id ? `/products?categoryId=${category.id}` : reference.to,
         }
         : null;
@@ -185,7 +185,7 @@ function HomePage() {
   }
 
   const featuredCategories = useMemo(() => buildFeaturedCategories(categories), [categories]);
-  const featuredProducts = useMemo(() => products.slice(0, 4), [products]);
+  const featuredProducts = useMemo(() => products.slice(0, 2), [products]);
   const dealProducts = useMemo(() => {
     const discounted = products.filter((product) => Number(product.salePrice) > 0 && product.salePrice < product.basePrice);
     return (discounted.length ? discounted : products).slice(0, 4);

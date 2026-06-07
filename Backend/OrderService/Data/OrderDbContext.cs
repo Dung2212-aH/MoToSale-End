@@ -23,6 +23,10 @@ public class OrderDbContext : DbContext
     public DbSet<Voucher> Vouchers { get; set; }
     public DbSet<VoucherUser> VoucherUsers { get; set; }
     public DbSet<VoucherValidationResult> VoucherValidationResults { get; set; }
+    public DbSet<Payment> Payments { get; set; }
+    public DbSet<InstallmentPlan> InstallmentPlans { get; set; }
+    public DbSet<InstallmentTerm> InstallmentTerms { get; set; }
+    public DbSet<RefundRequest> RefundRequests { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -41,7 +45,122 @@ public class OrderDbContext : DbContext
         ConfigureOrderVouchers(modelBuilder);
         ConfigureVouchers(modelBuilder);
         ConfigureVoucherUsers(modelBuilder);
+        ConfigurePayments(modelBuilder);
+        ConfigureInstallmentPlans(modelBuilder);
+        ConfigureInstallmentTerms(modelBuilder);
+        ConfigureRefundRequests(modelBuilder);
         ConfigureStoredProcedureResults(modelBuilder);
+    }
+
+    private static void ConfigureRefundRequests(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<RefundRequest>(e =>
+        {
+            e.ToTable("YEUCAU_HOANTIEN");
+            e.HasKey(x => x.MaYeuCauHoanTien);
+            e.Property(x => x.MaYeuCauHoanTien).ValueGeneratedOnAdd();
+            e.Property(x => x.SoTien).HasPrecision(18, 2);
+            e.Property(x => x.TenNganHang).HasMaxLength(100).IsRequired();
+            e.Property(x => x.SoTaiKhoan).HasMaxLength(20).IsUnicode(false).IsRequired();
+            e.Property(x => x.ChuTaiKhoan).HasMaxLength(150).IsRequired();
+            e.Property(x => x.LyDo).HasMaxLength(500);
+            e.Property(x => x.TrangThai).HasMaxLength(20).IsUnicode(false).IsRequired();
+            e.Property(x => x.NgayTao).HasColumnType("datetime2(0)");
+            e.Property(x => x.NgayHoanTat).HasColumnType("datetime2(0)");
+            e.Property(x => x.GhiChuAdmin).HasMaxLength(500);
+            e.Property(x => x.MaGiaoDichHoan).HasMaxLength(120);
+
+            e.HasOne(x => x.Order)
+                .WithMany(x => x.RefundRequests)
+                .HasForeignKey(x => x.MaDonHang)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+    }
+
+    private static void ConfigurePayments(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Payment>(e =>
+        {
+            e.ToTable("THANHTOAN");
+            e.HasKey(x => x.MaThanhToan);
+            e.Property(x => x.MaThanhToan).ValueGeneratedOnAdd();
+            e.Property(x => x.MaThanhToanKinhDoanh).HasMaxLength(50).IsRequired();
+            e.Property(x => x.SoTien).HasPrecision(18, 2).IsRequired();
+            e.Property(x => x.PhuongThuc).HasMaxLength(30).IsUnicode(false).IsRequired();
+            e.Property(x => x.TrangThai).HasMaxLength(20).IsUnicode(false).IsRequired();
+            e.Property(x => x.MaGiaoDich).HasMaxLength(120);
+            e.Property(x => x.DaThanhToanLuc).HasColumnType("datetime2(0)");
+            e.Property(x => x.NgayTao).HasColumnType("datetime2(0)");
+            e.Property(x => x.LoaiThanhToan).HasMaxLength(30).IsUnicode(false).IsRequired();
+            e.Property(x => x.NoiDungChuyenKhoan).HasMaxLength(500);
+            e.Property(x => x.MaNganHang).HasMaxLength(50);
+            e.Property(x => x.LyDoHuy).HasMaxLength(500);
+            e.Property(x => x.NgayHuy).HasColumnType("datetime2(0)");
+
+            e.HasOne(x => x.Order)
+                .WithMany(x => x.Payments)
+                .HasForeignKey(x => x.MaDonHang)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+    }
+
+    private static void ConfigureInstallmentPlans(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<InstallmentPlan>(e =>
+        {
+            e.ToTable("HOSO_TRAGOP");
+            e.HasKey(x => x.MaHoSoTraGop);
+            e.Property(x => x.MaHoSoTraGop).ValueGeneratedOnAdd();
+            e.Property(x => x.TienTraTruoc).HasPrecision(18, 2);
+            e.Property(x => x.SoTienGoc).HasPrecision(18, 2);
+            e.Property(x => x.LaiSuatNam).HasPrecision(9, 4);
+            e.Property(x => x.TongTienLai).HasPrecision(18, 2);
+            e.Property(x => x.TongPhaiTra).HasPrecision(18, 2);
+            e.Property(x => x.TrangThai).HasMaxLength(20).IsUnicode(false).IsRequired();
+            e.Property(x => x.NgayTao).HasColumnType("datetime2(0)");
+            e.Property(x => x.NgayCapNhat).HasColumnType("datetime2(0)");
+
+            e.Property(x => x.HoTenNguoiVay).HasMaxLength(150).IsRequired();
+            e.Property(x => x.SoCCCD).HasMaxLength(20).IsUnicode(false).IsRequired();
+            e.Property(x => x.NgayCapCCCD).HasColumnType("date");
+            e.Property(x => x.NoiCapCCCD).HasMaxLength(150);
+            e.Property(x => x.NgaySinh).HasColumnType("date");
+            e.Property(x => x.SoDienThoai).HasMaxLength(20).IsUnicode(false);
+            e.Property(x => x.DiaChiThuongTru).HasMaxLength(255);
+            e.Property(x => x.NgheNghiep).HasMaxLength(100);
+            e.Property(x => x.TenCongTy).HasMaxLength(150);
+            e.Property(x => x.ThuNhapHangThang).HasPrecision(18, 2);
+
+            e.HasIndex(x => x.MaDonHang).IsUnique();
+
+            e.HasOne(x => x.Order)
+                .WithOne(x => x.InstallmentPlan)
+                .HasForeignKey<InstallmentPlan>(x => x.MaDonHang)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+    }
+
+    private static void ConfigureInstallmentTerms(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<InstallmentTerm>(e =>
+        {
+            e.ToTable("KY_TRAGOP");
+            e.HasKey(x => x.MaKyTraGop);
+            e.Property(x => x.MaKyTraGop).ValueGeneratedOnAdd();
+            e.Property(x => x.NgayDenHan).HasColumnType("datetime2(0)");
+            e.Property(x => x.SoTienGoc).HasPrecision(18, 2);
+            e.Property(x => x.SoTienLai).HasPrecision(18, 2);
+            e.Property(x => x.TongTien).HasPrecision(18, 2);
+            e.Property(x => x.TrangThai).HasMaxLength(20).IsUnicode(false).IsRequired();
+            e.Property(x => x.NgayThanhToan).HasColumnType("datetime2(0)");
+            e.Property(x => x.NgayTao).HasColumnType("datetime2(0)");
+            e.Property(x => x.NgayCapNhat).HasColumnType("datetime2(0)");
+
+            e.HasOne(x => x.Plan)
+                .WithMany(x => x.Terms)
+                .HasForeignKey(x => x.MaHoSoTraGop)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 
     private static void ConfigureVouchers(ModelBuilder modelBuilder)
@@ -112,7 +231,6 @@ public class OrderDbContext : DbContext
             });
             e.HasKey(x => x.MaSanPham);
             e.Property(x => x.MaSanPham).ValueGeneratedOnAdd();
-            e.Ignore(x => x.MaShowroom);
             e.Property(x => x.MaSanPhamKinhDoanh).HasMaxLength(50).IsRequired();
             e.Property(x => x.TenSanPham).HasMaxLength(255).IsRequired();
             e.Property(x => x.Slug).HasMaxLength(280).IsRequired();

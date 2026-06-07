@@ -11,8 +11,10 @@ const productService = {
   updateVariant: (productId, variantId, data) => api.patch(`/products/${productId}/variants/${variantId}`, data),
   deleteVariant: (productId, variantId) => api.delete(`/products/${productId}/variants/${variantId}`),
   getImages: (productId) => api.get(`/products/${productId}/images`),
+  // Pass undefined Content-Type so axios overrides the instance-level
+  // 'application/json' default and auto-sets multipart/form-data with the boundary.
   uploadImage: (productId, formData) => api.post(`/products/${productId}/images`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    headers: { 'Content-Type': undefined },
   }),
   deleteImage: (productId, imageId) => api.delete(`/products/${productId}/images/${imageId}`),
   getCompatibilities: (productId) => api.get(`/products/${productId}/compatibilities`),

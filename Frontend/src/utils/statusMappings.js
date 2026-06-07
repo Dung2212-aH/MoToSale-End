@@ -1,13 +1,19 @@
+// 3 trục trạng thái độc lập, không chồng chéo:
+//   1. ORDER_STATUS  — AwaitingPayment | Confirmed | Cancelled  (đơn ở giai đoạn nào của giao dịch)
+//   2. SHIPPING_STATUS — Preparing | Shipping | Delivered      (hàng đang ở đâu)
+//   3. PAYMENT_STATUS — Unpaid | PartiallyPaid | Paid | Refunded | Cancelled  (tiền đã thu hay chưa)
+
 export const ORDER_STATUS_MAP = {
   AwaitingPayment: 'Chờ thanh toán',
   Confirmed: 'Đã xác nhận',
-  Processing: 'Đang chuẩn bị hàng',
-  Shipping: 'Đang giao',
-  Delivered: 'Đã giao',
-  Completed: 'Hoàn tất',
   Cancelled: 'Đã hủy',
-  Pending: 'Legacy: chờ xử lý',
-  Checkout: 'Đang checkout',
+  // Legacy giá trị cũ vẫn map để hiển thị nếu còn data
+  Pending: 'Chờ thanh toán',
+  Checkout: 'Chờ thanh toán',
+  Processing: 'Đã xác nhận',
+  Shipping: 'Đã xác nhận',
+  Delivered: 'Đã xác nhận',
+  Completed: 'Đã xác nhận',
 };
 
 export const SHIPPING_STATUS_MAP = {
@@ -16,16 +22,18 @@ export const SHIPPING_STATUS_MAP = {
   Delivered: 'Đã giao',
 };
 
+// Hợp nhất nhãn cho cả 2 cấp:
+//   - Cấp ĐƠN  (DONHANG.TrangThaiThanhToan): Unpaid / PartiallyPaid / Paid / Refunded / Cancelled
+//   - Cấp GIAO DỊCH (THANHTOAN.TrangThai):   Pending / Paid / Failed / Cancelled
+// Để biết nhãn contextual theo orderType (Deposit/Installment) dùng getPaymentStatusContextual.
 export const PAYMENT_STATUS_MAP = {
   Unpaid: 'Chưa thanh toán',
-  Pending: 'Chờ xác nhận thanh toán',
+  PartiallyPaid: 'Đã thanh toán một phần',
   Paid: 'Đã thanh toán',
-  DepositPaid: 'Đã thanh toán tiền cọc',
-  PartiallyPaid: 'Thanh toán một phần / đã đặt cọc',
   Refunded: 'Đã hoàn tiền',
-  PartiallyRefunded: 'Hoàn tiền một phần',
-  Failed: 'Thanh toán thất bại',
-  Cancelled: 'Đã hủy thanh toán',
+  Cancelled: 'Đã hủy',
+  Pending: 'Chờ xác nhận',
+  Failed: 'Thất bại',
 };
 
 export const PAYMENT_METHOD_MAP = {
@@ -38,25 +46,25 @@ export const PAYMENT_METHOD_MAP = {
 
 export const ORDER_TYPE_MAP = {
   FullPayment: 'Thanh toán toàn bộ',
-  Deposit: 'Đặt cọc',
+  Deposit: 'Đặt cọc trước',
   Installment: 'Trả góp',
 };
 
 export const RECEIVING_METHOD_MAP = {
   Delivery: 'Giao hàng tận nơi',
-  Pickup: 'Nhận tại showroom',
+  Pickup: 'Nhận trực tiếp',
 };
 
 const ORDER_STATUS_COLOR_MAP = {
   AwaitingPayment: 'bg-amber-100 text-amber-700',
   Confirmed: 'bg-blue-100 text-blue-700',
-  Processing: 'bg-sky-100 text-sky-700',
-  Shipping: 'bg-blue-100 text-blue-700',
-  Delivered: 'bg-green-100 text-green-700',
-  Completed: 'bg-emerald-100 text-emerald-700',
   Cancelled: 'bg-red-100 text-red-700',
-  Pending: 'bg-zinc-100 text-zinc-700',
-  Checkout: 'bg-zinc-100 text-zinc-700',
+  Pending: 'bg-amber-100 text-amber-700',
+  Checkout: 'bg-amber-100 text-amber-700',
+  Processing: 'bg-blue-100 text-blue-700',
+  Shipping: 'bg-blue-100 text-blue-700',
+  Delivered: 'bg-blue-100 text-blue-700',
+  Completed: 'bg-blue-100 text-blue-700',
 };
 
 const SHIPPING_STATUS_COLOR_MAP = {
@@ -67,14 +75,12 @@ const SHIPPING_STATUS_COLOR_MAP = {
 
 const PAYMENT_STATUS_COLOR_MAP = {
   Unpaid: 'bg-zinc-100 text-zinc-700',
-  Pending: 'bg-amber-100 text-amber-700',
-  Paid: 'bg-green-100 text-green-700',
-  DepositPaid: 'bg-orange-100 text-orange-700',
   PartiallyPaid: 'bg-orange-100 text-orange-700',
+  Paid: 'bg-green-100 text-green-700',
   Refunded: 'bg-purple-100 text-purple-700',
-  PartiallyRefunded: 'bg-purple-100 text-purple-700',
-  Failed: 'bg-red-100 text-red-700',
   Cancelled: 'bg-zinc-100 text-zinc-700',
+  Pending: 'bg-amber-100 text-amber-700',
+  Failed: 'bg-red-100 text-red-700',
 };
 
 export function getOrderStatusLabel(status) {
@@ -87,6 +93,25 @@ export function getShippingStatusLabel(status) {
 
 export function getPaymentStatusLabel(status) {
   return PAYMENT_STATUS_MAP[status] || status || 'Không xác định';
+}
+
+/**
+ * Cùng paymentStatus 'PartiallyPaid' có nghĩa khác nhau tùy LoaiDonHang:
+ *   - Deposit: "Đã đặt cọc, chờ thanh toán phần còn lại"
+ *   - Installment: "Đang trả góp" (đã đóng cọc + có thể một vài kỳ)
+ * Helper này trả về nhãn phù hợp ngữ cảnh để hiển thị cho khách/admin.
+ */
+export function getPaymentStatusContextual(paymentStatus, orderType) {
+  if (paymentStatus === 'PartiallyPaid') {
+    if (orderType === 'Deposit') return 'Đã đặt cọc';
+    if (orderType === 'Installment') return 'Đang trả góp';
+    return 'Đã thanh toán một phần';
+  }
+  if (paymentStatus === 'Paid') {
+    if (orderType === 'Installment') return 'Đã trả góp xong';
+    return 'Đã thanh toán đủ';
+  }
+  return getPaymentStatusLabel(paymentStatus);
 }
 
 export function getPaymentMethodLabel(method) {

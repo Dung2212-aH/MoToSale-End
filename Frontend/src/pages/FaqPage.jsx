@@ -34,7 +34,7 @@ const faqCategories = [
       },
       {
         question: 'Tôi có thể đặt cọc trước không?',
-        answer: 'Có. Khi thanh toán, bạn chọn hình thức "Đặt cọc trước" và nhập số tiền muốn đặt cọc. Số tiền còn lại sẽ thanh toán khi nhận xe tại showroom.',
+        answer: 'Có. Khi thanh toán, bạn chọn hình thức "Đặt cọc trước" và nhập số tiền muốn đặt cọc. Số tiền còn lại sẽ thanh toán khi nhận xe.',
       },
       {
         question: 'Đơn hàng của tôi sẽ bị hủy khi nào?',
@@ -64,15 +64,11 @@ const faqCategories = [
     items: [
       {
         question: 'Có những hình thức nhận hàng nào?',
-        answer: 'Có 2 hình thức: "Giao hàng tận nơi" (áp dụng cho phụ tùng, phụ kiện) và "Nhận tại showroom" (áp dụng cho xe máy). Khi chọn nhận tại showroom, bạn có thể hẹn ngày nhận xe.',
+        answer: 'Có 2 hình thức: "Giao hàng tận nơi" và "Nhận trực tiếp". Khi chọn nhận trực tiếp, bạn có thể hẹn ngày nhận xe.',
       },
       {
         question: 'Phí giao hàng là bao nhiêu?',
-        answer: 'Phí giao hàng được hệ thống tính theo đơn vị vận chuyển phù hợp và địa chỉ nhận hàng tại bước thanh toán. Phí chỉ được miễn hoặc giảm khi bạn chọn nhận tại showroom, hoặc đã nhận và áp dụng voucher miễn phí vận chuyển.',
-      },
-      {
-        question: 'Tôi có thể xem hệ thống showroom ở đâu?',
-        answer: 'Nhấn vào "Hệ thống cửa hàng" ở thanh menu phía trên để xem danh sách tất cả showroom, bao gồm địa chỉ, số điện thoại và giờ mở cửa.',
+        answer: 'Phí giao hàng được hệ thống tính theo đơn vị vận chuyển phù hợp và địa chỉ nhận hàng tại bước thanh toán. Phí có thể được miễn hoặc giảm khi bạn áp dụng voucher miễn phí vận chuyển.',
       },
     ],
   },
@@ -85,7 +81,7 @@ const faqCategories = [
       },
       {
         question: 'Sản phẩm có bảo hành không?',
-        answer: 'Tất cả xe máy đều được bảo hành theo chính sách của hãng. Phụ tùng chính hãng được bảo hành theo quy định. Chi tiết bảo hành vui lòng liên hệ showroom.',
+        answer: 'Tất cả xe máy đều được bảo hành theo chính sách của hãng. Phụ tùng chính hãng được bảo hành theo quy định.',
       },
       {
         question: 'Làm sao để thêm sản phẩm vào yêu thích?',

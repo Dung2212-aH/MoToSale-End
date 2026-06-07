@@ -32,6 +32,8 @@ function generateSlug(str) {
 const getCategoryId = (category) => category.maDanhMuc || category.id;
 const getCategoryName = (category) => category.tenDanhMuc || category.name || '';
 const getParentCategoryId = (category) => category.maDanhMucCha ?? category.parentCategoryId ?? category.danhMucChaId ?? null;
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const normalizeText = (value) => String(value || '')
   .toLowerCase()
   .normalize('NFD')
@@ -208,6 +210,26 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
     });
   };
 
+  const handleMainImageChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setErrors((prev) => ({ ...prev, anhChinhFile: 'Chỉ hỗ trợ ảnh JPG, PNG hoặc WebP' }));
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE) {
+      setErrors((prev) => ({ ...prev, anhChinhFile: 'Dung lượng ảnh không được vượt quá 5MB' }));
+      event.target.value = '';
+      return;
+    }
+
+    setErrors((prev) => ({ ...prev, anhChinhFile: undefined }));
+    setForm((prev) => ({ ...prev, anhChinhFile: file, anhChinhUrl: URL.createObjectURL(file) }));
+  };
+
   const validate = () => {
     const errs = {};
     if (!form.tenSanPham.trim()) errs.tenSanPham = 'Tên sản phẩm là bắt buộc';
@@ -269,7 +291,8 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
       }
       onSaved();
     } catch (err) {
-      alert(isEdit ? 'Cập nhật sản phẩm thất bại!' : 'Thêm sản phẩm thất bại!');
+      const message = err?.response?.data?.message || err?.message || (isEdit ? 'Cập nhật sản phẩm thất bại!' : 'Thêm sản phẩm thất bại!');
+      alert(message);
       console.error(err);
     } finally {
       setSaving(false);
@@ -423,20 +446,16 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
                 <div className="custom-file">
                   <input
                     type="file"
-                    className="custom-file-input"
+                    className={`custom-file-input ${errors.anhChinhFile ? 'is-invalid' : ''}`}
                     id="mainImageFile"
-                    accept="image/*"
-                    onChange={(e) => {
-                      const file = e.target.files[0];
-                      if (file) {
-                        setForm((prev) => ({ ...prev, anhChinhFile: file, anhChinhUrl: URL.createObjectURL(file) }));
-                      }
-                    }}
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleMainImageChange}
                   />
                   <label className="custom-file-label" htmlFor="mainImageFile">
                     {form.anhChinhFile ? form.anhChinhFile.name : 'Chọn ảnh từ máy tính...'}
                   </label>
                 </div>
+                {errors.anhChinhFile && <small className="text-danger d-block mt-1">{errors.anhChinhFile}</small>}
                 {form.anhChinhUrl && (
                   <img src={form.anhChinhUrl} alt="Preview" className="mt-2 rounded border" style={{ maxHeight: 100, maxWidth: 150, objectFit: 'cover' }} />
                 )}

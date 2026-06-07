@@ -25,7 +25,8 @@ function Footer() {
           <ul className="mt-4 space-y-2 text-sm text-zinc-300">
             <li>Địa chỉ: 236 Hoàng Quốc Việt, phường Nghĩa Đô, TP Hà Nội</li>
             <li>Email: phamtiendung2k5hc@gmail.com</li>
-            <li>Hotline: 1900 6750</li>
+            <li>Liên hệ: Phạm Tiến Dũng</li>
+            <li>Hotline/Zalo: 0392757286</li>
           </ul>
         </div>
 
@@ -83,16 +84,18 @@ function Footer() {
 
           <div className="mt-5 flex gap-2" aria-label="Mạng xã hội">
             {[
-              { id: 'f', icon: <FaFacebookF /> },
-              { id: 'yt', icon: <FaYoutube /> },
-              { id: 'ig', icon: <FaInstagram /> },
-              { id: 'tk', icon: <FaTiktok /> },
+              { id: 'f', icon: <FaFacebookF />, href: 'https://web.facebook.com/pham.dung.224360' },
+              { id: 'yt', icon: <FaYoutube />, href: 'https://www.youtube.com/' },
+              { id: 'ig', icon: <FaInstagram />, href: 'mailto:phamtiendung2k5hc@gmail.com' },
+              { id: 'tk', icon: <FaTiktok />, href: 'https://zalo.me/0392757286' },
             ].map((item) => (
               <a
-                href="#"
+                href={item.href}
                 key={item.id}
                 className="grid h-9 w-9 place-items-center rounded-lg bg-zinc-800 text-[15px] text-white transition hover:bg-[#d71920]"
                 aria-label={`Mạng xã hội ${item.id}`}
+                target={item.href.startsWith('http') ? '_blank' : undefined}
+                rel={item.href.startsWith('http') ? 'noreferrer' : undefined}
               >
                 {item.icon}
               </a>

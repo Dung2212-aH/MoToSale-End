@@ -9,13 +9,18 @@ import { formatCurrency } from '../utils/formatters.js';
 
 const RECEIVING_METHODS = [
   { value: 'Delivery', label: 'Giao hàng tận nơi' },
-  { value: 'Pickup', label: 'Nhận tại showroom' },
+  { value: 'Pickup', label: 'Nhận trực tiếp' },
 ];
 
 const ORDER_TYPES = [
   { value: 'FullPayment', label: 'Thanh toán toàn bộ' },
   { value: 'Deposit', label: 'Đặt cọc trước' },
+  { value: 'Installment', label: 'Trả góp' },
 ];
+
+const INSTALLMENT_TERMS = [6, 9, 12];
+const INSTALLMENT_MIN_DOWN_PERCENT = 30;
+const DEPOSIT_MIN_PERCENT = 20;
 
 const PAYMENT_METHODS = [
   { value: 'BankTransfer', label: 'Chuyển khoản ngân hàng', icon: '🏦', desc: 'Chuyển khoản qua tài khoản ngân hàng' },
@@ -35,6 +40,18 @@ const initialForm = {
   orderType: 'FullPayment',
   paymentMethod: 'BankTransfer',
   depositAmount: '',
+  installmentTerm: 6,
+  installmentBorrowerName: '',
+  installmentIdNumber: '',
+  installmentIdIssueDate: '',
+  installmentIdIssuePlace: '',
+  installmentBirthDate: '',
+  installmentPhone: '',
+  installmentResidence: '',
+  installmentOccupation: '',
+  installmentCompany: '',
+  installmentWorkMonths: '',
+  installmentMonthlyIncome: '',
   note: '',
   fulfillmentNote: '',
   pickupAppointmentAt: '',
@@ -87,8 +104,24 @@ function validateForm(form, totalAmount) {
 
   if (form.orderType === 'Deposit') {
     const deposit = Number(form.depositAmount);
-    if (!deposit || deposit <= 0) errors.depositAmount = 'Số tiền đặt cọc phải lớn hơn 0';
+    const minDeposit = Math.round((totalAmount * DEPOSIT_MIN_PERCENT) / 100);
+    if (!deposit || deposit <= 0) errors.depositAmount = 'Vui lòng nhập số tiền đặt cọc';
+    else if (deposit < minDeposit) errors.depositAmount = `Đặt cọc tối thiểu ${DEPOSIT_MIN_PERCENT}% (${formatCurrency(minDeposit)})`;
     else if (deposit >= totalAmount) errors.depositAmount = 'Số tiền đặt cọc phải nhỏ hơn tổng tiền';
+  }
+
+  if (form.orderType === 'Installment') {
+    const down = Number(form.depositAmount);
+    const minDown = Math.round((totalAmount * INSTALLMENT_MIN_DOWN_PERCENT) / 100);
+    if (!down || down < minDown) errors.depositAmount = `Trả trước tối thiểu ${INSTALLMENT_MIN_DOWN_PERCENT}% (${formatCurrency(minDown)})`;
+    else if (down >= totalAmount) errors.depositAmount = 'Tiền trả trước phải nhỏ hơn tổng tiền';
+    if (!INSTALLMENT_TERMS.includes(Number(form.installmentTerm))) errors.installmentTerm = 'Vui lòng chọn kỳ hạn trả góp';
+    if (!form.installmentBorrowerName.trim()) errors.installmentBorrowerName = 'Vui lòng nhập họ tên người vay';
+    if (!/^[0-9]{9,15}$/.test(form.installmentIdNumber.trim())) errors.installmentIdNumber = 'Số CCCD/CMND không hợp lệ';
+    if (!form.installmentIdIssueDate) errors.installmentIdIssueDate = 'Vui lòng nhập ngày cấp CCCD';
+    if (!form.installmentIdIssuePlace.trim()) errors.installmentIdIssuePlace = 'Vui lòng nhập nơi cấp CCCD';
+    if (!/^[0-9+]{9,15}$/.test(form.installmentPhone.trim())) errors.installmentPhone = 'Số điện thoại người vay không hợp lệ';
+    if (!form.installmentResidence.trim()) errors.installmentResidence = 'Vui lòng nhập địa chỉ thường trú';
   }
 
   return errors;
@@ -106,7 +139,21 @@ function buildOrderPayload({ form, cart, items, appliedVoucher, voucherDiscount,
     shippingProvince: form.shippingProvince.trim(),
     receivingMethod: form.receivingMethod,
     orderType: form.orderType,
-    depositAmount: amounts.requiresDepositInput ? amounts.depositNum : 0,
+    depositAmount: amounts.needsDownPayment ? amounts.depositNum : 0,
+    soKyTraGop: form.orderType === 'Installment' ? Number(form.installmentTerm) : null,
+    installmentApplication: form.orderType === 'Installment' ? {
+      hoTenNguoiVay: form.installmentBorrowerName.trim(),
+      soCCCD: form.installmentIdNumber.trim(),
+      ngayCapCCCD: form.installmentIdIssueDate || null,
+      noiCapCCCD: form.installmentIdIssuePlace.trim(),
+      ngaySinh: form.installmentBirthDate || null,
+      soDienThoai: form.installmentPhone.trim(),
+      diaChiThuongTru: form.installmentResidence.trim(),
+      ngheNghiep: form.installmentOccupation.trim() || null,
+      tenCongTy: form.installmentCompany.trim() || null,
+      thoiGianLamViecThang: form.installmentWorkMonths ? Number(form.installmentWorkMonths) : null,
+      thuNhapHangThang: form.installmentMonthlyIncome ? Number(form.installmentMonthlyIncome) : null,
+    } : null,
     note: form.note.trim() || null,
     fulfillmentNote: form.fulfillmentNote.trim() || null,
     pickupAppointmentAt: form.pickupAppointmentAt || null,
@@ -288,9 +335,12 @@ function CheckoutPage() {
   const shippingDiscount = Number(shippingQuote?.discountAmount ?? shippingQuote?.DiscountAmount ?? 0);
   const carrierName = shippingQuote?.carrierName ?? shippingQuote?.CarrierName;
   const totalAmount = Math.max(0, subtotal - voucherDiscount + shippingFee);
-  const requiresDepositInput = form.orderType === 'Deposit';
-  const depositNum = requiresDepositInput ? Number(form.depositAmount) || 0 : 0;
-  const remainingAmount = requiresDepositInput ? Math.max(0, totalAmount - depositNum) : 0;
+  const needsDownPayment = form.orderType === 'Deposit' || form.orderType === 'Installment';
+  const isInstallment = form.orderType === 'Installment';
+  const depositNum = needsDownPayment ? Number(form.depositAmount) || 0 : 0;
+  const remainingAmount = needsDownPayment ? Math.max(0, totalAmount - depositNum) : 0;
+  const minDownPayment = Math.round((totalAmount * INSTALLMENT_MIN_DOWN_PERCENT) / 100);
+  const minDeposit = Math.round((totalAmount * DEPOSIT_MIN_PERCENT) / 100);
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -389,14 +439,20 @@ function CheckoutPage() {
         items,
         appliedVoucher,
         voucherDiscount,
-        amounts: { requiresDepositInput, depositNum },
+        amounts: { needsDownPayment, depositNum },
       });
       const res = await orderApi.createOrder(payload);
       await refreshCart().catch(() => {});
       const order = res.order || res.Order || res;
-      navigate(`/checkout/success?orderId=${order.id || order.Id}`, { replace: true });
+      // Send the user to the QR payment page; they only reach /checkout/success after the
+      // admin marks the order as paid (PaymentPage polls and redirects automatically).
+      navigate(`/checkout/payment?orderId=${order.id || order.Id}`, { replace: true });
     } catch (err) {
-      setError(err?.response?.data?.message || err?.message || 'Đặt hàng thất bại. Vui lòng thử lại.');
+      const data = err?.response?.data;
+      const detail = data?.detail && data.detail !== data.message ? ` (${data.detail})` : '';
+      setError((data?.message || err?.message || 'Đặt hàng thất bại. Vui lòng thử lại.') + detail);
+      // eslint-disable-next-line no-console
+      console.error('Create order failed:', err?.response?.status, data || err);
     } finally {
       setSubmitting(false);
     }
@@ -509,23 +565,13 @@ function CheckoutPage() {
                 )}
               </div>
             )}
-            {false && form.receivingMethod === 'Delivery' && (
-              <div className="rounded-[28px] border border-zinc-200 bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.07)]">
-                <h2 className="text-[18px] font-black text-zinc-950">Địa chỉ giao hàng</h2>
-                <div className="mt-5"><Field label="Địa chỉ *" id="shippingAddressLine" name="shippingAddressLine" value={form.shippingAddressLine} onChange={handleChange} error={fieldErrors.shippingAddressLine} placeholder="Số nhà, tên đường..." /></div>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <Field label="Tỉnh / Thành phố *" id="shippingProvince" name="shippingProvince" value={form.shippingProvince} onChange={handleChange} error={fieldErrors.shippingProvince} placeholder="TP. Hồ Chí Minh" />
-                  <Field label="Phường / Xã" id="shippingWard" name="shippingWard" value={form.shippingWard} onChange={handleChange} placeholder="Phường Tân Phú" />
-                </div>
-              </div>
-            )}
 
             {/* Pickup */}
             {form.receivingMethod === 'Pickup' && (
               <div className="rounded-[28px] border border-zinc-200 bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.07)]">
                 <h2 className="text-[18px] font-black text-zinc-950">Hẹn ngày nhận xe</h2>
                 <div className="mt-5"><Field label="Ngày hẹn nhận" id="pickupAppointmentAt" name="pickupAppointmentAt" value={form.pickupAppointmentAt} onChange={handleChange} type="datetime-local" /></div>
-                <div className="mt-4"><Field label="Ghi chú giao nhận" id="fulfillmentNote" name="fulfillmentNote" value={form.fulfillmentNote} onChange={handleChange} placeholder="Ghi chú cho showroom..." multiline /></div>
+                <div className="mt-4"><Field label="Ghi chú giao nhận" id="fulfillmentNote" name="fulfillmentNote" value={form.fulfillmentNote} onChange={handleChange} placeholder="Ghi chú giao nhận..." multiline /></div>
               </div>
             )}
 
@@ -537,10 +583,83 @@ function CheckoutPage() {
                   <RadioPill key={t.value} name="orderType" value={t.value} label={t.label} checked={form.orderType === t.value} onChange={handleChange} />
                 ))}
               </div>
-              {requiresDepositInput && (
-                <div className="mt-4"><Field label="Số tiền đặt cọc *" id="depositAmount" name="depositAmount" value={form.depositAmount} onChange={handleChange} error={fieldErrors.depositAmount} placeholder="5000000" type="number" /></div>
+              {form.orderType === 'Deposit' && (
+                <div className="mt-4">
+                  <Field
+                    label={`Số tiền đặt cọc * (tối thiểu ${DEPOSIT_MIN_PERCENT}% — ${formatCurrency(minDeposit)})`}
+                    id="depositAmount"
+                    name="depositAmount"
+                    value={form.depositAmount}
+                    onChange={handleChange}
+                    error={fieldErrors.depositAmount}
+                    placeholder={String(minDeposit || 5000000)}
+                    type="number"
+                  />
+                  <p className="mt-2 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs leading-5 text-amber-700">
+                    Phần còn lại ({formatCurrency(remainingAmount)}) sẽ thanh toán khi nhận xe.
+                  </p>
+                </div>
+              )}
+              {isInstallment && (
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <span className="mb-1.5 block text-sm font-bold text-zinc-700">Kỳ hạn trả góp *</span>
+                    <div className="flex flex-wrap gap-3">
+                      {INSTALLMENT_TERMS.map((term) => (
+                        <RadioPill key={term} name="installmentTerm" value={String(term)} label={`${term} tháng`} checked={Number(form.installmentTerm) === term} onChange={handleChange} />
+                      ))}
+                    </div>
+                    {fieldErrors.installmentTerm && <p className="mt-1 text-xs font-medium text-red-500">{fieldErrors.installmentTerm}</p>}
+                  </div>
+                  <Field
+                    label={`Số tiền trả trước * (tối thiểu ${INSTALLMENT_MIN_DOWN_PERCENT}% — ${formatCurrency(minDownPayment)})`}
+                    id="depositAmount"
+                    name="depositAmount"
+                    value={form.depositAmount}
+                    onChange={handleChange}
+                    error={fieldErrors.depositAmount}
+                    placeholder={String(minDownPayment || 5000000)}
+                    type="number"
+                  />
+                  <p className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs leading-5 text-amber-700">
+                    Phần còn lại ({formatCurrency(remainingAmount)}) sẽ được chia thành {form.installmentTerm} kỳ, lãi suất áp dụng theo chính sách cửa hàng. Lịch trả góp chi tiết hiển thị sau khi đặt hàng.
+                  </p>
+                </div>
               )}
             </div>
+
+            {/* Installment application form */}
+            {isInstallment && (
+              <div className="rounded-[28px] border border-zinc-200 bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.07)]">
+                <h2 className="text-[18px] font-black text-zinc-950">Hồ sơ trả góp</h2>
+                <p className="mt-1 text-sm text-zinc-500">Vui lòng cung cấp thông tin chính xác để cửa hàng thẩm định hồ sơ.</p>
+
+                <div className="mt-4">
+                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-zinc-400">Thông tin cá nhân</h3>
+                  <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                    <Field label="Họ và tên người vay *" id="installmentBorrowerName" name="installmentBorrowerName" value={form.installmentBorrowerName} onChange={handleChange} error={fieldErrors.installmentBorrowerName} placeholder="Nguyễn Văn A" />
+                    <Field label="Số CCCD/CMND *" id="installmentIdNumber" name="installmentIdNumber" value={form.installmentIdNumber} onChange={handleChange} error={fieldErrors.installmentIdNumber} placeholder="0123456789" />
+                    <Field label="Ngày cấp CCCD *" id="installmentIdIssueDate" name="installmentIdIssueDate" value={form.installmentIdIssueDate} onChange={handleChange} error={fieldErrors.installmentIdIssueDate} type="date" />
+                    <Field label="Nơi cấp CCCD *" id="installmentIdIssuePlace" name="installmentIdIssuePlace" value={form.installmentIdIssuePlace} onChange={handleChange} error={fieldErrors.installmentIdIssuePlace} placeholder="VD: Cục CS QLHC về TTXH" />
+                    <Field label="Ngày sinh" id="installmentBirthDate" name="installmentBirthDate" value={form.installmentBirthDate} onChange={handleChange} type="date" />
+                    <Field label="Số điện thoại người vay *" id="installmentPhone" name="installmentPhone" value={form.installmentPhone} onChange={handleChange} error={fieldErrors.installmentPhone} placeholder="0912345678" type="tel" />
+                  </div>
+                  <div className="mt-4">
+                    <Field label="Địa chỉ thường trú *" id="installmentResidence" name="installmentResidence" value={form.installmentResidence} onChange={handleChange} error={fieldErrors.installmentResidence} placeholder="Số nhà, đường, phường, quận, tỉnh/thành" />
+                  </div>
+                </div>
+
+                <div className="mt-5">
+                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-zinc-400">Công việc &amp; thu nhập</h3>
+                  <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                    <Field label="Nghề nghiệp" id="installmentOccupation" name="installmentOccupation" value={form.installmentOccupation} onChange={handleChange} placeholder="VD: Nhân viên văn phòng" />
+                    <Field label="Công ty đang làm" id="installmentCompany" name="installmentCompany" value={form.installmentCompany} onChange={handleChange} placeholder="Tên công ty/cửa hàng" />
+                    <Field label="Thời gian làm việc (tháng)" id="installmentWorkMonths" name="installmentWorkMonths" value={form.installmentWorkMonths} onChange={handleChange} placeholder="24" type="number" />
+                    <Field label="Thu nhập hàng tháng (VND)" id="installmentMonthlyIncome" name="installmentMonthlyIncome" value={form.installmentMonthlyIncome} onChange={handleChange} placeholder="15000000" type="number" />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Payment Method */}
             <div className="rounded-[28px] border border-zinc-200 bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.07)]">
@@ -690,14 +809,14 @@ function CheckoutPage() {
                     <strong className="font-bold">-{formatCurrency(voucherDiscount)}</strong>
                   </div>
                 )}
-                {requiresDepositInput && (
+                {needsDownPayment && (
                   <>
                     <div className="flex items-center justify-between text-sm text-amber-600">
-                      <span>Đặt cọc</span>
+                      <span>{isInstallment ? 'Trả trước' : 'Đặt cọc'}</span>
                       <strong className="font-bold">{formatCurrency(depositNum)}</strong>
                     </div>
                     <div className="flex items-center justify-between text-sm text-zinc-500">
-                      <span>Còn lại cần thanh toán</span>
+                      <span>{isInstallment ? `Còn lại (góp ${form.installmentTerm} kỳ, chưa gồm lãi)` : 'Còn lại cần thanh toán'}</span>
                       <strong className="font-bold">{formatCurrency(remainingAmount > 0 ? remainingAmount : 0)}</strong>
                     </div>
                   </>

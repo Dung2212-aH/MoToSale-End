@@ -5,7 +5,6 @@ public class Order
     public int MaDonHang { get; set; }
     public string MaDonHangKinhDoanh { get; set; } = string.Empty;
     public int MaNguoiDung { get; set; }
-    public int? MaShowroom { get; set; }
     public string HoTenNhanHang { get; set; } = string.Empty;
     public string SoDienThoaiNhanHang { get; set; } = string.Empty;
     public string? EmailNhanHang { get; set; }
@@ -35,4 +34,7 @@ public class Order
     public ICollection<InventoryHold> InventoryHolds { get; set; } = new List<InventoryHold>();
     public ICollection<OrderVoucher> Vouchers { get; set; } = new List<OrderVoucher>();
     public ICollection<OrderHistory> Histories { get; set; } = new List<OrderHistory>();
+    public ICollection<Payment> Payments { get; set; } = new List<Payment>();
+    public InstallmentPlan? InstallmentPlan { get; set; }
+    public ICollection<RefundRequest> RefundRequests { get; set; } = new List<RefundRequest>();
 }

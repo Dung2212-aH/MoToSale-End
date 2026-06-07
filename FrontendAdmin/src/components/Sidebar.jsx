@@ -70,6 +70,12 @@ const Sidebar = ({ collapsed = false }) => {
               </Link>
             </li>
             <li className="nav-item">
+              <Link to="/installments" className={`nav-link ${isActiveGroup('/installments')}`}>
+                <i className="nav-icon fas fa-calendar-check"></i>
+                <p>Duyệt kỳ trả góp</p>
+              </Link>
+            </li>
+            <li className="nav-item">
               <Link to="/vouchers" className={`nav-link ${isActiveGroup('/vouchers')}`}>
                 <i className="nav-icon fas fa-ticket-alt"></i>
                 <p>Voucher</p>
@@ -150,11 +156,19 @@ const Sidebar = ({ collapsed = false }) => {
               </li>
             )}
             <li className="nav-item">
-              <Link to="/settings" className={`nav-link ${isActiveGroup('/settings')}`}>
+              <Link to="/settings" className={`nav-link ${location.pathname === '/settings' ? 'active' : ''}`}>
                 <i className="nav-icon fas fa-cog"></i>
                 <p>Cấu hình vận hành</p>
               </Link>
             </li>
+            {isAdmin() && (
+              <li className="nav-item">
+                <Link to="/settings/payment" className={`nav-link ${isActive('/settings/payment')}`}>
+                  <i className="nav-icon fas fa-qrcode"></i>
+                  <p>Cấu hình thanh toán</p>
+                </Link>
+              </li>
+            )}
           </ul>
         </nav>
       </div>

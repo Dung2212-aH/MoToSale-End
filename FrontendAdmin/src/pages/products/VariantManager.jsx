@@ -1,15 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import productService from '../../services/productService';
 import { useAuth } from '../../contexts/AuthContext';
+
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+function getErrorMessage(error, fallback = 'Thao tác thất bại. Vui lòng thử lại.') {
+  return error?.response?.data?.message || error?.message || fallback;
+}
 
 const VariantManager = ({ productId, onClose }) => {
   const { isAdmin } = useAuth();
   const [variants, setVariants] = useState([]);
+  const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editVariant, setEditVariant] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [uploadingVariantId, setUploadingVariantId] = useState(null);
 
   const [form, setForm] = useState({
     tenBienThe: '',
@@ -25,11 +35,16 @@ const VariantManager = ({ productId, onClose }) => {
     setLoading(true);
     setError('');
     try {
-      const res = await productService.getVariants(productId);
-      const data = res.data;
+      const [variantRes, imageRes] = await Promise.all([
+        productService.getVariants(productId),
+        productService.getImages(productId),
+      ]);
+      const data = variantRes.data;
+      const imageData = imageRes.data;
       setVariants(Array.isArray(data) ? data : data.items || data.data || []);
+      setImages(Array.isArray(imageData) ? imageData : imageData.items || imageData.data || []);
     } catch (err) {
-      setError('Không thể tải danh sách biến thể.');
+      setError(getErrorMessage(err, 'Không thể tải danh sách biến thể.'));
       console.error(err);
     } finally {
       setLoading(false);
@@ -73,6 +88,89 @@ const VariantManager = ({ productId, onClose }) => {
     setForm(prev => ({ ...prev, [name]: value }));
   };
 
+  const getVariantId = (variant) => variant.id || variant.maBienSanPham;
+
+  const imagesByVariant = useMemo(() => {
+    const grouped = new Map();
+    images.forEach((image) => {
+      if (!image.maBienSanPham) return;
+      const key = String(image.maBienSanPham);
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(image);
+    });
+    return grouped;
+  }, [images]);
+
+  const validateFiles = (files) => {
+    const validFiles = [];
+    const errors = [];
+
+    files.forEach((file) => {
+      if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+        errors.push(`${file.name}: chỉ hỗ trợ JPG, PNG hoặc WebP`);
+        return;
+      }
+
+      if (file.size > MAX_FILE_SIZE) {
+        errors.push(`${file.name}: vượt quá 5MB`);
+        return;
+      }
+
+      validFiles.push(file);
+    });
+
+    return { validFiles, errors };
+  };
+
+  const handleVariantImagesSelected = async (variant, fileList) => {
+    const variantId = getVariantId(variant);
+    const files = Array.from(fileList || []);
+    if (!files.length || !variantId) return;
+
+    const { validFiles, errors } = validateFiles(files);
+    if (errors.length) {
+      setError(errors.join('\n'));
+    }
+
+    if (!validFiles.length) return;
+
+    const currentVariantImages = imagesByVariant.get(String(variantId)) || [];
+    setUploadingVariantId(variantId);
+    setError('');
+    setSuccess('');
+
+    try {
+      for (let index = 0; index < validFiles.length; index += 1) {
+        const formData = new FormData();
+        formData.append('file', validFiles[index]);
+        formData.append('maBienSanPham', variantId);
+        formData.append('isMain', currentVariantImages.length === 0 && index === 0 ? 'true' : 'false');
+        await productService.uploadImage(productId, formData);
+      }
+
+      await fetchVariants();
+      setSuccess(`Đã upload ${validFiles.length} ảnh cho ${variant.tenBienThe || variant.name}.`);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Upload ảnh biến thể thất bại.'));
+    } finally {
+      setUploadingVariantId(null);
+    }
+  };
+
+  const handleSetVariantMainImage = async (imageId) => {
+    try {
+      setError('');
+      const formData = new FormData();
+      formData.append('imageId', imageId);
+      formData.append('isMain', 'true');
+      await productService.uploadImage(productId, formData);
+      await fetchVariants();
+      setSuccess('Đã đặt ảnh chính cho biến thể.');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Đặt ảnh chính thất bại.'));
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.tenBienThe.trim()) {
@@ -86,7 +184,7 @@ const VariantManager = ({ productId, onClose }) => {
         giaGhiDe: Number(form.giaGhiDe) || 0,
       };
       if (editVariant) {
-        await productService.updateVariant(productId, editVariant.id, payload);
+        await productService.updateVariant(productId, getVariantId(editVariant), payload);
       } else {
         payload.soLuongTon = Number(form.soLuongTon) || 0;
         await productService.createVariant(productId, payload);
@@ -94,7 +192,7 @@ const VariantManager = ({ productId, onClose }) => {
       setShowForm(false);
       fetchVariants();
     } catch (err) {
-      alert('Lưu biến thể thất bại!');
+      alert(getErrorMessage(err, 'Lưu biến thể thất bại!'));
       console.error(err);
     } finally {
       setSaving(false);
@@ -107,14 +205,14 @@ const VariantManager = ({ productId, onClose }) => {
       await productService.deleteVariant(productId, variantId);
       fetchVariants();
     } catch (err) {
-      alert('Xóa biến thể thất bại!');
+      alert(getErrorMessage(err, 'Xóa biến thể thất bại!'));
       console.error(err);
     }
   };
 
   return (
     <div className="modal fade show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-      <div className="modal-dialog modal-lg variant-manager-dialog" style={{ maxHeight: '90vh' }}>
+      <div className="modal-dialog modal-xl variant-manager-dialog" style={{ maxHeight: '90vh' }}>
         <div className="modal-content" style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
           <div className="modal-header">
             <h5 className="modal-title">Quản lý biến thể sản phẩm</h5>
@@ -129,7 +227,8 @@ const VariantManager = ({ productId, onClose }) => {
               </button>
             </div>
 
-            {error && <div className="alert alert-danger">{error}</div>}
+            {error && <div className="alert alert-danger white-space-pre-line">{error}</div>}
+            {success && <div className="alert alert-success">{success}</div>}
 
             {loading ? (
               <div className="text-center py-3">
@@ -139,48 +238,90 @@ const VariantManager = ({ productId, onClose }) => {
             ) : variants.length === 0 ? (
               <p className="text-muted text-center">Chưa có biến thể nào.</p>
             ) : (
-              <div className="table-responsive">
-                <table className="table table-bordered table-striped table-sm">
-                  <thead>
-                    <tr>
-                      <th>Tên biến thể</th>
-                      <th>SKU</th>
-                      <th>Phiên bản</th>
-                      <th>Màu sắc</th>
-                      <th>Giá ghi đè</th>
-                      <th>Tồn kho</th>
-                      <th>Trạng thái</th>
-                      <th>Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {variants.map(v => (
-                      <tr key={v.id}>
-                        <td>{v.tenBienThe || v.name}</td>
-                        <td>{v.sku}</td>
-                        <td>{v.phienBan || v.version || ''}</td>
-                        <td>{v.mauSac || v.color || ''}</td>
-                        <td>{v.giaGhiDe || v.overridePrice || 0}</td>
-                        <td>{v.soLuongTon ?? v.stock ?? 0}</td>
-                        <td>
-                          <span className={`badge badge-${(v.trangThai || v.status) === 'Available' || (v.trangThai || v.status) === 'Available' ? 'success' : 'secondary'}`}>
-                            {(v.trangThai || v.status) === 'Available' || (v.trangThai || v.status) === 'Available' ? 'Hoạt động' : 'Ngừng'}
-                          </span>
-                        </td>
-                        <td>
-                          <button className="btn btn-xs btn-info mr-1" onClick={() => openEdit(v)}>
-                            <i className="fas fa-edit"></i>
+              <div className="variant-card-list">
+                {variants.map((variant) => {
+                  const variantId = getVariantId(variant);
+                  const variantImages = imagesByVariant.get(String(variantId)) || [];
+                  const isUploading = String(uploadingVariantId) === String(variantId);
+                  const inputId = `variant-image-${variantId}`;
+
+                  return (
+                    <div key={variantId} className="variant-image-card">
+                      <div className="variant-image-card-main">
+                        <div className="variant-meta">
+                          <strong>{variant.tenBienThe || variant.name}</strong>
+                          <span className="text-muted">{variant.sku || 'Chưa có SKU'}</span>
+                          <div className="mt-2 d-flex flex-wrap" style={{ gap: 6 }}>
+                            {(variant.phienBan || variant.version) && <span className="badge badge-light">{variant.phienBan || variant.version}</span>}
+                            {(variant.mauSac || variant.color) && <span className="badge badge-info">{variant.mauSac || variant.color}</span>}
+                            <span className="badge badge-secondary">Tồn: {variant.soLuongTon ?? variant.stock ?? 0}</span>
+                            <span className={`badge badge-${(variant.trangThai || variant.status) === 'Available' ? 'success' : 'secondary'}`}>
+                              {(variant.trangThai || variant.status) === 'Available' ? 'Hoạt động' : 'Ngừng'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="variant-actions">
+                          <input
+                            id={inputId}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            multiple
+                            className="d-none"
+                            disabled={isUploading}
+                            onChange={(event) => {
+                              handleVariantImagesSelected(variant, event.target.files);
+                              event.target.value = '';
+                            }}
+                          />
+                          <label className="btn btn-sm btn-primary mb-0" htmlFor={inputId}>
+                            {isUploading ? (
+                              <>
+                                <span className="spinner-border spinner-border-sm mr-1"></span>
+                                Đang upload
+                              </>
+                            ) : (
+                              <>
+                                <i className="fas fa-image mr-1"></i>
+                                Chọn ảnh
+                              </>
+                            )}
+                          </label>
+                          <button className="btn btn-sm btn-info" onClick={() => openEdit(variant)}>
+                            <i className="fas fa-edit mr-1"></i>Sửa
                           </button>
                           {isAdmin() && (
-                            <button className="btn btn-xs btn-danger" onClick={() => handleDelete(v.id, v.tenBienThe || v.name)}>
+                            <button className="btn btn-sm btn-outline-danger" onClick={() => handleDelete(variantId, variant.tenBienThe || variant.name)}>
                               <i className="fas fa-trash"></i>
                             </button>
                           )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                      </div>
+
+                      <div className="variant-image-strip">
+                        {variantImages.length === 0 ? (
+                          <div className="variant-image-empty">
+                            <i className="fas fa-camera mr-1"></i>
+                            Chưa có ảnh cho biến thể này
+                          </div>
+                        ) : (
+                          variantImages.map((image) => (
+                            <div key={image.id || image.maAnhSanPham} className={`variant-image-thumb ${image.laAnhChinh ? 'is-main' : ''}`}>
+                              <img src={image.urlAnh || image.url} alt={image.altText || ''} />
+                              {image.laAnhChinh ? (
+                                <span className="badge badge-primary">Chính</span>
+                              ) : (
+                                <button type="button" onClick={() => handleSetVariantMainImage(image.id || image.maAnhSanPham)}>
+                                  Đặt chính
+                                </button>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 

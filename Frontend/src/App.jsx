@@ -9,6 +9,7 @@ import MainLayout from './components/MainLayout.jsx';
 import CartPage from './pages/CartPage.jsx';
 import CheckoutPage from './pages/CheckoutPage.jsx';
 import CheckoutSuccessPage from './pages/CheckoutSuccessPage.jsx';
+import PaymentPage from './pages/PaymentPage.jsx';
 import FavoritesPage from './pages/FavoritesPage.jsx';
 import HomePage from './pages/HomePage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
@@ -20,9 +21,9 @@ import AccountPage from './pages/AccountPage.jsx';
 import ProductDetailPage from './pages/ProductDetailPage.jsx';
 import ProductListPage from './pages/ProductListPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
-import StoreSystemPage from './pages/StoreSystemPage.jsx';
 import FaqPage from './pages/FaqPage.jsx';
 import VouchersPage from './pages/VouchersPage.jsx';
+import ContactPage from './pages/ContactPage.jsx';
 
 const authPaths = ['/login', '/register', '/forgot-password'];
 
@@ -59,10 +60,10 @@ function AppRoutes() {
     <Routes>
       <Route element={<MainLayout />}>
         <Route path="/" element={<HomePage />} />
-        <Route path="/he-thong-cua-hang" element={<StoreSystemPage />} />
         <Route path="/products" element={<ProductListPage />} />
         <Route path="/products/:id" element={<ProductDetailPage />} />
         <Route path="/vouchers" element={<VouchersPage />} />
+        <Route path="/contact" element={<ContactPage />} />
         <Route path="/faq" element={<FaqPage />} />
         <Route
           path="/cart"
@@ -85,6 +86,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <CheckoutPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/checkout/payment"
+          element={
+            <ProtectedRoute>
+              <PaymentPage />
             </ProtectedRoute>
           }
         />

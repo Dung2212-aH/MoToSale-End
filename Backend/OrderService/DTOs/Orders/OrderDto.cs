@@ -5,7 +5,6 @@ public class OrderDto
     public int MaDonHang { get; set; }
     public string MaDonHangKinhDoanh { get; set; } = string.Empty;
     public int MaNguoiDung { get; set; }
-    public int? MaShowroom { get; set; }
     public int? MaGioHang { get; set; }
     public string HoTenNhanHang { get; set; } = string.Empty;
     public string SoDienThoaiNhanHang { get; set; } = string.Empty;
@@ -31,7 +30,11 @@ public class OrderDto
     public DateTime? NgayHenNhanXe { get; set; }
     public string? GhiChuGiaoNhan { get; set; }
     public DateTime? CheckoutHetHanLuc { get; set; }
+    public string? PhuongThucThanhToan { get; set; }
     public List<OrderItemDto> Items { get; set; } = new();
     public List<OrderVoucherDto> Vouchers { get; set; } = new();
     public List<OrderHistoryDto> LichSu { get; set; } = new();
+    public List<PaymentDto> DanhSachThanhToan { get; set; } = new();
+    public InstallmentPlanDto? TraGop { get; set; }
+    public List<RefundRequestDto> YeuCauHoanTien { get; set; } = new();
 }

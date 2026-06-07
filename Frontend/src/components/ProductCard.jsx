@@ -1,6 +1,35 @@
 import { Link } from 'react-router-dom';
+import { FaRegStar, FaStar, FaStarHalfAlt } from 'react-icons/fa';
 import { FiHeart } from 'react-icons/fi';
 import { formatCurrency, getProductDiscountPercent, getProductImage, getProductPrice } from '../utils/formatters.js';
+
+function getRatingValue(product) {
+  const value = Number(product.averageRating ?? product.rating ?? 0);
+  return Number.isFinite(value) ? Math.min(5, Math.max(0, value)) : 0;
+}
+
+function getReviewCount(product) {
+  const value = Number(product.totalReviews ?? product.reviewCount ?? product.reviewsCount ?? 0);
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+function RatingStars({ rating }) {
+  return (
+    <span className="flex items-center gap-0.5 text-amber-400" aria-hidden="true">
+      {[1, 2, 3, 4, 5].map((star) => {
+        if (rating >= star - 0.25) {
+          return <FaStar key={star} className="h-3.5 w-3.5" />;
+        }
+
+        if (rating >= star - 0.75) {
+          return <FaStarHalfAlt key={star} className="h-3.5 w-3.5" />;
+        }
+
+        return <FaRegStar key={star} className="h-3.5 w-3.5 text-zinc-300" />;
+      })}
+    </span>
+  );
+}
 
 function ProductCard({ product, onAddToCart, isFavorite = false, onToggleFavorite }) {
   const price = getProductPrice(product);
@@ -8,6 +37,8 @@ function ProductCard({ product, onAddToCart, isFavorite = false, onToggleFavorit
   const discountPercent = getProductDiscountPercent(product);
   const imageUrl = getProductImage(product);
   const detailLink = `/products/${product.id}`;
+  const rating = getRatingValue(product);
+  const reviewCount = getReviewCount(product);
 
   return (
     <article className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.06)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_34px_rgba(15,23,42,0.12)]">
@@ -58,6 +89,18 @@ function ProductCard({ product, onAddToCart, isFavorite = false, onToggleFavorit
         <Link className="block min-h-[56px] text-[15px] leading-7 font-bold text-zinc-900 transition hover:text-[#d71920]" to={detailLink}>
           {product.name}
         </Link>
+
+        <div className="mt-2 flex min-h-[22px] items-center gap-2 text-[12px] font-semibold text-zinc-500">
+          <RatingStars rating={rating} />
+          {reviewCount > 0 ? (
+            <>
+              <span className="text-zinc-800">{rating.toFixed(1)}</span>
+              <span>({reviewCount} đánh giá)</span>
+            </>
+          ) : (
+            <span>Chưa có đánh giá</span>
+          )}
+        </div>
 
         <div className="mt-3 flex flex-wrap items-baseline gap-2">
           <span className="text-[18px] font-extrabold text-[#d71920]">{formatCurrency(price)}</span>

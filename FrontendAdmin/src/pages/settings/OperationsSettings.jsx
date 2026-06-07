@@ -3,35 +3,24 @@ import operationsService from '../../services/operationsService';
 import { useAuth } from '../../contexts/AuthContext';
 
 const DEFAULT_SETTINGS = [
-  ['StoreName', 'Tên cửa hàng'],
-  ['Hotline', 'Hotline'],
-  ['Address', 'Địa chỉ'],
-  ['DefaultLowStockThreshold', 'Ngưỡng tồn thấp mặc định'],
-  ['DepositPolicy', 'Chính sách đặt cọc'],
-  ['CancelPolicy', 'Chính sách hủy đơn'],
-  ['WarrantyPolicy', 'Chính sách bảo hành'],
-  ['DefaultShippingFee', 'Phí vận chuyển mặc định'],
+  ['DefaultLowStockThreshold', 'Nguong ton thap mac dinh'],
+  ['DepositPolicy', 'Chinh sach dat coc'],
+  ['CancelPolicy', 'Chinh sach huy don'],
+  ['WarrantyPolicy', 'Chinh sach bao hanh'],
+  ['DefaultShippingFee', 'Phi van chuyen mac dinh'],
+  // Tài khoản nhận chuyển khoản (BankBin/BankAccountNo/BankAccountName) cấu hình ở trang riêng /settings/payment.
+  ['InstallmentAnnualRate', 'Lai suat tra gop/nam (%)'],
+  ['InstallmentMinDownPaymentPercent', 'Ty le tra truoc toi thieu khi tra gop (%)'],
+  ['InstallmentAllowedTerms', 'Cac ky han tra gop cho phep (thang, cach nhau dau phay)'],
+  ['PaymentHoldMinutes', 'Thoi gian giu cho ton kho cho thanh toan (phut)'],
+  ['DepositMinPercent', 'Ty le dat coc toi thieu cho don Dat coc (%)'],
 ];
-
-const typeLabels = {
-  StoreWarehouse: 'Cửa hàng kiêm kho',
-  Showroom: 'Showroom',
-  Warehouse: 'Kho',
-};
 
 const getApiMessage = (err, fallback) => err?.response?.data?.message || fallback;
 
 const OperationsSettings = () => {
   const { isAdmin } = useAuth();
-  const [warehouses, setWarehouses] = useState([]);
   const [settings, setSettings] = useState([]);
-  const [warehouseForm, setWarehouseForm] = useState({
-    tenKho: '',
-    loaiKho: 'StoreWarehouse',
-    diaChi: '',
-    hotline: '',
-    dangHoatDong: true,
-  });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -42,12 +31,7 @@ const OperationsSettings = () => {
     setLoading(true);
     setError('');
     try {
-      const [warehousesRes, settingsRes] = await Promise.all([
-        operationsService.getWarehouses(),
-        operationsService.getSettings(),
-      ]);
-      setWarehouses(warehousesRes.data.items || []);
-
+      const settingsRes = await operationsService.getSettings();
       const fromApi = settingsRes.data.items || [];
       const map = new Map(fromApi.map((item) => [item.key ?? item.Key, item]));
       setSettings(DEFAULT_SETTINGS.map(([key, label]) => ({
@@ -57,7 +41,7 @@ const OperationsSettings = () => {
         moTa: map.get(key)?.moTa ?? map.get(key)?.MoTa ?? label,
       })));
     } catch (err) {
-      setError(getApiMessage(err, 'Không thể tải cấu hình vận hành.'));
+      setError(getApiMessage(err, 'Khong the tai cau hinh van hanh.'));
     } finally {
       setLoading(false);
     }
@@ -67,42 +51,13 @@ const OperationsSettings = () => {
     fetchData();
   }, []);
 
-  const saveWarehouse = async () => {
-    if (!warehouseForm.tenKho.trim()) {
-      alert('Tên kho/showroom là bắt buộc.');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await operationsService.saveWarehouse(warehouseForm);
-      setWarehouseForm({ tenKho: '', loaiKho: 'StoreWarehouse', diaChi: '', hotline: '', dangHoatDong: true });
-      await fetchData();
-    } catch (err) {
-      alert(getApiMessage(err, 'Không thể lưu kho/showroom.'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const editWarehouse = (item) => {
-    setWarehouseForm({
-      maKho: item.maKho ?? item.MaKho,
-      tenKho: item.tenKho ?? item.TenKho,
-      loaiKho: item.loaiKho ?? item.LoaiKho,
-      diaChi: item.diaChi ?? item.DiaChi ?? '',
-      hotline: item.hotline ?? item.Hotline ?? '',
-      dangHoatDong: item.dangHoatDong ?? item.DangHoatDong ?? true,
-    });
-  };
-
   const saveSettings = async () => {
     setSaving(true);
     try {
       await operationsService.saveSettings(settings.map((item) => ({ key: item.key, value: item.value, moTa: item.moTa })));
       await fetchData();
     } catch (err) {
-      alert(getApiMessage(err, 'Không thể lưu cấu hình hệ thống.'));
+      alert(getApiMessage(err, 'Khong the luu cau hinh he thong.'));
     } finally {
       setSaving(false);
     }
@@ -116,67 +71,32 @@ const OperationsSettings = () => {
     <div className="content-wrapper">
       <div className="content-header">
         <div className="container-fluid">
-          <h1 className="m-0">Cấu hình vận hành</h1>
+          <h1 className="m-0">Cau hinh van hanh</h1>
         </div>
       </div>
       <section className="content">
         <div className="container-fluid">
           {error && <div className="alert alert-danger">{error}</div>}
-          {!canEdit && <div className="alert alert-info">Staff chỉ được xem cấu hình, chỉ Admin được chỉnh sửa.</div>}
+          {!canEdit && <div className="alert alert-info">Staff chi duoc xem cau hinh, chi Admin duoc chinh sua.</div>}
 
           <div className="card">
-            <div className="card-header"><h3 className="card-title">Showroom/Kho</h3></div>
+            <div className="card-header"><h3 className="card-title">Cau hinh he thong</h3></div>
             <div className="card-body">
-              {canEdit && (
-                <div className="row mb-3">
-                  <div className="col-md-3"><input className="form-control" placeholder="Tên kho/showroom" value={warehouseForm.tenKho} onChange={(e) => setWarehouseForm((p) => ({ ...p, tenKho: e.target.value }))} /></div>
-                  <div className="col-md-2">
-                    <select className="form-control" value={warehouseForm.loaiKho} onChange={(e) => setWarehouseForm((p) => ({ ...p, loaiKho: e.target.value }))}>
-                      {Object.entries(typeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                    </select>
-                  </div>
-                  <div className="col-md-3"><input className="form-control" placeholder="Địa chỉ" value={warehouseForm.diaChi} onChange={(e) => setWarehouseForm((p) => ({ ...p, diaChi: e.target.value }))} /></div>
-                  <div className="col-md-2"><input className="form-control" placeholder="Hotline" value={warehouseForm.hotline} onChange={(e) => setWarehouseForm((p) => ({ ...p, hotline: e.target.value }))} /></div>
-                  <div className="col-md-2"><button className="btn btn-primary btn-block" onClick={saveWarehouse} disabled={saving}>Lưu kho</button></div>
+              {loading ? (
+                <div className="text-center">Dang tai...</div>
+              ) : (
+                <div className="row">
+                  {settings.map((item, index) => (
+                    <div className="col-md-6" key={item.key}>
+                      <div className="form-group">
+                        <label>{item.label}</label>
+                        <textarea className="form-control" rows="2" value={item.value || ''} disabled={!canEdit} onChange={(e) => updateSetting(index, e.target.value)} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
-              <table className="table table-bordered table-striped">
-                <thead><tr><th>Tên</th><th>Loại</th><th>Địa chỉ</th><th>Hotline</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
-                <tbody>
-                  {loading ? (
-                    <tr><td colSpan="6" className="text-center">Đang tải...</td></tr>
-                  ) : warehouses.map((item) => (
-                    <tr key={item.maKho ?? item.MaKho}>
-                      <td>{item.tenKho ?? item.TenKho}</td>
-                      <td>{typeLabels[item.loaiKho ?? item.LoaiKho] || item.loaiKho || item.LoaiKho}</td>
-                      <td>{item.diaChi ?? item.DiaChi ?? '-'}</td>
-                      <td>{item.hotline ?? item.Hotline ?? '-'}</td>
-                      <td>{item.dangHoatDong ?? item.DangHoatDong ? 'Đang hoạt động' : 'Ngừng hoạt động'}</td>
-                      <td>{canEdit && <button className="btn btn-xs btn-info" onClick={() => editWarehouse(item)}><i className="fas fa-edit"></i></button>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card-header"><h3 className="card-title">Cấu hình hệ thống</h3></div>
-            <div className="card-body">
-              <div className="alert alert-info">
-                Phí vận chuyển hiện được tính tự động theo nội tỉnh/ngoại tỉnh dựa trên địa chỉ showroom/kho đang hoạt động.
-              </div>
-              <div className="row">
-                {settings.map((item, index) => (
-                  <div className="col-md-6" key={item.key}>
-                    <div className="form-group">
-                      <label>{item.label}</label>
-                      <textarea className="form-control" rows="2" value={item.value || ''} disabled={!canEdit} onChange={(e) => updateSetting(index, e.target.value)} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {canEdit && <button className="btn btn-primary" onClick={saveSettings} disabled={saving}>Lưu cấu hình</button>}
+              {canEdit && <button className="btn btn-primary" onClick={saveSettings} disabled={saving || loading}>Luu cau hinh</button>}
             </div>
           </div>
         </div>

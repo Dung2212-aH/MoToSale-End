@@ -32,7 +32,8 @@ public class ProductImageRepository : IProductImageRepository
         var images = await _dbContext.ProductImages
             .AsNoTracking()
             .Where(i => ids.Contains(i.MaSanPham))
-            .OrderByDescending(i => i.LaAnhChinh)
+            .OrderByDescending(i => i.MaBienSanPham != null)
+            .ThenByDescending(i => i.LaAnhChinh)
             .ThenBy(i => i.ThuTuHienThi)
             .ThenBy(i => i.MaAnhSanPham)
             .ToListAsync();
