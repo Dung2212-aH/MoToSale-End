@@ -54,7 +54,7 @@ function ProductDetailPage() {
   const { addItem } = useCart();
   const { isFavorite, toggleFavorite } = useFavorite();
   const { notify } = useNotification();
-  const { data: product, loading, error, run } = useAsync(() => productApi.getProductById(id), [id]);
+  const { data: product, loading, error, run } = useAsync(() => productApi.getById(id), [id]);
 
   const options = useMemo(() => normalizeProductOptions(product), [product]);
   const detailImages = useMemo(() => {
@@ -75,8 +75,8 @@ function ProductDetailPage() {
       }
 
       const requests = [
-        product?.brandId ? productApi.getProducts({ brandId: product.brandId, page: 1, pageSize: 8 }) : Promise.resolve({ items: [] }),
-        product?.categoryId ? productApi.getProducts({ categoryId: product.categoryId, page: 1, pageSize: 8 }) : Promise.resolve({ items: [] }),
+        product?.brandId ? productApi.getAll({ brandId: product.brandId, page: 1, pageSize: 8 }) : Promise.resolve({ items: [] }),
+        product?.categoryId ? productApi.getAll({ categoryId: product.categoryId, page: 1, pageSize: 8 }) : Promise.resolve({ items: [] }),
       ];
 
       try {
@@ -392,7 +392,7 @@ function ProductDetailPage() {
       return;
     }
 
-    const detail = await productApi.getProductById(item.id);
+    const detail = await productApi.getById(item.id);
     if (detail.variants?.length) {
       notify('Vui lòng chọn phiên bản/màu sắc', 'error');
       navigate(`/products/${item.id}`);

@@ -24,7 +24,7 @@ function FavoritesPage() {
 
   async function addToCart(product) {
     try {
-      const detail = await productApi.getProductById(product.id);
+      const detail = await productApi.getById(product.id);
       if (detail.variants?.length) {
         notify('Vui lòng chọn phiên bản/màu sắc', 'error');
         navigate(`/products/${product.id}`);

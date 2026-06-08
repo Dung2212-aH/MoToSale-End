@@ -40,7 +40,7 @@ export function CartProvider({ children }) {
 
     setLoading(true);
     try {
-      const nextCart = await cartApi.getCart();
+      const nextCart = await cartApi.getMine();
       return applyCart(nextCart);
     } catch (error) {
       if (error.response?.status === 401) {

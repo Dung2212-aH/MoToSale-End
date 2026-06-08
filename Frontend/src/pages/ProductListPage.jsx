@@ -162,7 +162,7 @@ function ProductListPage() {
     try {
       const [filtersResponse, productsResponse] = await Promise.all([
         productApi.getFilters(),
-        productApi.getProducts(apiQueryValues),
+        productApi.getAll(apiQueryValues),
       ]);
 
       setFilters(filtersResponse);
@@ -193,7 +193,7 @@ function ProductListPage() {
       return;
     }
 
-    const detail = await productApi.getProductById(product.id);
+    const detail = await productApi.getById(product.id);
     if (detail.variants?.length) {
       notify('Vui lòng chọn phiên bản/màu sắc', 'error');
       navigate(`/products/${product.id}`);

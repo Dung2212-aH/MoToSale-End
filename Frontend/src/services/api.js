@@ -495,15 +495,6 @@ export const productApi = {
     const response = await api.get('/products/filters');
     return normalizeFilters(responseData(response));
   },
-
-  getProducts(params) {
-    return productApi.getAll(params);
-  },
-
-  getProductById(id) {
-    return productApi.getById(id);
-  },
-
 };
 
 export const reviewApi = {
@@ -587,10 +578,6 @@ export const cartApi = {
     return normalizeCartResponse(response);
   },
 
-  getCart() {
-    return cartApi.getMine();
-  },
-
   async getCount() {
     const response = await api.get('/cart/count');
     const data = responseData(response);
@@ -650,10 +637,6 @@ export const orderApi = {
       details: order.items,
       vouchers: order.vouchers,
     };
-  },
-
-  getOrderById(id) {
-    return orderApi.getById(id);
   },
 
   async createOrder(data) {
@@ -747,10 +730,6 @@ export const voucherApi = {
     const data = responseData(response);
     const items = data?.items || data?.Items || data;
     return Array.isArray(items) ? items.map(normalizeVoucher) : items;
-  },
-
-  listVouchers(params) {
-    return voucherApi.getAll(params);
   },
 
   async validateVoucher(data) {
@@ -903,13 +882,6 @@ export const userApi = {
     return responseData(response);
   },
 
-  getUsers(params) {
-    return userApi.getAll(params);
-  },
-
-  getUserById(id) {
-    return userApi.getById(id);
-  },
 };
 
 export const favoriteApi = {

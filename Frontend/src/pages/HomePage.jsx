@@ -68,7 +68,7 @@ function HomePage() {
 
     try {
       const tasks = [
-        productApi.getProducts({ page: 1, pageSize: 12 }),
+        productApi.getAll({ page: 1, pageSize: 12 }),
         categoryApi.getAll().then((res) => res.data),
       ];
 
@@ -134,7 +134,7 @@ function HomePage() {
       return;
     }
 
-    const detail = await productApi.getProductById(product.id);
+    const detail = await productApi.getById(product.id);
     if (detail.variants?.length) {
       notify('Vui lòng chọn phiên bản/màu sắc', 'error');
       navigate(`/products/${product.id}`);

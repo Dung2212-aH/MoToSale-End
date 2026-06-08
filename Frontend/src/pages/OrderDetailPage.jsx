@@ -72,7 +72,7 @@ function OrderDetailPage() {
     setError('');
 
     try {
-      const res = await orderApi.getOrderById(id);
+      const res = await orderApi.getById(id);
       setOrder(res.order || res);
       setDetails(res.details?.$values || res.details || []);
       setVouchers(res.vouchers?.$values || res.vouchers || []);
