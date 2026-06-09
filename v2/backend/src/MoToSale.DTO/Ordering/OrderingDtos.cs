@@ -5,16 +5,16 @@ namespace MoToSale.DTO.Ordering;
 // ===== Cart =====
 public record AddCartItemRequest(int SkuId, int Qty);
 public record UpdateCartItemRequest(int Qty);
-public record CartItemDto(int Id, int SkuId, string SkuCode, string ProductName, int Qty, decimal UnitPrice, decimal LineTotal, string? ImageUrl);
+public record CartItemDto(int Id, int ProductId, int SkuId, string SkuCode, string ProductName, int Qty, decimal UnitPrice, decimal LineTotal, string? ImageUrl);
 public record CartDto(int Id, IEnumerable<CartItemDto> Items, int TotalItems, decimal Subtotal);
 
 // ===== Checkout / Order =====
 public record CheckoutRequest(
     string ShippingRecipient, string ShippingPhone, string? ShippingEmail, string? ShippingAddress,
     string ReceivingMethod, string OrderType, decimal ShippingFee, decimal DepositAmount, string? Note,
-    string? VoucherCode = null);
+    string? PaymentMethod = null, string? VoucherCode = null, string? FulfillmentNote = null, DateTime? PickupAppointmentAt = null);
 
-public record OrderLineDto(int Id, int SkuId, string ProductName, string SkuCode, decimal UnitPrice, int Qty, decimal LineTotal, IEnumerable<AllocationDto> Allocations);
+public record OrderLineDto(int Id, int ProductId, int SkuId, string ProductName, string SkuCode, decimal UnitPrice, int Qty, decimal LineTotal, IEnumerable<AllocationDto> Allocations);
 public record AllocationDto(int Id, int Qty, string Status);
 public record OrderHistoryDto(int Id, string EventType, string? OldValue, string NewValue, string? Note, int? ActorUserId, DateTime CreatedAt);
 public record OrderPaymentDto(int Id, string Code, string PaymentType, decimal Amount, string Method, string Status, string? TransactionRef, DateTime? PaidAt);
@@ -25,10 +25,10 @@ public record OrderListItem(
     decimal GrandTotal, DateTime? PlacedAt, int UserId, string? CustomerName, IEnumerable<OrderLineSummaryDto> Lines);
 
 public record OrderDetail(
-    int Id, string Code, int UserId, string OrderType, string OrderStatus, string PaymentStatus, string FulfillmentStatus,
+    int Id, string Code, int UserId, string OrderType, string OrderStatus, string PaymentMethod, string PaymentStatus, string FulfillmentStatus,
     decimal Subtotal, decimal DiscountTotal, decimal ShippingFee, decimal GrandTotal, decimal DepositAmount, decimal RemainingAmount,
     string ShippingRecipient, string ShippingPhone, string? ShippingEmail, string? ShippingAddress, string ReceivingMethod,
-    string? Note, DateTime? PlacedAt, string? CustomerName, IEnumerable<OrderLineDto> Lines,
+    string? Note, string? FulfillmentNote, DateTime? PickupAppointmentAt, DateTime? PlacedAt, string? CustomerName, IEnumerable<OrderLineDto> Lines,
     IEnumerable<OrderHistoryDto> Histories, IEnumerable<OrderPaymentDto> Payments);
 
 public class OrderSearchRequest : PagingRequest
@@ -54,7 +54,7 @@ public record CancelOrderRequest(string? Reason);
 // Lines chỉ áp dụng khi đơn đang Chờ thanh toán (chưa thu tiền, chưa xuất kho).
 public record UpdateOrderRequest(
     string? ShippingRecipient, string? ShippingPhone, string? ShippingEmail, string? ShippingAddress,
-    string? Note, List<PosOrderLineRequest>? Lines = null);
+    string? Note, string? FulfillmentNote = null, DateTime? PickupAppointmentAt = null, List<PosOrderLineRequest>? Lines = null);
 
 // ===== Bán tại quầy (POS) =====
 public record PosOrderLineRequest(int SkuId, int Qty, decimal? UnitPrice = null);

@@ -374,6 +374,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.Channel).HasMaxLength(20).IsUnicode(false);
             e.Property(x => x.OrderType).HasMaxLength(20).IsUnicode(false);
             e.Property(x => x.OrderStatus).HasMaxLength(20).IsUnicode(false);
+            e.Property(x => x.PaymentMethod).HasMaxLength(20).IsUnicode(false).HasDefaultValue(PaymentMethod.COD);
             e.Property(x => x.PaymentStatus).HasMaxLength(20).IsUnicode(false);
             e.Property(x => x.FulfillmentStatus).HasMaxLength(20).IsUnicode(false);
             e.Property(x => x.ReceivingMethod).HasMaxLength(20).IsUnicode(false);
@@ -382,6 +383,8 @@ public class AppDbContext : DbContext
             e.Property(x => x.ShippingEmail).HasMaxLength(255);
             e.Property(x => x.ShippingAddress).HasMaxLength(500);
             e.Property(x => x.Note).HasMaxLength(1000);
+            e.Property(x => x.FulfillmentNote).HasMaxLength(1000);
+            e.Property(x => x.PickupAppointmentAt).HasColumnType("datetime2(0)");
             e.Property(x => x.PlacedAt).HasColumnType("datetime2(0)");
             foreach (var p in new[] { nameof(Order.Subtotal), nameof(Order.DiscountTotal), nameof(Order.ShippingFee), nameof(Order.GrandTotal), nameof(Order.DepositAmount), nameof(Order.RemainingAmount) })
                 e.Property(p).HasPrecision(18, 2);

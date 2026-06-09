@@ -4,10 +4,8 @@ import orderService from '../../services/orderService';
 import {
   ORDER_STATUS_OPTIONS,
   PAYMENT_STATUS_OPTIONS,
-  SHIPPING_STATUS_OPTIONS,
   getOrderStatusMeta,
   getPaymentStatusMeta,
-  getShippingStatusMeta,
 } from '../../utils/constants';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { formatDate } from '../../utils/formatDate';
@@ -24,7 +22,6 @@ const OrderList = () => {
   const [keyword, setKeyword] = useState(searchParams.get('keyword') || '');
   const [orderStatus, setOrderStatus] = useState(searchParams.get('trangThaiDonHang') || '');
   const [paymentStatus, setPaymentStatus] = useState(searchParams.get('trangThaiThanhToan') || '');
-  const [shippingStatus, setShippingStatus] = useState(searchParams.get('trangThaiVanChuyen') || '');
   const [startDate, setStartDate] = useState(searchParams.get('startDate') || '');
   const [endDate, setEndDate] = useState(searchParams.get('endDate') || '');
   const [page, setPage] = useState(Number(searchParams.get('page')) || 1);
@@ -36,12 +33,11 @@ const OrderList = () => {
     if (keyword.trim()) params.set('keyword', keyword.trim());
     if (orderStatus) params.set('trangThaiDonHang', orderStatus);
     if (paymentStatus) params.set('trangThaiThanhToan', paymentStatus);
-    if (shippingStatus) params.set('trangThaiVanChuyen', shippingStatus);
     if (startDate) params.set('startDate', startDate);
     if (endDate) params.set('endDate', endDate);
     if (page > 1) params.set('page', String(page));
     setSearchParams(params, { replace: true });
-  }, [keyword, orderStatus, paymentStatus, shippingStatus, startDate, endDate, page, setSearchParams]);
+  }, [keyword, orderStatus, paymentStatus, startDate, endDate, page, setSearchParams]);
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -52,7 +48,6 @@ const OrderList = () => {
         if (keyword.trim()) params.keyword = keyword.trim();
         if (orderStatus) params.orderStatus = orderStatus;
         if (paymentStatus) params.paymentStatus = paymentStatus;
-        if (shippingStatus) params.fulfillmentStatus = shippingStatus;
         if (startDate) params.startDate = startDate;
         if (endDate) params.endDate = endDate;
 
@@ -70,7 +65,7 @@ const OrderList = () => {
     };
 
     fetchOrders();
-  }, [page, keyword, orderStatus, paymentStatus, shippingStatus, startDate, endDate]);
+  }, [page, keyword, orderStatus, paymentStatus, startDate, endDate]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -98,7 +93,6 @@ const OrderList = () => {
     if (keyword.trim()) params.keyword = keyword.trim();
     if (orderStatus) params.orderStatus = orderStatus;
     if (paymentStatus) params.paymentStatus = paymentStatus;
-    if (shippingStatus) params.fulfillmentStatus = shippingStatus;
     if (startDate) params.startDate = startDate;
     if (endDate) params.endDate = endDate;
     return params;
@@ -122,14 +116,13 @@ const OrderList = () => {
             ],
             rows: [
               { label: 'Tên báo cáo', value: 'Danh sách đơn hàng theo bộ lọc hiện tại' },
-              { label: 'Mục đích', value: 'Dùng để đối soát đơn hàng, chăm sóc khách hàng, kiểm tra thanh toán và vận chuyển.' },
+              { label: 'Mục đích', value: 'Dùng để đối soát đơn hàng, chăm sóc khách hàng, kiểm tra trạng thái đơn và thanh toán.' },
               { label: 'Từ khóa', value: keyword.trim() || 'Không lọc' },
               { label: 'Trạng thái đơn', value: orderStatus ? getOrderStatusMeta(orderStatus).label : 'Tất cả' },
               { label: 'Thanh toán', value: paymentStatus ? getPaymentStatusMeta(paymentStatus).label : 'Tất cả' },
-              { label: 'Vận chuyển', value: shippingStatus ? getShippingStatusMeta(shippingStatus).label : 'Tất cả' },
               { label: 'Từ ngày', value: startDate || 'Không lọc' },
               { label: 'Đến ngày', value: endDate || 'Không lọc' },
-              { label: 'Sheet DonHang', value: 'Mỗi dòng là một đơn hàng, gồm khách hàng, ngày tạo, trạng thái đơn, thanh toán, vận chuyển và tổng tiền.' },
+              { label: 'Sheet DonHang', value: 'Mỗi dòng là một đơn hàng, gồm khách hàng, ngày tạo, trạng thái đơn, thanh toán và tổng tiền.' },
               { label: 'Lưu ý doanh thu', value: 'File này là danh sách đơn để đối soát, không thay thế báo cáo doanh thu.' },
             ],
           },
@@ -143,7 +136,6 @@ const OrderList = () => {
               { header: 'Ngày tạo', key: 'createdAt', type: 'date', width: 20 },
               { header: 'Trạng thái đơn', key: 'orderStatus', width: 24 },
               { header: 'Thanh toán', key: 'paymentStatus', width: 24 },
-              { header: 'Vận chuyển', key: 'shippingStatus', width: 24 },
               { header: 'Tổng tiền', key: 'amount', type: 'currency', width: 18 },
             ],
             rows: exportRows.map((order) => ({
@@ -154,7 +146,6 @@ const OrderList = () => {
               createdAt: order.ngayTao || order.createdAt || order.placedAt,
               orderStatus: getOrderStatusMeta(order.trangThaiDonHang || order.trangThai || order.status || order.orderStatus).label,
               paymentStatus: getPaymentStatusMeta(order.trangThaiThanhToan || order.paymentStatus).label,
-              shippingStatus: getShippingStatusMeta(order.trangThaiVanChuyen || order.shippingStatus || order.fulfillmentStatus).label,
               amount: getOrderAmount(order),
             })),
           },
@@ -227,12 +218,6 @@ const OrderList = () => {
                     {PAYMENT_STATUS_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                   </select>
                 </div>
-                <div className="col-md-3">
-                  <select className="form-control" value={shippingStatus} onChange={(e) => { setShippingStatus(e.target.value); setPage(1); }}>
-                    <option value="">Vận chuyển</option>
-                    {SHIPPING_STATUS_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                  </select>
-                </div>
                 <div className="col-md-2 mt-2">
                   <input type="date" className="form-control" value={startDate} onChange={(e) => { setStartDate(e.target.value); setPage(1); }} title="Từ ngày" />
                 </div>
@@ -240,7 +225,7 @@ const OrderList = () => {
                   <input type="date" className="form-control" value={endDate} onChange={(e) => { setEndDate(e.target.value); setPage(1); }} title="Đến ngày" />
                 </div>
                 <div className="col-md-2 mt-2">
-                  <button type="button" className="btn btn-outline-secondary btn-block" onClick={() => { setKeyword(''); setOrderStatus(''); setPaymentStatus(''); setShippingStatus(''); setStartDate(''); setEndDate(''); setPage(1); }}>
+                  <button type="button" className="btn btn-outline-secondary btn-block" onClick={() => { setKeyword(''); setOrderStatus(''); setPaymentStatus(''); setStartDate(''); setEndDate(''); setPage(1); }}>
                     Xóa lọc
                   </button>
                 </div>
@@ -270,7 +255,6 @@ const OrderList = () => {
                           <th className="table-col-money">Tổng tiền</th>
                           <th className="table-col-status">Trạng thái đơn</th>
                           <th className="table-col-status">Thanh toán</th>
-                          <th className="table-col-status">Vận chuyển</th>
                           <th className="table-col-date">Ngày tạo</th>
                           <th className="table-col-actions">Thao tác</th>
                         </tr>
@@ -283,7 +267,6 @@ const OrderList = () => {
                             <td className="table-col-money">{formatCurrency(getOrderAmount(order))}</td>
                             <td className="table-col-status">{renderBadge(getOrderStatusMeta(order.trangThaiDonHang || order.trangThai || order.status || order.orderStatus))}</td>
                             <td className="table-col-status">{renderBadge(getPaymentStatusMeta(order.trangThaiThanhToan || order.paymentStatus))}</td>
-                            <td className="table-col-status">{renderBadge(getShippingStatusMeta(order.trangThaiVanChuyen || order.shippingStatus || order.fulfillmentStatus))}</td>
                             <td className="table-col-date">{formatDate(order.ngayTao || order.createdAt || order.placedAt)}</td>
                             <td className="table-col-actions">
                               <button

@@ -71,7 +71,8 @@ public class CatalogService : ICatalogService
     public async Task<List<ManufacturerDto>> GetManufacturersAsync()
     {
         var list = await _manufacturers.GetAllAsync();
-        return list.OrderBy(m => m.Name).Select(m => new ManufacturerDto(m.Id, m.Name, m.LogoUrl, m.Description, m.Status)).ToList();
+        return list.Where(m => m.Status != (int)EntityStatus.Inactive && m.Status != (int)EntityStatus.Deleted)
+            .OrderBy(m => m.Name).Select(m => new ManufacturerDto(m.Id, m.Name, m.LogoUrl, m.Description, m.Status)).ToList();
     }
 
     public async Task<int> CreateManufacturerAsync(SaveManufacturerRequest r)
@@ -115,8 +116,13 @@ public class CatalogService : ICatalogService
     public async Task DeleteManufacturerAsync(int id)
     {
         var m = await _manufacturers.GetByIdAsync(id) ?? throw new CatalogException("Không tìm thấy hãng sản xuất.");
-        if (await _products.AnyAsync(p => p.ManufacturerId == id)) throw new CatalogException("Hãng sản xuất còn sản phẩm, không thể xóa.");
-        _manufacturers.Delete(m);
+        // Chặn nếu còn sản phẩm ĐANG BÁN thuộc hãng (tránh ẩn nhầm hãng đang dùng).
+        if (await _products.AnyAsync(p => p.ManufacturerId == id && p.Status == (int)EntityStatus.Active))
+            throw new CatalogException("Hãng sản xuất còn sản phẩm đang bán, không thể xóa.");
+        // Xóa mềm: ẩn khỏi danh sách/chọn, giữ nguyên tham chiếu để sản phẩm cũ vẫn hiển thị tên hãng.
+        m.Status = (int)EntityStatus.Inactive;
+        m.UpdatedDate = DateTime.UtcNow;
+        _manufacturers.Update(m);
         await _manufacturers.SaveChangesAsync();
     }
 
@@ -243,14 +249,16 @@ public class CatalogService : ICatalogService
     public async Task<List<CategoryDto>> GetCategoriesAsync()
     {
         var list = await _categories.GetAllAsync();
-        return list.OrderBy(c => c.SortOrder).ThenBy(c => c.Name)
+        return list.Where(c => c.Status != (int)EntityStatus.Inactive && c.Status != (int)EntityStatus.Deleted)
+            .OrderBy(c => c.SortOrder).ThenBy(c => c.Name)
             .Select(c => new CategoryDto(c.Id, c.ParentId, c.Name, c.Slug, c.Kind, c.SortOrder, c.Status)).ToList();
     }
 
     public async Task<List<BrandDto>> GetBrandsAsync()
     {
         var list = await _brands.GetAllAsync();
-        return list.OrderBy(b => b.Name).Select(b => new BrandDto(b.Id, b.Name, b.Slug, b.LogoUrl, b.Status)).ToList();
+        return list.Where(b => b.Status != (int)EntityStatus.Inactive && b.Status != (int)EntityStatus.Deleted)
+            .OrderBy(b => b.Name).Select(b => new BrandDto(b.Id, b.Name, b.Slug, b.LogoUrl, b.Status)).ToList();
     }
 
     public async Task<List<VehicleModelDto>> GetVehicleModelsAsync(int? brandId)
@@ -258,7 +266,8 @@ public class CatalogService : ICatalogService
         var list = brandId.HasValue
             ? await _models.FindAsync(m => m.BrandId == brandId.Value)
             : await _models.GetAllAsync();
-        return list.OrderBy(m => m.Name).Select(m => new VehicleModelDto(m.Id, m.BrandId, m.Name, m.Slug, m.Status)).ToList();
+        return list.Where(m => m.Status != (int)EntityStatus.Inactive && m.Status != (int)EntityStatus.Deleted)
+            .OrderBy(m => m.Name).Select(m => new VehicleModelDto(m.Id, m.BrandId, m.Name, m.Slug, m.Status)).ToList();
     }
 
     public async Task<List<SkuLookupDto>> GetSkusAsync()
@@ -432,9 +441,14 @@ public class CatalogService : ICatalogService
     public async Task DeleteBrandAsync(int id)
     {
         var brand = await _brands.GetByIdAsync(id) ?? throw new CatalogException("Không tìm thấy hãng.");
-        if (await _models.AnyAsync(m => m.BrandId == id)) throw new CatalogException("Hãng còn dòng xe, không thể xóa.");
-        if (await _products.AnyAsync(p => p.BrandId == id)) throw new CatalogException("Hãng còn sản phẩm, không thể xóa.");
-        _brands.Delete(brand);
+        if (await _models.AnyAsync(m => m.BrandId == id && m.Status == (int)EntityStatus.Active))
+            throw new CatalogException("Hãng còn dòng xe đang dùng, không thể xóa.");
+        if (await _products.AnyAsync(p => p.BrandId == id && p.Status == (int)EntityStatus.Active))
+            throw new CatalogException("Hãng còn sản phẩm đang bán, không thể xóa.");
+        // Xóa mềm: ẩn khỏi danh sách/chọn, giữ tham chiếu cho dữ liệu cũ.
+        brand.Status = (int)EntityStatus.Inactive;
+        brand.UpdatedDate = DateTime.UtcNow;
+        _brands.Update(brand);
         await _brands.SaveChangesAsync();
     }
 
@@ -466,18 +480,61 @@ public class CatalogService : ICatalogService
     public async Task DeleteModelAsync(int id)
     {
         var model = await _models.GetByIdAsync(id) ?? throw new CatalogException("Không tìm thấy dòng xe.");
-        if (await _products.AnyAsync(p => p.VehicleModelId == id)) throw new CatalogException("Dòng xe còn sản phẩm, không thể xóa.");
-        _models.Delete(model);
+        if (await _products.AnyAsync(p => p.VehicleModelId == id && p.Status == (int)EntityStatus.Active))
+            throw new CatalogException("Dòng xe còn sản phẩm đang bán, không thể xóa.");
+        model.Status = (int)EntityStatus.Inactive;
+        model.UpdatedDate = DateTime.UtcNow;
+        _models.Update(model);
         await _models.SaveChangesAsync();
     }
 
     // ===== Danh mục =====
+    private static bool IsSystemRootCategory(Category category) =>
+        category.ParentId is null && (category.Slug == "xe-may" || category.Slug == "phu-tung");
+
+    private static int KindFromSystemRootSlug(string slug) =>
+        slug == "xe-may" ? (int)ProductKind.Motorcycle : (int)ProductKind.Part;
+
+    private async Task<Category> GetValidCategoryParentAsync(int? parentId)
+    {
+        if (!parentId.HasValue)
+            throw new CatalogException("Danh mục mới phải nằm dưới Xe máy hoặc Phụ tùng.");
+
+        var parent = await _db.Categories.AsNoTracking().FirstOrDefaultAsync(c =>
+            c.Id == parentId.Value &&
+            c.Status != (int)EntityStatus.Inactive &&
+            c.Status != (int)EntityStatus.Deleted);
+
+        if (parent is null)
+            throw new CatalogException("Danh mục cha không hợp lệ.");
+
+        if (!IsSystemRootCategory(parent))
+            throw new CatalogException("Danh mục cha chỉ được là Xe máy hoặc Phụ tùng.");
+
+        return parent;
+    }
+
     public async Task<int> CreateCategoryAsync(CreateCategoryRequest r)
     {
         if (string.IsNullOrWhiteSpace(r.Name)) throw new CatalogException("Tên danh mục là bắt buộc.");
         var slug = string.IsNullOrWhiteSpace(r.Slug) ? Slugify(r.Name) : r.Slug!.Trim();
         if (await _categories.AnyAsync(c => c.Slug == slug)) throw new CatalogException("Slug danh mục đã tồn tại.");
-        var cat = new Category { ParentId = r.ParentId, Name = r.Name.Trim(), Slug = slug, Kind = r.Kind, SortOrder = r.SortOrder, CreatedDate = DateTime.UtcNow, Status = (int)EntityStatus.Active };
+
+        int kind;
+        if (r.ParentId is null)
+        {
+            if (slug != "xe-may" && slug != "phu-tung")
+                throw new CatalogException("Chỉ được tạo danh mục con dưới Xe máy hoặc Phụ tùng.");
+
+            kind = KindFromSystemRootSlug(slug);
+        }
+        else
+        {
+            var parent = await GetValidCategoryParentAsync(r.ParentId);
+            kind = parent.Kind;
+        }
+
+        var cat = new Category { ParentId = r.ParentId, Name = r.Name.Trim(), Slug = slug, Kind = kind, SortOrder = r.SortOrder, CreatedDate = DateTime.UtcNow, Status = (int)EntityStatus.Active };
         _categories.Add(cat);
         await _categories.SaveChangesAsync();
         return cat.Id;
@@ -487,12 +544,28 @@ public class CatalogService : ICatalogService
     {
         var cat = await _categories.GetByIdAsync(id) ?? throw new CatalogException("Không tìm thấy danh mục.");
         if (r.ParentId == id) throw new CatalogException("Danh mục không thể là cha của chính nó.");
-        cat.ParentId = r.ParentId;
+
+        var currentIsSystemRoot = IsSystemRootCategory(cat);
+        if (currentIsSystemRoot)
+        {
+            if (r.ParentId is not null)
+                throw new CatalogException("Danh mục gốc hệ thống không thể chuyển thành danh mục con.");
+            cat.ParentId = null;
+            cat.Kind = KindFromSystemRootSlug(cat.Slug);
+        }
+        else
+        {
+            var parent = await GetValidCategoryParentAsync(r.ParentId);
+            cat.ParentId = parent.Id;
+            cat.Kind = parent.Kind;
+        }
+
         cat.Name = r.Name.Trim();
+        if (currentIsSystemRoot && !string.IsNullOrWhiteSpace(r.Slug) && r.Slug.Trim() != cat.Slug)
+            throw new CatalogException("Không thể đổi slug danh mục gốc hệ thống.");
         if (!string.IsNullOrWhiteSpace(r.Slug)) cat.Slug = r.Slug!.Trim();
-        cat.Kind = r.Kind;
         cat.SortOrder = r.SortOrder;
-        cat.Status = r.Status;
+        cat.Status = currentIsSystemRoot ? (int)EntityStatus.Active : r.Status;
         cat.UpdatedDate = DateTime.UtcNow;
         _categories.Update(cat);
         await _categories.SaveChangesAsync();
@@ -501,9 +574,15 @@ public class CatalogService : ICatalogService
     public async Task DeleteCategoryAsync(int id)
     {
         var cat = await _categories.GetByIdAsync(id) ?? throw new CatalogException("Không tìm thấy danh mục.");
-        if (await _categories.AnyAsync(c => c.ParentId == id)) throw new CatalogException("Danh mục còn danh mục con, không thể xóa.");
-        if (await _products.AnyAsync(p => p.CategoryId == id)) throw new CatalogException("Danh mục còn sản phẩm, không thể xóa.");
-        _categories.Delete(cat);
+        if (IsSystemRootCategory(cat))
+            throw new CatalogException("Không thể xóa danh mục gốc Xe máy hoặc Phụ tùng.");
+        if (await _categories.AnyAsync(c => c.ParentId == id && c.Status == (int)EntityStatus.Active))
+            throw new CatalogException("Danh mục còn danh mục con đang dùng, không thể xóa.");
+        if (await _products.AnyAsync(p => p.CategoryId == id && p.Status == (int)EntityStatus.Active))
+            throw new CatalogException("Danh mục còn sản phẩm đang bán, không thể xóa.");
+        cat.Status = (int)EntityStatus.Inactive;
+        cat.UpdatedDate = DateTime.UtcNow;
+        _categories.Update(cat);
         await _categories.SaveChangesAsync();
     }
 

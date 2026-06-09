@@ -5,6 +5,7 @@ import orderService from '../../services/orderService';
 import operationsService from '../../services/operationsService';
 import businessOperationsService from '../../services/businessOperationsService';
 import { formatCurrency } from '../../utils/formatCurrency';
+import { formatMoneyInput, normalizeMoneyInput } from '../../utils/moneyInput';
 import { printVatInvoice } from '../../utils/vatInvoice';
 
 const toText = (value) => String(value ?? '').trim();
@@ -420,11 +421,11 @@ const PosOrder = () => {
                             </td>
                             <td>
                               <input
-                                type="number"
-                                min="0"
+                                type="text"
+                                inputMode="numeric"
                                 className="form-control form-control-sm text-right"
-                                value={line.unitPrice}
-                                onChange={(event) => updateLine(getLineKey(line), 'unitPrice', event.target.value)}
+                                value={formatMoneyInput(line.unitPrice)}
+                                onChange={(event) => updateLine(getLineKey(line), 'unitPrice', normalizeMoneyInput(event.target.value))}
                               />
                             </td>
                             <td>
@@ -521,11 +522,11 @@ const PosOrder = () => {
                     <div className="form-group">
                       <label>Tiền đặt cọc</label>
                       <input
-                        type="number"
-                        min="0"
+                        type="text"
+                        inputMode="numeric"
                         className="form-control"
-                        value={depositAmount}
-                        onChange={(event) => setDepositAmount(event.target.value)}
+                        value={formatMoneyInput(depositAmount)}
+                        onChange={(event) => setDepositAmount(normalizeMoneyInput(event.target.value))}
                       />
                     </div>
                   )}
@@ -543,17 +544,16 @@ const PosOrder = () => {
                     <select className="form-control" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}>
                       <option value="Cash">Tiền mặt</option>
                       <option value="BankTransfer">Chuyển khoản</option>
-                      <option value="Card">Thẻ</option>
                     </select>
                   </div>
                   <div className="form-group">
                     <label>Tiền thu</label>
                     <input
-                      type="number"
-                      min="0"
+                      type="text"
+                      inputMode="numeric"
                       className="form-control"
-                      value={paidAmount}
-                      onChange={(event) => setPaidAmount(event.target.value)}
+                      value={formatMoneyInput(paidAmount)}
+                      onChange={(event) => setPaidAmount(normalizeMoneyInput(event.target.value))}
                     />
                   </div>
                   <div className="form-group">

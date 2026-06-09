@@ -38,7 +38,34 @@ v2/
 - **Node.js ≥ 20.19** (Vite 8) + npm
 - **SQL Server LocalDB** (`(localdb)\MSSQLLocalDB`) — kèm Visual Studio hoặc "SQL Server Express LocalDB"
 
-## Chạy nhanh (Windows / PowerShell)
+## Chạy bằng Docker (khuyến nghị — không cần cài .NET/Node/SQL Server)
+
+Chỉ cần **Docker Desktop**. Tại thư mục `v2`:
+```bash
+cp .env.example .env
+# Sửa MSSQL_SA_PASSWORD và JWT_SECRET_KEY trong .env trước khi chạy trên VPS.
+docker compose up --build
+```
+Lệnh này dựng & chạy cả hệ: SQL Server + AuthService + APIService + ApiGateway + 2 frontend (nginx). Lần đầu sẽ tải image (~vài phút). APIService tự migrate + seed khi DB sẵn sàng.
+
+| Truy cập | URL |
+|---|---|
+| Storefront (khách) | http://localhost:8081 |
+| Admin (quản trị) | http://localhost:8080 |
+| API Gateway | http://localhost:5100 |
+| SQL Server | Chỉ mở trong Docker network, không public ra ngoài VPS |
+
+Dừng: `docker compose down` · Xóa luôn dữ liệu DB và ảnh upload: `docker compose down -v`.
+
+Ghi chú deploy VPS cơ bản:
+- File `.env` chứa mật khẩu SQL/JWT thật và đã bị `.gitignore` chặn, không commit file này.
+- SQL Server không publish port `1433`; backend truy cập DB qua mạng nội bộ Docker.
+- Ảnh upload được lưu trong volume `api-uploads`, không mất khi recreate container.
+- Khi public ra internet, nên đặt nginx/caddy phía ngoài để gắn domain và HTTPS cho admin/store.
+
+---
+
+## Chạy nhanh (không Docker — Windows / PowerShell)
 
 **1) Backend** — mở 3 cửa sổ, chạy theo thứ tự (APIService sẽ tự tạo DB + seed lần đầu, ~30–60s):
 ```powershell

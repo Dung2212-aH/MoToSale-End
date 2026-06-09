@@ -52,9 +52,27 @@ public class ReportsController : ControllerBase
             .Where(o => IsInRange(o.PlacedAt ?? o.UpdatedDate ?? o.CreatedDate, start, end))
             .ToList();
 
-        var revenue = revenueOrders.Sum(o => o.GrandTotal);
+        var grossRevenue = revenueOrders.Sum(o => o.GrandTotal);
         var costMap = await BuildAvgCostMapAsync();
-        var cogs = revenueOrders.SelectMany(o => o.Lines).Sum(l => costMap.GetValueOrDefault(l.SkuId) * l.Qty);
+        var grossCogs = revenueOrders.SelectMany(o => o.Lines).Sum(l => costMap.GetValueOrDefault(l.SkuId) * l.Qty);
+
+        // Net hóa: trừ tiền đã hoàn cho khách (đổi trả) trong kỳ + bớt giá vốn hàng trả "bán lại được" (đã nhập kho lại).
+        var refundsQuery = _db.Refunds.AsNoTracking().Where(x => x.RefundStatus == "Paid");
+        if (start.HasValue) refundsQuery = refundsQuery.Where(x => x.RefundedAt >= start.Value);
+        if (end.HasValue) refundsQuery = refundsQuery.Where(x => x.RefundedAt <= end.Value);
+        var refundsInRange = await refundsQuery.SumAsync(x => (decimal?)x.Amount) ?? 0;
+
+        var returnLinesQuery = from l in _db.SalesReturnLines.AsNoTracking()
+                               join r in _db.SalesReturns.AsNoTracking() on l.SalesReturnId equals r.Id
+                               where r.ReturnStatus == "Approved" && l.ItemCondition == "Resellable"
+                               select new { r.ApprovedAt, l.SkuId, l.Qty };
+        if (start.HasValue) returnLinesQuery = returnLinesQuery.Where(x => x.ApprovedAt >= start.Value);
+        if (end.HasValue) returnLinesQuery = returnLinesQuery.Where(x => x.ApprovedAt <= end.Value);
+        var returnedResellable = await returnLinesQuery.ToListAsync();
+        var returnedCogs = returnedResellable.Sum(x => costMap.GetValueOrDefault(x.SkuId) * x.Qty);
+
+        var revenue = Math.Max(0, grossRevenue - refundsInRange);   // doanh thu thuần
+        var cogs = Math.Max(0, grossCogs - returnedCogs);
         var grossProfit = revenue - cogs;
         var recentOrders = allOrders
             .OrderByDescending(o => o.PlacedAt ?? o.CreatedDate)
@@ -93,7 +111,7 @@ public class ReportsController : ControllerBase
 
     private static bool IsRevenueOrder(Entities.Ordering.Order order) =>
         order.PaymentStatus == PaymentStatus.Paid &&
-        (order.OrderStatus == OrderStatus.Delivered || order.OrderStatus == OrderStatus.Completed);
+        order.OrderStatus == OrderStatus.Delivered;
 
     private static List<RevenuePointDto> BuildRevenueSeries(IEnumerable<Entities.Ordering.Order> orders, DateTime? start, DateTime? end)
     {
@@ -125,9 +143,9 @@ public class ReportsController : ControllerBase
 
     private static string NormalizeStatusGroup(string status) => status switch
     {
-        OrderStatus.Pending or OrderStatus.AwaitingPayment or OrderStatus.Confirmed => "Chờ xử lý",
-        OrderStatus.Allocated or OrderStatus.Shipping => "Đang xử lý",
-        OrderStatus.Delivered or OrderStatus.Completed => "Hoàn tất",
+        OrderStatus.Pending => "Chờ xác nhận",
+        OrderStatus.Shipping => "Đang giao",
+        OrderStatus.Delivered => "Đã giao",
         OrderStatus.Cancelled => "Đã hủy",
         _ => "Khác",
     };
@@ -191,8 +209,8 @@ public class ReportsController : ControllerBase
             RefundedTotal: refundedTotal,
             CustomerReceivable: outstandingCustomer,
             SupplierPayable: supplierDebt,
-            PendingOrders: orders.Count(x => x.OrderStatus is OrderStatus.AwaitingPayment or OrderStatus.Confirmed),
-            ShippingOrders: orders.Count(x => x.OrderStatus is OrderStatus.Allocated or OrderStatus.Shipping),
+            PendingOrders: orders.Count(x => x.OrderStatus == OrderStatus.Pending),
+            ShippingOrders: orders.Count(x => x.OrderStatus == OrderStatus.Shipping),
             PendingPurchases: await _db.PurchaseOrders.CountAsync(x => x.PurchaseStatus == "Draft" || x.PurchaseStatus == "Approved" || x.PurchaseStatus == "PartiallyReceived"),
             OpenRepairs: await _db.RepairOrders.CountAsync(x => x.RepairStatus != "Delivered" && x.RepairStatus != "Cancelled"),
             OpenWarranties: await _db.Warranties.CountAsync(x => x.WarrantyStatus != "Completed" && x.WarrantyStatus != "Rejected" && x.WarrantyStatus != "Cancelled"),
@@ -208,7 +226,8 @@ public class ReportsController : ControllerBase
                let available = i.OnHand - i.Reserved
                where available <= 0 || (available > 0 && available <= i.ReorderPoint)
                orderby available, p.Name
-               select new InventoryWarningDto(i.SkuId, s.SkuCode, p.Name, i.OnHand, i.Reserved, available, i.ReorderPoint, available <= 0 ? "Hết hàng" : "Sắp hết hàng"))
+               select new InventoryWarningDto(i.SkuId, s.SkuCode, p.Name, i.OnHand, i.Reserved, available, i.ReorderPoint,
+                   available < 0 ? "Thiếu hàng đã giữ chỗ" : available == 0 ? "Hết hàng" : "Sắp hết hàng"))
             .Take(limit)
             .ToListAsync();
 

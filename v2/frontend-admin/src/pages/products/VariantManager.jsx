@@ -1,6 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import productService from '../../services/productService';
 import { useAuth } from '../../contexts/AuthContext';
+import { formatCurrency } from '../../utils/formatCurrency';
+import { formatMoneyInput, normalizeMoneyInput } from '../../utils/moneyInput';
+
+const buildSkuDisplayName = (version, color) =>
+  [String(version || '').trim(), String(color || '').trim()].filter(Boolean).join(' - ');
+
+const inferVersion = (variant) => {
+  const explicitVersion = variant.phienBan || variant.version;
+  if (explicitVersion) return explicitVersion;
+
+  const name = variant.tenBienThe || variant.variantName || variant.name || '';
+  const color = variant.mauSac || variant.color || '';
+  const colorSuffix = color ? ` - ${color}` : '';
+  if (colorSuffix && name.endsWith(colorSuffix)) {
+    return name.slice(0, -colorSuffix.length).trim();
+  }
+  return name;
+};
+
+const shouldSyncDisplayName = (form) => {
+  const current = String(form.tenBienThe || '').trim();
+  const derived = buildSkuDisplayName(form.phienBan, form.mauSac);
+  const version = String(form.phienBan || '').trim();
+  const color = String(form.mauSac || '').trim();
+  return !current || current === derived || current === version || current === color;
+};
 
 const VariantManager = ({ productId, onClose }) => {
   const { isAdmin } = useAuth();
@@ -55,12 +81,16 @@ const VariantManager = ({ productId, onClose }) => {
   };
 
   const openEdit = (v) => {
+    const version = inferVersion(v);
+    const color = v.mauSac || v.color || '';
+    const displayName = v.tenBienThe || v.variantName || v.name || buildSkuDisplayName(version, color);
+
     setEditVariant(v);
     setForm({
-      tenBienThe: v.tenBienThe || v.name || '',
+      tenBienThe: displayName,
       sku: v.sku || '',
-      phienBan: v.phienBan || v.version || '',
-      mauSac: v.mauSac || v.color || '',
+      phienBan: version,
+      mauSac: color,
       giaNiemYet: v.giaNiemYet ?? v.listPrice ?? '',
       giaKhuyenMai: v.giaKhuyenMai ?? v.salePrice ?? '',
       trangThai: v.trangThai || v.status || 'Available',
@@ -70,18 +100,36 @@ const VariantManager = ({ productId, onClose }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
+    setForm(prev => {
+      const next = { ...prev, [name]: value };
+      if ((name === 'phienBan' || name === 'mauSac') && shouldSyncDisplayName(prev)) {
+        next.tenBienThe = buildSkuDisplayName(next.phienBan, next.mauSac) || next.phienBan || next.mauSac;
+      }
+      return next;
+    });
+  };
+
+  const handleMoneyChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: normalizeMoneyInput(value) }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.tenBienThe.trim()) {
-      alert('Tên biến thể là bắt buộc!');
+    const version = form.phienBan.trim();
+    const color = form.mauSac.trim();
+    if (!version) {
+      alert('Phiên bản là bắt buộc. Ví dụ: Tiêu chuẩn, Cao cấp, S, ABS, 1L.');
       return;
     }
     setSaving(true);
     try {
-      const payload = { ...form };
+      const payload = {
+        ...form,
+        phienBan: version,
+        mauSac: color,
+        tenBienThe: form.tenBienThe.trim() || buildSkuDisplayName(version, color),
+      };
       if (editVariant) {
         await productService.updateVariant(productId, editVariant.id, payload);
       } else {
@@ -113,7 +161,7 @@ const VariantManager = ({ productId, onClose }) => {
       <div className="modal-dialog modal-lg variant-manager-dialog" style={{ maxHeight: '90vh' }}>
         <div className="modal-content" style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
           <div className="modal-header">
-            <h5 className="modal-title">Quản lý biến thể sản phẩm</h5>
+            <h5 className="modal-title">Quản lý SKU / phiên bản sản phẩm</h5>
             <button type="button" className="close" onClick={onClose}>
               <span>&times;</span>
             </button>
@@ -121,7 +169,7 @@ const VariantManager = ({ productId, onClose }) => {
           <div className="modal-body variant-manager-body" style={{ overflowY: 'auto', flex: 1 }}>
             <div className="mb-3">
               <button className="btn btn-primary btn-sm" onClick={openAdd}>
-                <i className="fas fa-plus"></i> Thêm biến thể
+                <i className="fas fa-plus"></i> Thêm SKU / phiên bản
               </button>
             </div>
 
@@ -139,7 +187,7 @@ const VariantManager = ({ productId, onClose }) => {
                 <table className="table table-bordered table-striped table-sm">
                   <thead>
                     <tr>
-                      <th>Tên biến thể</th>
+                      <th>Tên SKU hiển thị</th>
                       <th>SKU</th>
                       <th>Phiên bản</th>
                       <th>Màu sắc</th>
@@ -152,12 +200,12 @@ const VariantManager = ({ productId, onClose }) => {
                   <tbody>
                     {variants.map(v => (
                       <tr key={v.id}>
-                        <td>{v.tenBienThe || v.name}</td>
+                        <td>{v.tenBienThe || v.variantName || v.name || buildSkuDisplayName(v.phienBan || v.version, v.mauSac || v.color)}</td>
                         <td>{v.sku}</td>
-                        <td>{v.phienBan || v.version || ''}</td>
+                        <td>{v.phienBan || v.version || inferVersion(v) || ''}</td>
                         <td>{v.mauSac || v.color || ''}</td>
-                        <td>{v.giaNiemYet ?? v.listPrice ?? 0}</td>
-                        <td>{v.giaKhuyenMai ?? v.salePrice ?? '—'}</td>
+                        <td>{formatCurrency(v.giaNiemYet ?? v.listPrice ?? 0)}</td>
+                        <td>{(v.giaKhuyenMai ?? v.salePrice) ? formatCurrency(v.giaKhuyenMai ?? v.salePrice) : 'Không'}</td>
                         <td>
                           <span className={`badge badge-${(v.trangThai || v.status) === 'Available' || (v.trangThai || v.status) === 'Available' ? 'success' : 'secondary'}`}>
                             {(v.trangThai || v.status) === 'Available' || (v.trangThai || v.status) === 'Available' ? 'Hoạt động' : 'Ngừng'}
@@ -168,7 +216,7 @@ const VariantManager = ({ productId, onClose }) => {
                             <i className="fas fa-edit"></i>
                           </button>
                           {isAdmin() && (
-                            <button className="btn btn-xs btn-danger" onClick={() => handleDelete(v.id, v.tenBienThe || v.name)}>
+                            <button className="btn btn-xs btn-danger" onClick={() => handleDelete(v.id, v.tenBienThe || v.variantName || v.name || inferVersion(v))}>
                               <i className="fas fa-trash"></i>
                             </button>
                           )}
@@ -184,15 +232,26 @@ const VariantManager = ({ productId, onClose }) => {
             {showForm && (
               <div className="card mt-3 variant-form-card">
                 <div className="card-header">
-                  <h6 className="card-title m-0">{editVariant ? 'Sửa biến thể' : 'Thêm biến thể mới'}</h6>
+                  <h6 className="card-title m-0">{editVariant ? 'Sửa SKU / phiên bản' : 'Thêm SKU / phiên bản mới'}</h6>
                 </div>
                 <div className="card-body">
+                  <p className="text-muted small mb-3">
+                    Phiên bản là Tiêu chuẩn/Cao cấp/S/ABS hoặc quy cách phụ tùng như 1L, trước/sau.
+                    Màu sắc là thuộc tính đi kèm. Tên SKU hiển thị có thể để trống để hệ thống tự tạo.
+                  </p>
                   <form onSubmit={handleSubmit}>
                     <div className="row">
                       <div className="col-md-4">
                         <div className="form-group">
-                          <label>Tên biến thể <span className="text-danger">*</span></label>
-                          <input type="text" className="form-control form-control-sm" name="tenBienThe" value={form.tenBienThe} onChange={handleChange} />
+                          <label>Tên SKU hiển thị</label>
+                          <input
+                            type="text"
+                            className="form-control form-control-sm"
+                            name="tenBienThe"
+                            value={form.tenBienThe}
+                            onChange={handleChange}
+                            placeholder="Tự sinh từ phiên bản và màu"
+                          />
                         </div>
                       </div>
                       <div className="col-md-4">
@@ -203,7 +262,7 @@ const VariantManager = ({ productId, onClose }) => {
                       </div>
                       <div className="col-md-4">
                         <div className="form-group">
-                          <label>Phiên bản</label>
+                          <label>Phiên bản <span className="text-danger">*</span></label>
                           <input type="text" className="form-control form-control-sm" name="phienBan" value={form.phienBan} onChange={handleChange} />
                         </div>
                       </div>
@@ -218,13 +277,13 @@ const VariantManager = ({ productId, onClose }) => {
                       <div className="col-md-3">
                         <div className="form-group">
                           <label>Giá niêm yết</label>
-                          <input type="number" className="form-control form-control-sm" name="giaNiemYet" value={form.giaNiemYet} onChange={handleChange} min="1" required />
+                          <input type="text" inputMode="numeric" className="form-control form-control-sm" name="giaNiemYet" value={formatMoneyInput(form.giaNiemYet)} onChange={handleMoneyChange} required />
                         </div>
                       </div>
                       <div className="col-md-3">
                         <div className="form-group">
                           <label>Giá khuyến mãi</label>
-                          <input type="number" className="form-control form-control-sm" name="giaKhuyenMai" value={form.giaKhuyenMai} onChange={handleChange} min="0" />
+                          <input type="text" inputMode="numeric" className="form-control form-control-sm" name="giaKhuyenMai" value={formatMoneyInput(form.giaKhuyenMai)} onChange={handleMoneyChange} />
                         </div>
                       </div>
                       <div className="col-md-3">

@@ -28,8 +28,14 @@ public class PaymentService : IPaymentService
     public async Task<int> RecordPaymentAsync(CreatePaymentRequest req, int? userId)
     {
         if (req.Amount <= 0) throw new PaymentException("Số tiền phải lớn hơn 0.");
+        if (!IsManualPaymentMethod(req.Method))
+            throw new PaymentException("Phương thức thanh toán thủ công chỉ hỗ trợ tiền mặt hoặc chuyển khoản.");
         var order = await _orders.GetByIdAsync(req.OrderId) ?? throw new PaymentException("Không tìm thấy đơn hàng.");
         if (order.OrderStatus == OrderStatus.Cancelled) throw new PaymentException("Đơn đã hủy.");
+        var pendingPayment = (await _payments.GetByOrderAsync(order.Id))
+            .FirstOrDefault(p => p.PaymentRecordStatus == PaymentRecordStatus.Pending);
+        if (pendingPayment is not null)
+            throw new PaymentException("Đơn đang có phiếu chuyển khoản chờ xác nhận. Hãy xác nhận hoặc hủy phiếu đó trước khi ghi nhận thanh toán thủ công.");
 
         var now = DateTime.UtcNow;
         var paymentStatusBefore = order.PaymentStatus;
@@ -66,20 +72,19 @@ public class PaymentService : IPaymentService
         var reachedFull = totalPaid >= order.GrandTotal;
         var reachedDeposit = order.OrderType == Common.OrderType.Deposit && totalPaid >= order.DepositAmount;
 
-        order.PaymentStatus = reachedFull
-            ? Common.PaymentStatus.Paid
-            : reachedDeposit ? Common.PaymentStatus.DepositPaid : Common.PaymentStatus.PartiallyPaid;
+        // Trục thanh toán: thu đủ -> Đã thanh toán; chưa đủ (kể cả đã đủ cọc) -> Chờ thanh toán.
+        order.PaymentStatus = reachedFull ? Common.PaymentStatus.Paid : Common.PaymentStatus.Unpaid;
         if (order.PaymentStatus != paymentStatusBefore)
         {
             _orders.AddStatusHistory(new OrderStatusHistory
             {
                 OrderId = order.Id, FromStatus = paymentStatusBefore, ToStatus = order.PaymentStatus,
-                Note = "PaymentStatus: Recorded manual payment", ChangedBy = userId, CreatedDate = now,
+                Note = "PaymentStatus: Ghi nhận thanh toán", ChangedBy = userId, CreatedDate = now,
             });
         }
 
-        // Đủ điều kiện xác nhận → confirm giữ chỗ + chuyển đơn sang Confirmed (sẵn sàng phân phối).
-        if ((reachedFull || reachedDeposit) && order.OrderStatus == OrderStatus.AwaitingPayment)
+        // Đủ tiền/đủ cọc → xác nhận giữ chỗ. KHÔNG đụng trạng thái đơn (admin tự duyệt giao).
+        if (reachedFull || reachedDeposit)
         {
             foreach (var r in await _reservations.GetByOrderAsync(order.Id))
             {
@@ -89,29 +94,6 @@ public class PaymentService : IPaymentService
                     r.UpdatedDate = now;
                 }
             }
-
-            var from = order.OrderStatus;
-            order.OrderStatus = OrderStatus.Confirmed;
-            _orders.AddStatusHistory(new OrderStatusHistory
-            {
-                OrderId = order.Id, FromStatus = from, ToStatus = OrderStatus.Confirmed,
-                Note = "Xác nhận thanh toán", ChangedBy = userId, CreatedDate = now,
-            });
-        }
-
-        // Đã thu đủ + hàng đã giao (bán đứt tại quầy) → hoàn tất đơn.
-        if (reachedFull
-            && order.FulfillmentStatus == Common.FulfillmentStatus.Fulfilled
-            && order.OrderStatus != OrderStatus.Completed
-            && order.OrderStatus != OrderStatus.Cancelled)
-        {
-            var fromC = order.OrderStatus;
-            order.OrderStatus = OrderStatus.Completed;
-            _orders.AddStatusHistory(new OrderStatusHistory
-            {
-                OrderId = order.Id, FromStatus = fromC, ToStatus = OrderStatus.Completed,
-                Note = "Hoàn tất (đã giao & thu đủ)", ChangedBy = userId, CreatedDate = now,
-            });
         }
 
         order.UpdatedDate = now;
@@ -119,6 +101,9 @@ public class PaymentService : IPaymentService
         await _payments.SaveChangesAsync();
         return payment.Id;
     }
+
+    private static bool IsManualPaymentMethod(string? method) =>
+        method is PaymentMethod.Cash or PaymentMethod.BankTransfer;
 
     public Task<MoToSale.DTO.Common.PagingResponse<PaymentListItem>> SearchAsync(MoToSale.DTO.Common.PagingRequest request, string? status) => _payments.SearchAsync(request, status);
 
@@ -148,10 +133,7 @@ public class PaymentService : IPaymentService
             var paymentStatusBefore = order.PaymentStatus;
             var totalPaid = await _payments.GetTotalPaidAsync(order.Id) - payment.Amount;
             order.RemainingAmount = Math.Max(0, order.GrandTotal - totalPaid);
-            order.PaymentStatus = totalPaid <= 0 ? Common.PaymentStatus.Unpaid
-                : totalPaid >= order.GrandTotal ? Common.PaymentStatus.Paid
-                : order.OrderType == Common.OrderType.Deposit && totalPaid >= order.DepositAmount ? Common.PaymentStatus.DepositPaid
-                : Common.PaymentStatus.PartiallyPaid;
+            order.PaymentStatus = totalPaid >= order.GrandTotal ? Common.PaymentStatus.Paid : Common.PaymentStatus.Unpaid;
             order.UpdatedDate = DateTime.UtcNow;
             _orders.Update(order);
             if (order.PaymentStatus != paymentStatusBefore)
@@ -205,6 +187,21 @@ public class PaymentService : IPaymentService
             CreatedDate = now,
         };
         _payments.Add(payment);
+
+        // Trục thanh toán: đơn chuyển sang "Chờ xác nhận chuyển khoản" tới khi admin đối soát.
+        if (order.PaymentStatus != Common.PaymentStatus.PendingConfirmation)
+        {
+            var payBefore = order.PaymentStatus;
+            order.PaymentStatus = Common.PaymentStatus.PendingConfirmation;
+            order.UpdatedDate = now;
+            _orders.Update(order);
+            _orders.AddStatusHistory(new OrderStatusHistory
+            {
+                OrderId = order.Id, FromStatus = payBefore, ToStatus = Common.PaymentStatus.PendingConfirmation,
+                Note = "PaymentStatus: Khách báo đã chuyển khoản", ChangedBy = userId, CreatedDate = now,
+            });
+        }
+
         await _payments.SaveChangesAsync();
         return payment.Id;
     }
@@ -241,9 +238,8 @@ public class PaymentService : IPaymentService
 
         var reachedFull = totalPaid >= order.GrandTotal;
         var reachedDeposit = order.OrderType == Common.OrderType.Deposit && totalPaid >= order.DepositAmount;
-        order.PaymentStatus = reachedFull
-            ? Common.PaymentStatus.Paid
-            : reachedDeposit ? Common.PaymentStatus.DepositPaid : Common.PaymentStatus.PartiallyPaid;
+        // Thu đủ -> Đã thanh toán; chưa đủ (đã đối soát một phần/cọc) -> Chờ thanh toán.
+        order.PaymentStatus = reachedFull ? Common.PaymentStatus.Paid : Common.PaymentStatus.Unpaid;
         if (order.PaymentStatus != paymentStatusBefore)
         {
             _orders.AddStatusHistory(new OrderStatusHistory
@@ -253,7 +249,8 @@ public class PaymentService : IPaymentService
             });
         }
 
-        if ((reachedFull || reachedDeposit) && order.OrderStatus == OrderStatus.AwaitingPayment)
+        // Đủ tiền/đủ cọc → xác nhận giữ chỗ. KHÔNG đụng trạng thái đơn.
+        if (reachedFull || reachedDeposit)
         {
             foreach (var r in await _reservations.GetByOrderAsync(order.Id))
             {
@@ -263,27 +260,6 @@ public class PaymentService : IPaymentService
                     r.UpdatedDate = now;
                 }
             }
-            var from = order.OrderStatus;
-            order.OrderStatus = OrderStatus.Confirmed;
-            _orders.AddStatusHistory(new OrderStatusHistory
-            {
-                OrderId = order.Id, FromStatus = from, ToStatus = OrderStatus.Confirmed,
-                Note = "Xác nhận thanh toán (chuyển khoản)", ChangedBy = userId, CreatedDate = now,
-            });
-        }
-
-        if (reachedFull
-            && order.FulfillmentStatus == Common.FulfillmentStatus.Fulfilled
-            && order.OrderStatus != OrderStatus.Completed
-            && order.OrderStatus != OrderStatus.Cancelled)
-        {
-            var fromC = order.OrderStatus;
-            order.OrderStatus = OrderStatus.Completed;
-            _orders.AddStatusHistory(new OrderStatusHistory
-            {
-                OrderId = order.Id, FromStatus = fromC, ToStatus = OrderStatus.Completed,
-                Note = "Hoàn tất (đã giao & thu đủ)", ChangedBy = userId, CreatedDate = now,
-            });
         }
 
         order.UpdatedDate = now;

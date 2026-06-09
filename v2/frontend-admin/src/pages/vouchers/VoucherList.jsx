@@ -5,6 +5,7 @@ import categoryService from '../../services/categoryService';
 import brandService from '../../services/brandService';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { formatDateShort } from '../../utils/formatDate';
+import { formatMoneyInput, normalizeMoneyInput } from '../../utils/moneyInput';
 import { useAuth } from '../../contexts/AuthContext';
 
 const VOUCHER_TYPES = {
@@ -155,6 +156,11 @@ const VoucherList = () => {
       }
       return { ...prev, [name]: value };
     });
+  };
+
+  const handleMoneyChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: normalizeMoneyInput(value) }));
   };
 
   const handleMultiSelect = (name, options) => {
@@ -410,11 +416,12 @@ const VoucherList = () => {
                       <div className="form-group">
                         <label>Giá trị giảm <span className="text-danger">*</span></label>
                         <input
-                          type="number"
+                          type={form.discountType === 'Percent' ? 'number' : 'text'}
+                          inputMode={form.discountType === 'Percent' ? undefined : 'numeric'}
                           className="form-control"
                           name="discountValue"
-                          value={form.discountType === 'FreeShipping' ? 0 : form.discountValue}
-                          onChange={handleChange}
+                          value={form.discountType === 'FreeShipping' ? 0 : form.discountType === 'Percent' ? form.discountValue : formatMoneyInput(form.discountValue)}
+                          onChange={form.discountType === 'Percent' ? handleChange : handleMoneyChange}
                           disabled={form.discountType === 'FreeShipping'}
                           placeholder={form.discountType === 'Percent' ? 'VD: 10' : 'VD: 50000'}
                         />
@@ -423,13 +430,13 @@ const VoucherList = () => {
                     <div className="col-md-4">
                       <div className="form-group">
                         <label>Giá trị đơn tối thiểu</label>
-                        <input type="number" className="form-control" name="minOrderValue" value={form.minOrderValue} onChange={handleChange} placeholder="VD: 200000" />
+                        <input type="text" inputMode="numeric" className="form-control" name="minOrderValue" value={formatMoneyInput(form.minOrderValue)} onChange={handleMoneyChange} placeholder="VD: 200000" />
                       </div>
                     </div>
                     <div className="col-md-4">
                       <div className="form-group">
                         <label>Giá trị giảm tối đa</label>
-                        <input type="number" className="form-control" name="maxDiscountValue" value={form.maxDiscountValue} onChange={handleChange} placeholder="VD: 100000" />
+                        <input type="text" inputMode="numeric" className="form-control" name="maxDiscountValue" value={formatMoneyInput(form.maxDiscountValue)} onChange={handleMoneyChange} placeholder="VD: 100000" />
                       </div>
                     </div>
                   </div>

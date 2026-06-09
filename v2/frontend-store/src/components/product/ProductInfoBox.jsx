@@ -70,6 +70,7 @@ function ProductInfoBox({
   versionOptions,
   colorOptions,
   availableColorOptions,
+  versionOptionLabel = 'Phiên bản',
   showVersionSelector = true,
   showColorSelector = true,
   colorStatusText = 'Đang cập nhật',
@@ -82,14 +83,15 @@ function ProductInfoBox({
   const availableColors = Array.isArray(availableColorOptions) ? availableColorOptions : [];
   const productBasePrice = Number(product?.basePrice || 0);
   const productSalePrice = Number(product?.salePrice ?? productBasePrice);
-  const variantBasePrice = selectedVariant?.priceOverride == null ? null : Number(selectedVariant.priceOverride);
-  const originalPrice = variantBasePrice || productBasePrice;
-  const discountAmount = productBasePrice > productSalePrice ? productBasePrice - productSalePrice : 0;
-  const sellingPrice = discountAmount > 0 && originalPrice > 0
-    ? originalPrice - discountAmount
-    : originalPrice || productSalePrice;
+  const variantListPrice = selectedVariant?.listPrice == null ? null : Number(selectedVariant.listPrice);
+  const variantSalePrice = selectedVariant?.salePrice == null ? null : Number(selectedVariant.salePrice);
+  const variantCurrentPrice = selectedVariant?.priceOverride == null ? null : Number(selectedVariant.priceOverride);
+  const sellingPrice = variantSalePrice || variantCurrentPrice || productSalePrice || productBasePrice;
+  const originalPrice = variantListPrice || productBasePrice;
   const formattedSellingPrice = sellingPrice > 0 ? formatCurrency(sellingPrice) : 'Liên hệ';
-  const discountPercent = getProductDiscountPercent(product);
+  const discountPercent = originalPrice > 0 && sellingPrice > 0 && originalPrice > sellingPrice
+    ? Math.round(((originalPrice - sellingPrice) * 100) / originalPrice)
+    : getProductDiscountPercent(product);
   const hasOriginalPrice = originalPrice > 0 && originalPrice > sellingPrice;
   const stockValue = selectedVariant?.stockQuantity ?? product?.stockQuantity;
   const hasKnownStock = stockValue !== undefined && stockValue !== null;
@@ -142,7 +144,7 @@ function ProductInfoBox({
         {showVersionSelector && (
           <div>
             <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-base font-bold text-zinc-950">Phiên bản</h2>
+              <h2 className="text-base font-bold text-zinc-950">{versionOptionLabel}</h2>
               {selectedVersion && <span className="text-sm text-zinc-500">{selectedVersion}</span>}
             </div>
             <div className="grid gap-3 sm:grid-cols-2">

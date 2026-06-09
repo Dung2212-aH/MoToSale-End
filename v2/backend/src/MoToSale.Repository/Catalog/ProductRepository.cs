@@ -24,6 +24,16 @@ public class ProductRepository : Repository<Product>, IProductRepository
             query = query.Where(p => p.CategoryId == r.CategoryId || p.Category.ParentId == r.CategoryId);
         if (r.BrandId.HasValue) query = query.Where(p => p.BrandId == r.BrandId);
         if (r.VehicleModelId.HasValue) query = query.Where(p => p.VehicleModelId == r.VehicleModelId);
+        if (r.CompatibleVehicleModelId.HasValue)
+        {
+            var modelId = r.CompatibleVehicleModelId.Value;
+            query = query.Where(p => p.Kind == (int)ProductKind.Part && Context.PartCompatibilities.Any(c =>
+                c.PartProductId == p.Id
+                && c.Status == (int)EntityStatus.Active
+                && (c.AppliesToAll
+                    || c.VehicleModelId == modelId
+                    || (c.BrandId.HasValue && Context.VehicleModels.Any(m => m.Id == modelId && m.BrandId == c.BrandId.Value)))));
+        }
         if (r.Kind.HasValue) query = query.Where(p => p.Kind == r.Kind);
         if (r.Status.HasValue) query = query.Where(p => p.Status == r.Status);
         if (r.IsFeatured.HasValue) query = query.Where(p => p.IsFeatured == r.IsFeatured);

@@ -30,9 +30,12 @@ public class ShowroomsController : ControllerBase
         {
             id = 1,
             name = Pick("StoreName", "ShopName", "CompanyName") ?? "MoToSale",
-            address = Pick("StoreAddress", "Address", "CompanyAddress") ?? "",
-            phoneNumber = Pick("StorePhone", "Phone", "Hotline") ?? "",
-            email = Pick("StoreEmail", "Email") ?? "",
+            address = Pick("StoreAddress", "Address", "CompanyAddress") ?? "120 Nguyễn Trãi, Phường Bến Thành, TP.HCM",
+            district = Pick("StoreDistrict", "District") ?? "Quận 1",
+            province = Pick("StoreProvince", "Province", "City") ?? "TP.HCM",
+            city = Pick("StoreProvince", "Province", "City") ?? "TP.HCM",
+            phoneNumber = Pick("StorePhone", "Phone", "Hotline") ?? "0900000003",
+            email = Pick("StoreEmail", "Email") ?? "support@motosale.local",
             openingHours = Pick("OpeningHours", "StoreHours") ?? "08:00 - 21:00",
             // Thông tin chuyển khoản (khách quét QR thanh toán)
             bankName = Pick("BankName") ?? "",

@@ -7,9 +7,9 @@ const ProtectedRoute = ({ children, roles = ['Admin', 'Staff'] }) => {
 
   if (loading) {
     return (
-      <div className="d-flex justify-content-center align-items-center" style={{ height: '100vh' }}>
-        <div className="spinner-border text-primary" role="status">
-          <span className="sr-only">Đang tải...</span>
+      <div className="flex h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" role="status">
+          <span className="sr-only absolute h-px w-px overflow-hidden whitespace-nowrap">Đang tải...</span>
         </div>
       </div>
     );
@@ -21,8 +21,8 @@ const ProtectedRoute = ({ children, roles = ['Admin', 'Staff'] }) => {
 
   if (roles.length > 0 && !hasRole(...roles)) {
     return (
-      <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '100vh' }}>
-        <div className="alert alert-warning mb-0">
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="mb-0 rounded border border-[#ffeeba] bg-[#fff3cd] px-5 py-3 text-[#856404]">
           Bạn không có quyền truy cập khu vực này.
         </div>
       </div>

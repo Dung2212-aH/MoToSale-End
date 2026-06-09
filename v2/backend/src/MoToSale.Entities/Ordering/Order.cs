@@ -9,8 +9,11 @@ public class Order : BaseEntity
     public string Channel { get; set; } = "Online";
     public string OrderType { get; set; } = Common.OrderType.FullPayment;
     public string OrderStatus { get; set; } = Common.OrderStatus.Pending;
+    public string PaymentMethod { get; set; } = Common.PaymentMethod.COD;
     public string PaymentStatus { get; set; } = Common.PaymentStatus.Unpaid;
     public string FulfillmentStatus { get; set; } = Common.FulfillmentStatus.Unallocated;
+
+    public int? VoucherId { get; set; } // voucher đã áp dụng (để hoàn lượt khi hủy + chặn theo PerUserLimit)
 
     public decimal Subtotal { get; set; }
     public decimal DiscountTotal { get; set; }
@@ -25,6 +28,8 @@ public class Order : BaseEntity
     public string? ShippingAddress { get; set; }
     public string ReceivingMethod { get; set; } = "Delivery"; // Delivery | Pickup
     public string? Note { get; set; }
+    public string? FulfillmentNote { get; set; }
+    public DateTime? PickupAppointmentAt { get; set; }
     public DateTime? PlacedAt { get; set; }
 
     public ICollection<OrderLine> Lines { get; set; } = new List<OrderLine>();

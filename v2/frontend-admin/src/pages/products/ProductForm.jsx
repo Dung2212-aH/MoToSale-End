@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import productService from '../../services/productService';
 import brandService from '../../services/brandService';
+import { formatMoneyInput, normalizeMoneyInput } from '../../utils/moneyInput';
 
 const PRODUCT_TYPE = {
   XeMay: {
@@ -217,6 +218,11 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
       }
       return updated;
     });
+  };
+
+  const handleMoneyChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: normalizeMoneyInput(value) }));
   };
 
   const validate = () => {
@@ -445,14 +451,14 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
                 <div className="col-md-6">
                   <div className="form-group">
                     <label>Giá gốc <span className="text-danger">*</span></label>
-                    <input type="number" className={`form-control ${errors.giaGoc ? 'is-invalid' : ''}`} name="giaGoc" value={form.giaGoc} onChange={handleChange} min="0" />
+                    <input type="text" inputMode="numeric" className={`form-control ${errors.giaGoc ? 'is-invalid' : ''}`} name="giaGoc" value={formatMoneyInput(form.giaGoc)} onChange={handleMoneyChange} />
                     {errors.giaGoc && <div className="invalid-feedback">{errors.giaGoc}</div>}
                   </div>
                 </div>
                 <div className="col-md-6">
                   <div className="form-group">
                     <label>Giá khuyến mại</label>
-                    <input type="number" className="form-control" name="giaKhuyenMai" value={form.giaKhuyenMai} onChange={handleChange} min="0" />
+                    <input type="text" inputMode="numeric" className="form-control" name="giaKhuyenMai" value={formatMoneyInput(form.giaKhuyenMai)} onChange={handleMoneyChange} />
                   </div>
                 </div>
               </div>

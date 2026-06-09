@@ -39,6 +39,14 @@ function matchesSelection(variant, version, color) {
   return versionMatches && colorMatches;
 }
 
+function getVariantImages(images, variant) {
+  if (!variant?.id || !Array.isArray(images)) {
+    return [];
+  }
+
+  return images.filter((image) => String(image.productVariantId || '') === String(variant.id));
+}
+
 function ProductDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -133,7 +141,9 @@ function ProductDetailPage() {
       .map((variant) => variant.color)
       .filter(Boolean);
     const defaultColor = candidateColors[0] || options.colors[0] || '';
+    const variantImages = getVariantImages(options.images, firstInStockVariant);
     const firstImage =
+      variantImages[0] ||
       options.images.find((image) => {
         const colorMatches = defaultColor ? image.color === defaultColor : true;
         const versionMatches = defaultVersion && image.version ? image.version === defaultVersion : true;
@@ -192,6 +202,11 @@ function ProductDetailPage() {
       return [];
     }
 
+    const selectedVariantImages = getVariantImages(options.images, selectedVariant);
+    if (selectedVariantImages.length) {
+      return selectedVariantImages;
+    }
+
     const byColor = selectedColor ? options.images.filter((image) => image.color === selectedColor) : [];
     const byColorAndVersion =
       selectedColor && selectedVersion
@@ -214,16 +229,19 @@ function ProductDetailPage() {
     }
 
     return options.images;
-  }, [options.images, selectedColor, selectedVersion]);
+  }, [options.images, selectedColor, selectedVariant, selectedVersion]);
 
   const galleryImages = useMemo(() => {
+    if (visibleImages.length) {
+      return visibleImages;
+    }
+
     if (!options.images.length) {
       return [];
     }
 
-    // Giữ nguyên thứ tự ảnh như ban đầu để không bị nhảy vị trí thumbnail khi click (theo yêu cầu user)
     return options.images;
-  }, [options.images]);
+  }, [options.images, visibleImages]);
 
   useEffect(() => {
     if (!visibleImages.length) {
@@ -255,6 +273,7 @@ function ProductDetailPage() {
     }
 
     const nextImage =
+      getVariantImages(options.images, matchedVariant || fallbackVariant)[0] ||
       options.images.find((image) => {
         const versionMatches = image.version ? image.version === version : true;
         const colorTarget = matchedVariant?.color || fallbackVariant?.color || selectedColor;
@@ -280,6 +299,7 @@ function ProductDetailPage() {
     // Always jump to the FIRST image of the chosen color for a clean carousel reset
     const colorImages = options.images.filter((image) => image.color === color);
     const nextImage =
+      getVariantImages(options.images, matchedVariant)[0] ||
       colorImages.find((image) => {
         const versionMatches = selectedVersion && image.version ? image.version === selectedVersion : true;
         return versionMatches;
@@ -412,6 +432,7 @@ function ProductDetailPage() {
 
   const fallbackNotes = options.fallbackNotes;
   const showVersionSelector = options.hasVersionOptions && options.versions.length > 1;
+  const versionOptionLabel = 'Phiên bản';
   const showColorSelector = options.hasColorOptions;
   const colorStatusText = showColorSelector ? selectedColor || 'Đang cập nhật' : 'Đang cập nhật';
 
@@ -449,6 +470,7 @@ function ProductDetailPage() {
                     versionOptions={options.versions}
                     colorOptions={options.colors}
                     availableColorOptions={availableColorOptions}
+                    versionOptionLabel={versionOptionLabel}
                     showVersionSelector={showVersionSelector}
                     showColorSelector={showColorSelector}
                     colorStatusText={colorStatusText}

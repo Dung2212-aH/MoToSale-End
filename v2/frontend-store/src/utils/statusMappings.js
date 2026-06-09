@@ -1,13 +1,14 @@
 export const ORDER_STATUS_MAP = {
-  AwaitingPayment: 'Chờ thanh toán / xác nhận',
-  Confirmed: 'Đã xác nhận',
-  Processing: 'Đang chuẩn bị hàng',
+  AwaitingPayment: 'Chờ xác nhận',
+  Confirmed: 'Chờ xác nhận',
+  Processing: 'Đang giao',
+  Allocated: 'Đang giao',
   Shipping: 'Đang giao',
   Delivered: 'Đã giao',
-  Completed: 'Hoàn tất',
+  Completed: 'Đã giao',
   Cancelled: 'Đã hủy',
-  Pending: 'Legacy: chờ xử lý',
-  Checkout: 'Đang checkout',
+  Pending: 'Chờ xác nhận',
+  Checkout: 'Chờ xác nhận',
 };
 
 export const SHIPPING_STATUS_MAP = {
@@ -23,19 +24,22 @@ export const SHIPPING_STATUS_MAP = {
 };
 
 export const PAYMENT_STATUS_MAP = {
-  Unpaid: 'Chưa thanh toán',
-  Pending: 'Chờ xác nhận thanh toán',
+  Unpaid: 'Chờ thanh toán',
+  PendingConfirmation: 'Chờ xác nhận chuyển khoản',
   Paid: 'Đã thanh toán',
-  DepositPaid: 'Đã thanh toán tiền cọc',
-  PartiallyPaid: 'Thanh toán một phần / đã đặt cọc',
   Refunded: 'Đã hoàn tiền',
-  PartiallyRefunded: 'Hoàn tiền một phần',
   Failed: 'Thanh toán thất bại',
+  // alias dữ liệu cũ
+  Pending: 'Chờ xác nhận chuyển khoản',
+  DepositPaid: 'Đã đặt cọc (còn nợ)',
+  PartiallyPaid: 'Đã thanh toán một phần',
+  PartiallyRefunded: 'Hoàn tiền một phần',
   Cancelled: 'Đã hủy thanh toán',
 };
 
 export const PAYMENT_METHOD_MAP = {
   BankTransfer: 'Chuyển khoản ngân hàng',
+  Cash: 'Tiền mặt',
   Card: 'Thẻ tín dụng/ghi nợ',
   Momo: 'Ví MoMo',
   VNPay: 'VNPay',
@@ -55,14 +59,15 @@ export const RECEIVING_METHOD_MAP = {
 
 const ORDER_STATUS_COLOR_MAP = {
   AwaitingPayment: 'bg-amber-100 text-amber-700',
-  Confirmed: 'bg-blue-100 text-blue-700',
-  Processing: 'bg-sky-100 text-sky-700',
+  Confirmed: 'bg-amber-100 text-amber-700',
+  Processing: 'bg-blue-100 text-blue-700',
+  Allocated: 'bg-blue-100 text-blue-700',
   Shipping: 'bg-blue-100 text-blue-700',
   Delivered: 'bg-green-100 text-green-700',
-  Completed: 'bg-emerald-100 text-emerald-700',
+  Completed: 'bg-green-100 text-green-700',
   Cancelled: 'bg-red-100 text-red-700',
-  Pending: 'bg-zinc-100 text-zinc-700',
-  Checkout: 'bg-zinc-100 text-zinc-700',
+  Pending: 'bg-amber-100 text-amber-700',
+  Checkout: 'bg-amber-100 text-amber-700',
 };
 
 const SHIPPING_STATUS_COLOR_MAP = {
@@ -79,6 +84,7 @@ const SHIPPING_STATUS_COLOR_MAP = {
 
 const PAYMENT_STATUS_COLOR_MAP = {
   Unpaid: 'bg-zinc-100 text-zinc-700',
+  PendingConfirmation: 'bg-amber-100 text-amber-700',
   Pending: 'bg-amber-100 text-amber-700',
   Paid: 'bg-green-100 text-green-700',
   DepositPaid: 'bg-orange-100 text-orange-700',

@@ -20,27 +20,118 @@ function normalizeText(value = '') {
     .toLowerCase();
 }
 
-function findCategoryReference(category) {
+function categoryKindOf(category) {
+  return Number(category?.kind ?? category?.Kind ?? category?.productType ?? category?.ProductType ?? 0);
+}
+
+function categoryParentIdOf(category) {
+  return category?.parentCategoryId ?? category?.parentId ?? category?.ParentId ?? null;
+}
+
+function categoryMatchesReference(category, reference) {
   const candidate = normalizeText(`${category?.name || ''} ${category?.slug || ''}`);
-  return homeCategoryReferences.find((reference) => reference.match.some((keyword) => candidate.includes(normalizeText(keyword))));
+  const sameKind = !reference.kind || categoryKindOf(category) === Number(reference.kind);
+  return sameKind && reference.match.some((keyword) => candidate.includes(normalizeText(keyword)));
+}
+
+function formatFeaturedCategory(category, reference) {
+  return {
+    ...category,
+    image: category?.image || reference?.image,
+    to: category?.id ? `/products?categoryId=${category.id}` : reference?.to,
+  };
+}
+
+function fillBalancedCategories(categories, selected, limit = 4) {
+  const selectedIds = new Set(selected.map((category) => category.id));
+  const candidates = categories.filter((category) => {
+    if (!category?.id || selectedIds.has(category.id)) {
+      return false;
+    }
+
+    return categoryParentIdOf(category) != null || selected.length === 0;
+  });
+  const motorcycles = candidates.filter((category) => categoryKindOf(category) === 1);
+  const parts = candidates.filter((category) => categoryKindOf(category) === 2);
+  const maxRows = Math.max(motorcycles.length, parts.length);
+
+  for (let index = 0; index < maxRows && selected.length < limit; index += 1) {
+    for (const category of [motorcycles[index], parts[index]]) {
+      if (category && !selectedIds.has(category.id) && selected.length < limit) {
+        selected.push(formatFeaturedCategory(category));
+        selectedIds.add(category.id);
+      }
+    }
+  }
+
+  for (const category of candidates) {
+    if (selected.length >= limit) {
+      break;
+    }
+
+    if (!selectedIds.has(category.id)) {
+      selected.push(formatFeaturedCategory(category));
+      selectedIds.add(category.id);
+    }
+  }
+
+  return selected;
 }
 
 function buildFeaturedCategories(categories) {
-  const matches = homeCategoryReferences
-    .map((reference) => {
-      const category = categories.find((item) => findCategoryReference(item)?.id === reference.id);
+  const selected = [];
+  const selectedIds = new Set();
 
-      return category
-        ? {
-          ...category,
-          image: category.image || reference.image,
-          to: category.id ? `/products?categoryId=${category.id}` : reference.to,
-        }
-        : null;
-    })
-    .filter(Boolean);
+  for (const reference of homeCategoryReferences) {
+    const category = categories.find((item) => !selectedIds.has(item.id) && categoryMatchesReference(item, reference));
+    if (category) {
+      selected.push(formatFeaturedCategory(category, reference));
+      selectedIds.add(category.id);
+    }
+  }
 
-  return matches.length ? matches : homeCategoryReferences.map((reference) => ({ ...reference }));
+  fillBalancedCategories(categories, selected);
+
+  return selected.length ? selected.slice(0, 4) : homeCategoryReferences.map((reference) => ({ ...reference }));
+}
+
+function productKindOf(product) {
+  return Number(product?.kind ?? product?.Kind ?? product?.productType ?? product?.ProductType ?? 0);
+}
+
+function pickBalancedProducts(items, limit = 4) {
+  if (!Array.isArray(items) || items.length <= limit) {
+    return Array.isArray(items) ? items.slice(0, limit) : [];
+  }
+
+  const motorcycles = items.filter((product) => productKindOf(product) === 1);
+  const parts = items.filter((product) => productKindOf(product) === 2);
+  if (!motorcycles.length || !parts.length) {
+    return items.slice(0, limit);
+  }
+
+  const selected = [];
+  const selectedIds = new Set();
+  const maxRows = Math.max(motorcycles.length, parts.length);
+
+  for (let index = 0; index < maxRows && selected.length < limit; index += 1) {
+    for (const product of [motorcycles[index], parts[index]]) {
+      if (product && !selectedIds.has(product.id) && selected.length < limit) {
+        selected.push(product);
+        selectedIds.add(product.id);
+      }
+    }
+  }
+
+  for (const product of items) {
+    if (selected.length >= limit) break;
+    if (!selectedIds.has(product.id)) {
+      selected.push(product);
+      selectedIds.add(product.id);
+    }
+  }
+
+  return selected;
 }
 
 function HomePage() {
@@ -68,8 +159,8 @@ function HomePage() {
       const tasks = [
         productApi.getProducts({ page: 1, pageSize: 12 }),
         categoryApi.getAll().then((res) => res.data),
-        productApi.getProducts({ page: 1, pageSize: 8, NoiBat: true }).then((res) => res.items).catch(() => []),
-        productApi.getProducts({ page: 1, pageSize: 8, HotDeal: true }).then((res) => res.items).catch(() => []),
+        productApi.getProducts({ page: 1, pageSize: 8, IsFeatured: true }).then((res) => res.items).catch(() => []),
+        productApi.getProducts({ page: 1, pageSize: 12, IsHotDeal: true }).then((res) => res.items).catch(() => []),
         contentApi.getHomeBanners().catch(() => []),
       ];
 
@@ -209,10 +300,10 @@ function HomePage() {
   );
   const dealProducts = useMemo(() => {
     if (dealList.length) {
-      return dealList.slice(0, 4);
+      return pickBalancedProducts(dealList, 4);
     }
     const discounted = products.filter((product) => Number(product.salePrice) > 0 && product.salePrice < product.basePrice);
-    return (discounted.length ? discounted : products).slice(0, 4);
+    return pickBalancedProducts(discounted.length ? discounted : products, 4);
   }, [dealList, products]);
   const bestSellerProducts = useMemo(() => {
     const nextProducts = products.slice(4, 8);
@@ -261,8 +352,7 @@ function HomePage() {
             <img src={brandAssets.hotIcon} alt="Hot deal" className="h-7 w-7 object-contain" />
           </div>
           <div className="inline-flex min-h-11 items-center gap-3 rounded-full bg-gradient-to-r from-[#d71920] to-[#171717] px-5 text-xs font-extrabold uppercase tracking-[0.12em] text-white">
-            <span>Hot deal</span>
-            <strong className="text-[13px]">Giá tốt mỗi ngày</strong>
+            <span><strong className="text-[13px]"> Giá tốt mỗi ngày</strong></span>
           </div>
           <div className="w-full">{renderProductsBlock(dealProducts, 'Chưa có deal nổi bật.')}</div>
         </div>

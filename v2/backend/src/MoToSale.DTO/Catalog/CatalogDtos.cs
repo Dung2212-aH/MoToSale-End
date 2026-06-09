@@ -7,6 +7,7 @@ public class ProductSearchRequest : PagingRequest
     public int? CategoryId { get; set; }
     public int? BrandId { get; set; }
     public int? VehicleModelId { get; set; }
+    public int? CompatibleVehicleModelId { get; set; }
     public int? Kind { get; set; }            // ProductKind
     public int? Status { get; set; }          // EntityStatus
     public bool? IsFeatured { get; set; }

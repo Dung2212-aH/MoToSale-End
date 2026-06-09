@@ -74,45 +74,80 @@ const field = (source, ...keys) => {
   return undefined;
 };
 
+const collection = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value.$values)) return value.$values;
+  return [];
+};
+
+const normalizeFulfillmentStatus = (status) => {
+  const statusMap = {
+    Unallocated: 'NotShipped',
+    Allocated: 'Preparing',
+    Shipped: 'Shipping',
+    Fulfilled: 'Delivered',
+  };
+
+  return statusMap[status] || status;
+};
+
+const normalizeOrderHistory = (raw = {}) => ({
+  ...raw,
+  id: field(raw, 'id', 'Id'),
+  eventType: field(raw, 'eventType', 'EventType', 'type', 'Type'),
+  oldValue: field(raw, 'oldValue', 'OldValue', 'fromStatus', 'FromStatus'),
+  newValue: field(raw, 'newValue', 'NewValue', 'toStatus', 'ToStatus'),
+  note: field(raw, 'note', 'Note'),
+  actorUserId: field(raw, 'actorUserId', 'ActorUserId', 'changedBy', 'ChangedBy'),
+  createdAt: field(raw, 'createdAt', 'CreatedAt', 'createdDate', 'CreatedDate'),
+});
+
 const normalizeOrder = (raw = {}) => {
-  const items = field(raw, 'items', 'Items') || [];
-  const vouchers = field(raw, 'vouchers', 'Vouchers') || [];
+  const items = collection(field(raw, 'items', 'Items', 'lines', 'Lines'));
+  const vouchers = collection(field(raw, 'vouchers', 'Vouchers'));
+  const payments = collection(field(raw, 'payments', 'Payments'));
+  const histories = collection(field(raw, 'histories', 'Histories', 'history', 'History'));
+  const fulfillmentStatus = field(raw, 'fulfillmentStatus', 'FulfillmentStatus');
 
   return {
     ...raw,
     id: field(raw, 'id', 'Id', 'maDonHang', 'MaDonHang'),
-    orderCode: field(raw, 'orderCode', 'OrderCode', 'maDonHangKinhDoanh', 'MaDonHangKinhDoanh'),
+    orderCode: field(raw, 'orderCode', 'OrderCode', 'code', 'Code', 'maDonHangKinhDoanh', 'MaDonHangKinhDoanh'),
     userId: field(raw, 'userId', 'UserId', 'maNguoiDung', 'MaNguoiDung'),
     showroomId: field(raw, 'showroomId', 'ShowroomId', 'maShowroom', 'MaShowroom'),
     cartId: field(raw, 'cartId', 'CartId', 'maGioHang', 'MaGioHang'),
-    shippingFullName: field(raw, 'shippingFullName', 'ShippingFullName', 'hoTenNhanHang', 'HoTenNhanHang'),
-    shippingPhoneNumber: field(raw, 'shippingPhoneNumber', 'ShippingPhoneNumber', 'soDienThoaiNhanHang', 'SoDienThoaiNhanHang'),
+    shippingFullName: field(raw, 'shippingFullName', 'ShippingFullName', 'shippingRecipient', 'ShippingRecipient', 'hoTenNhanHang', 'HoTenNhanHang'),
+    shippingPhoneNumber: field(raw, 'shippingPhoneNumber', 'ShippingPhoneNumber', 'shippingPhone', 'ShippingPhone', 'soDienThoaiNhanHang', 'SoDienThoaiNhanHang'),
     shippingEmail: field(raw, 'shippingEmail', 'ShippingEmail', 'emailNhanHang', 'EmailNhanHang'),
-    shippingAddressLine: field(raw, 'shippingAddressLine', 'ShippingAddressLine', 'diaChiNhanHang', 'DiaChiNhanHang'),
+    shippingAddressLine: field(raw, 'shippingAddressLine', 'ShippingAddressLine', 'shippingAddress', 'ShippingAddress', 'diaChiNhanHang', 'DiaChiNhanHang'),
     subtotal: Number(field(raw, 'subtotal', 'Subtotal', 'tongTienHang', 'TongTienHang') || 0),
-    discountAmount: Number(field(raw, 'discountAmount', 'DiscountAmount', 'tienGiam', 'TienGiam') || 0),
+    discountAmount: Number(field(raw, 'discountAmount', 'DiscountAmount', 'discountTotal', 'DiscountTotal', 'tienGiam', 'TienGiam') || 0),
     shippingFee: Number(field(raw, 'shippingFee', 'ShippingFee', 'phiVanChuyen', 'PhiVanChuyen') || 0),
-    totalAmount: Number(field(raw, 'totalAmount', 'TotalAmount', 'tongThanhToan', 'TongThanhToan') || 0),
+    totalAmount: Number(field(raw, 'totalAmount', 'TotalAmount', 'grandTotal', 'GrandTotal', 'tongThanhToan', 'TongThanhToan') || 0),
     orderStatus: field(raw, 'orderStatus', 'OrderStatus', 'trangThaiDonHang', 'TrangThaiDonHang'),
     paymentStatus: field(raw, 'paymentStatus', 'PaymentStatus', 'trangThaiThanhToan', 'TrangThaiThanhToan'),
-    shippingStatus: field(raw, 'shippingStatus', 'ShippingStatus', 'trangThaiVanChuyen', 'TrangThaiVanChuyen'),
+    fulfillmentStatus,
+    shippingStatus: normalizeFulfillmentStatus(field(raw, 'shippingStatus', 'ShippingStatus', 'trangThaiVanChuyen', 'TrangThaiVanChuyen') || fulfillmentStatus),
     receivingMethod: field(raw, 'receivingMethod', 'ReceivingMethod', 'phuongThucNhanHang', 'PhuongThucNhanHang'),
     paymentMethod: field(raw, 'paymentMethod', 'PaymentMethod', 'phuongThucThanhToan', 'PhuongThucThanhToan', 'phuongThuc', 'PhuongThuc'),
     orderType: field(raw, 'orderType', 'OrderType', 'loaiDonHang', 'LoaiDonHang'),
     depositAmount: Number(field(raw, 'depositAmount', 'DepositAmount', 'tienDatCoc', 'TienDatCoc') || 0),
     remainingAmount: Number(field(raw, 'remainingAmount', 'RemainingAmount', 'soTienConLai', 'SoTienConLai') || 0),
     note: field(raw, 'note', 'Note', 'ghiChu', 'GhiChu'),
-    createdAt: field(raw, 'createdAt', 'CreatedAt', 'ngayTao', 'NgayTao'),
+    fulfillmentNote: field(raw, 'fulfillmentNote', 'FulfillmentNote'),
+    pickupAppointmentAt: field(raw, 'pickupAppointmentAt', 'PickupAppointmentAt'),
+    createdAt: field(raw, 'createdAt', 'CreatedAt', 'placedAt', 'PlacedAt', 'createdDate', 'CreatedDate', 'ngayTao', 'NgayTao'),
     updatedAt: field(raw, 'updatedAt', 'UpdatedAt', 'ngayCapNhat', 'NgayCapNhat'),
     items: items.map((item) => ({
       ...item,
       id: field(item, 'id', 'Id', 'maChiTietDonHang', 'MaChiTietDonHang'),
       productId: field(item, 'productId', 'ProductId', 'maSanPham', 'MaSanPham'),
       productVariantId: field(item, 'productVariantId', 'ProductVariantId', 'maBienSanPham', 'MaBienSanPham'),
-      productNameSnapshot: field(item, 'productNameSnapshot', 'ProductNameSnapshot', 'tenSanPhamSnapshot', 'TenSanPhamSnapshot'),
-      skuSnapshot: field(item, 'skuSnapshot', 'SkuSnapshot', 'skuSnapshot', 'SKUSnapshot'),
+      productNameSnapshot: field(item, 'productNameSnapshot', 'ProductNameSnapshot', 'productName', 'ProductName', 'tenSanPhamSnapshot', 'TenSanPhamSnapshot'),
+      skuSnapshot: field(item, 'skuSnapshot', 'SkuSnapshot', 'skuCode', 'SkuCode', 'skuSnapshot', 'SKUSnapshot'),
       unitPrice: Number(field(item, 'unitPrice', 'UnitPrice', 'donGia', 'DonGia') || 0),
-      quantity: Number(field(item, 'quantity', 'Quantity', 'soLuong', 'SoLuong') || 0),
+      quantity: Number(field(item, 'quantity', 'Quantity', 'qty', 'Qty', 'soLuong', 'SoLuong') || 0),
       lineTotal: Number(field(item, 'lineTotal', 'LineTotal', 'thanhTien', 'ThanhTien') || 0),
     })),
     vouchers: vouchers.map((voucher) => ({
@@ -122,6 +157,8 @@ const normalizeOrder = (raw = {}) => {
       discountTypeSnapshot: field(voucher, 'discountTypeSnapshot', 'DiscountTypeSnapshot', 'loaiGiamGiaSnapshot', 'LoaiGiamGiaSnapshot'),
       discountValueSnapshot: Number(field(voucher, 'discountValueSnapshot', 'DiscountValueSnapshot', 'giaTriGiamSnapshot', 'GiaTriGiamSnapshot') || 0),
     })),
+    payments: payments.map(normalizePayment),
+    histories: histories.map(normalizeOrderHistory),
   };
 };
 
@@ -146,9 +183,10 @@ const normalizeVoucher = (raw = {}) => ({
   description: field(raw, 'description', 'Description', 'moTa', 'MoTa'),
   discountType: field(raw, 'discountType', 'DiscountType', 'loaiGiamGia', 'LoaiGiamGia'),
   discountValue: Number(field(raw, 'discountValue', 'DiscountValue', 'giaTriGiam', 'GiaTriGiam') || 0),
-  maxDiscountValue: field(raw, 'maxDiscountValue', 'MaxDiscountValue', 'giaTriGiamToiDa', 'GiaTriGiamToiDa'),
+  maxDiscountValue: field(raw, 'maxDiscountValue', 'MaxDiscountValue', 'maxDiscount', 'MaxDiscount', 'giaTriGiamToiDa', 'GiaTriGiamToiDa'),
   minOrderValue: Number(field(raw, 'minOrderValue', 'MinOrderValue', 'giaTriDonToiThieu', 'GiaTriDonToiThieu') || 0),
   remainingUses: field(raw, 'remainingUses', 'RemainingUses') ?? null,
+  status: field(raw, 'status', 'Status', 'trangThai', 'TrangThai'),
 });
 
 const normalizeFavorite = (raw = {}) => {
@@ -221,15 +259,15 @@ const cleanParams = (params = {}) => {
   };
 
   const paramMap = {
-    categoryId: 'MaDanhMuc',
-    brandId: 'MaHangXe',
-    carModelId: 'MaDongXe',
-    compatibleCarModelId: 'MaDongXeTuongThich',
-    showroomId: 'MaShowroom',
-    productType: 'LoaiSanPham',
-    status: 'TrangThaiSanPham',
-    minPrice: 'GiaTu',
-    maxPrice: 'GiaDen',
+    categoryId: 'CategoryId',
+    brandId: 'BrandId',
+    carModelId: 'VehicleModelId',
+    compatibleCarModelId: 'CompatibleVehicleModelId',
+    showroomId: 'ShowroomId',
+    productType: 'Kind',
+    status: 'Status',
+    minPrice: 'MinPrice',
+    maxPrice: 'MaxPrice',
   };
 
   const sourceParams = { ...params };
@@ -658,6 +696,8 @@ export const orderApi = {
       order,
       details: order.items,
       vouchers: order.vouchers,
+      payments: order.payments,
+      histories: order.histories,
     };
   },
 
@@ -677,6 +717,9 @@ export const orderApi = {
       shippingFee: data.shippingFee ?? 0,
       depositAmount: data.depositAmount ?? 0,
       note: data.note,
+      fulfillmentNote: data.fulfillmentNote,
+      pickupAppointmentAt: data.pickupAppointmentAt,
+      paymentMethod: data.paymentMethod,
       voucherCode: data.voucherCode,
     });
     return normalizeOrder(responseData(response));
@@ -755,7 +798,7 @@ export const voucherApi = {
   async getAll(params) {
     // Danh sách voucher là Admin/Staff ở BE v2 → khách không xem được, trả rỗng.
     try {
-      const response = await api.get('/vouchers', { params: cleanParams(params) });
+      const response = await api.get('/vouchers/available', { params: cleanParams(params) });
       const data = responseData(response);
       const items = data?.items || data?.Items || data;
       return Array.isArray(items) ? items.map(normalizeVoucher) : items;
@@ -785,20 +828,46 @@ export const voucherApi = {
   },
 
   // Ví voucher (applicable/save/my) không có ở BE v2 (phạm vi đơn giản hóa) → trả rỗng để FE không vỡ.
-  async getApplicableVouchers() {
-    return [];
+  async getApplicableVouchers({ subtotal = 0 } = {}) {
+    const all = await voucherApi.getAll();
+    return all.filter((voucher) => Number(voucher.minOrderValue || 0) <= Number(subtotal || 0));
   },
 
-  async saveVoucher() {
-    return { saved: false };
+  async saveVoucher(code) {
+    const voucherCode = String(code || '').trim().toUpperCase();
+    if (!voucherCode) {
+      return { success: false, saved: false, message: 'Mã voucher không hợp lệ' };
+    }
+
+    const all = await voucherApi.getAll();
+    const voucher = all.find((item) => String(item.code || '').toUpperCase() === voucherCode);
+    if (!voucher) {
+      return { success: false, saved: false, message: 'Voucher không còn khả dụng' };
+    }
+
+    const storage = getStorage('localStorage');
+    const currentUser = getStoredUser();
+    const key = `motosale:saved-vouchers:${currentUser?.userId || currentUser?.email || 'guest'}`;
+    const savedCodes = new Set(JSON.parse(storage?.getItem(key) || '[]'));
+    const existed = savedCodes.has(voucherCode);
+    savedCodes.add(voucherCode);
+    storage?.setItem(key, JSON.stringify(Array.from(savedCodes)));
+    return { success: true, saved: true, existed, voucher };
   },
 
   async getMyVouchers() {
-    return [];
+    const storage = getStorage('localStorage');
+    const currentUser = getStoredUser();
+    const key = `motosale:saved-vouchers:${currentUser?.userId || currentUser?.email || 'guest'}`;
+    const savedCodes = new Set(JSON.parse(storage?.getItem(key) || '[]'));
+    if (!savedCodes.size) return [];
+    const all = await voucherApi.getAll();
+    return all.filter((voucher) => savedCodes.has(String(voucher.code || '').toUpperCase()));
   },
 
   async getMyVoucherCount() {
-    return 0;
+    const mine = await voucherApi.getMyVouchers();
+    return mine.length;
   },
 };
 

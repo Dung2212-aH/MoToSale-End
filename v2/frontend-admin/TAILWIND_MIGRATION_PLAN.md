@@ -48,9 +48,37 @@ Completed in this run:
 - [x] Browser-tested FAQ add modal open/close.
 
 Remaining cleanup:
+- [x] Convert shell layout (`MainLayout`, `Navbar`, `Sidebar`, `Footer`) to Tailwind utility classes only.
+- [x] Convert shared UI primitives so they no longer emit Bootstrap/AdminLTE class names.
 - [ ] Replace remaining legacy Bootstrap/AdminLTE class names in page JSX with shared Tailwind components.
+- [ ] Remove the compatibility selectors from `src/index.css` after no JSX depends on them.
 - [ ] Run full button/field/modal CRUD regression for every page after the JSX cleanup.
 - [ ] Capture and archive screenshots for every page after the final JSX cleanup.
+
+## Execution Plan - Tailwind-only without visual drift
+Status: `In Progress`
+
+Goal:
+- The admin app should use Tailwind utilities/components for the UI implementation.
+- Colors, spacing, layout sizes, sidebar behavior, forms, tables, modals, responsive states and interactions should remain equivalent to the current baseline.
+- Bootstrap/AdminLTE package/runtime dependencies must remain absent.
+- Legacy compatibility CSS may stay only while a matching JSX dependency still exists.
+
+Order of work:
+- [x] Confirm current state: Tailwind plugin enabled, Bootstrap/AdminLTE runtime removed, compatibility CSS still present.
+- [x] Phase A: Convert the admin shell layout to Tailwind-only class usage.
+- [x] Phase B: Convert shared UI primitives (`Button`, `Badge`, `DataTable`, `Modal`, `Pagination`, form controls, feedback states) to Tailwind-only output.
+- [ ] Phase C: Replace page-level wrappers, cards, tables, filters, forms and modals by functional group.
+- [ ] Phase D: Remove old compatibility selectors from `index.css`.
+- [ ] Phase E: Run production build and route-level UI regression checks.
+
+Functional groups for Phase C:
+- [x] Dashboard and charts.
+- [ ] Catalog: motorcycles, parts, categories, brands, manufacturers.
+- [ ] Sales: orders, order detail, POS, vouchers, customers.
+- [ ] Inventory and supply: inventory, stock documents, supply operations.
+- [ ] After-sales: returns, warranties, service CRM.
+- [ ] Finance, reports, audit logs, users, settings and imports.
 
 ## Phase 1 - Baseline UI
 Status: `Pending`

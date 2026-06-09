@@ -139,13 +139,15 @@ public class OrderService : IOrderService
         }
 
         var now = DateTime.UtcNow;
+        var paymentMethod = req.PaymentMethod == PaymentMethod.BankTransfer ? PaymentMethod.BankTransfer : PaymentMethod.COD;
         var order = new Order
         {
             Code = $"DH{now:yyyyMMddHHmmssfff}",
             UserId = userId,
             Channel = "Online",
             OrderType = req.OrderType is OrderType.Deposit or OrderType.Installment ? req.OrderType : OrderType.FullPayment,
-            OrderStatus = OrderStatus.AwaitingPayment,
+            OrderStatus = OrderStatus.Pending,
+            PaymentMethod = paymentMethod,
             PaymentStatus = PaymentStatus.Unpaid,
             FulfillmentStatus = FulfillmentStatus.Unallocated,
             ShippingRecipient = req.ShippingRecipient,
@@ -155,6 +157,8 @@ public class OrderService : IOrderService
             ReceivingMethod = req.ReceivingMethod,
             ShippingFee = req.ShippingFee,
             Note = req.Note,
+            FulfillmentNote = req.FulfillmentNote,
+            PickupAppointmentAt = req.PickupAppointmentAt,
             PlacedAt = now,
             CreatedDate = now,
         };
@@ -184,7 +188,17 @@ public class OrderService : IOrderService
             if (!vr.Valid) throw new OrderException(vr.Message ?? "Voucher không hợp lệ.");
             order.DiscountTotal = vr.DiscountAmount;
             var voucher = await _voucherRepo.GetByCodeAsync(req.VoucherCode.Trim().ToUpperInvariant());
-            if (voucher is not null) { voucher.UsedCount++; voucher.UpdatedDate = now; _voucherRepo.Update(voucher); }
+            if (voucher is not null)
+            {
+                if (voucher.PerUserLimit is int lim && lim > 0)
+                {
+                    var usedByUser = (await _orders.GetByUserAsync(userId))
+                        .Count(o => o.VoucherId == voucher.Id && o.OrderStatus != OrderStatus.Cancelled);
+                    if (usedByUser >= lim) throw new OrderException("Bạn đã dùng hết lượt voucher cho tài khoản này.");
+                }
+                order.VoucherId = voucher.Id;
+                voucher.UsedCount++; voucher.UpdatedDate = now; _voucherRepo.Update(voucher);
+            }
         }
 
         order.GrandTotal = order.Subtotal - order.DiscountTotal + order.ShippingFee;
@@ -222,7 +236,7 @@ public class OrderService : IOrderService
         }
 
         _cart.ClearItems(cart.Items);
-        _orders.AddStatusHistory(new OrderStatusHistory { OrderId = order.Id, ToStatus = OrderStatus.AwaitingPayment, Note = "Tạo đơn", ChangedBy = userId, CreatedDate = now });
+        _orders.AddStatusHistory(new OrderStatusHistory { OrderId = order.Id, ToStatus = OrderStatus.Pending, Note = "Tạo đơn", ChangedBy = userId, CreatedDate = now });
         await _orders.SaveChangesAsync();
 
         return order.Id;
@@ -238,6 +252,9 @@ public class OrderService : IOrderService
 
         var now = DateTime.UtcNow;
         var isDeposit = req.OrderType == OrderType.Deposit;
+        var paymentMethod = string.IsNullOrWhiteSpace(req.PaymentMethod) ? PaymentMethod.Cash : req.PaymentMethod;
+        if (!IsManualPaymentMethod(paymentMethod))
+            throw new OrderException("Bán tại quầy chỉ hỗ trợ thanh toán tiền mặt hoặc chuyển khoản.");
 
         // Khách hàng: dùng khách đã chọn, hoặc khách lẻ (tự tạo nếu chưa có).
         var customerId = req.CustomerId is > 0 ? req.CustomerId.Value : await GetOrCreateWalkInCustomerAsync(now);
@@ -248,7 +265,8 @@ public class OrderService : IOrderService
             UserId = customerId,
             Channel = "InStore",
             OrderType = isDeposit ? OrderType.Deposit : OrderType.FullPayment,
-            OrderStatus = OrderStatus.Confirmed,
+            OrderStatus = OrderStatus.Pending,
+            PaymentMethod = paymentMethod,
             PaymentStatus = PaymentStatus.Unpaid,
             FulfillmentStatus = FulfillmentStatus.Unallocated,
             ShippingRecipient = string.IsNullOrWhiteSpace(req.CustomerName) ? "Khách lẻ" : req.CustomerName.Trim(),
@@ -285,7 +303,7 @@ public class OrderService : IOrderService
             if (!vr.Valid) throw new OrderException(vr.Message ?? "Voucher không hợp lệ.");
             order.DiscountTotal = vr.DiscountAmount;
             var voucher = await _voucherRepo.GetByCodeAsync(req.VoucherCode.Trim().ToUpperInvariant());
-            if (voucher is not null) { voucher.UsedCount++; voucher.UpdatedDate = now; _voucherRepo.Update(voucher); }
+            if (voucher is not null) { order.VoucherId = voucher.Id; voucher.UsedCount++; voucher.UpdatedDate = now; _voucherRepo.Update(voucher); }
         }
         order.GrandTotal = order.Subtotal - order.DiscountTotal; // bán tại quầy không tính phí ship
 
@@ -348,35 +366,36 @@ public class OrderService : IOrderService
         if (isDeposit && paid < order.DepositAmount) throw new OrderException("Tiền thu phải tối thiểu bằng tiền cọc.");
         if (paid > 0)
         {
-            var method = string.IsNullOrWhiteSpace(req.PaymentMethod) ? PaymentMethod.Cash : req.PaymentMethod;
             _payments.Add(new Payment
             {
                 Code = $"TT{now:yyyyMMddHHmmssfff}", OrderId = order.Id,
                 PaymentType = isDeposit ? PaymentRecordType.Deposit : PaymentRecordType.Full,
-                Amount = paid, Method = method, PaymentRecordStatus = PaymentRecordStatus.Paid,
+                Amount = paid, Method = paymentMethod, PaymentRecordStatus = PaymentRecordStatus.Paid,
                 Note = "Thu tại quầy", RecordedBy = staffUserId, PaidAt = now, CreatedDate = now,
             });
             _db.CashTransactions.Add(new CashTransaction
             {
                 Code = $"CT{now:yyyyMMddHHmmssfff}", TransactionType = "Receipt", Category = "CustomerPayment",
-                Amount = paid, Method = method, ReferenceType = "Payment", ReferenceId = order.Id,
+                Amount = paid, Method = paymentMethod, ReferenceType = "Payment", ReferenceId = order.Id,
                 Note = $"Thu tại quầy {order.Code}", RecordedBy = staffUserId, OccurredAt = now, CreatedDate = now,
             });
             order.RemainingAmount = Math.Max(0, order.GrandTotal - paid);
-            order.PaymentStatus = paid >= order.GrandTotal
-                ? PaymentStatus.Paid
-                : isDeposit ? PaymentStatus.DepositPaid : PaymentStatus.PartiallyPaid;
+            // Chưa thu đủ (gồm đơn đặt cọc) -> vẫn "Chờ thanh toán"; cọc/còn nợ theo dõi qua DepositAmount/RemainingAmount.
+            order.PaymentStatus = paid >= order.GrandTotal ? PaymentStatus.Paid : PaymentStatus.Unpaid;
         }
 
-        // Đơn bán đứt đã thu đủ → hoàn tất luôn.
-        if (!isDeposit && order.PaymentStatus == PaymentStatus.Paid)
-            order.OrderStatus = OrderStatus.Completed;
+        // Bán đứt tại quầy: giao ngay -> "Đã giao". (Đơn cọc vẫn "Chờ xác nhận" tới khi thu nốt & giao.)
+        if (!isDeposit)
+            order.OrderStatus = OrderStatus.Delivered;
 
         order.UpdatedDate = now;
         _orders.AddStatusHistory(new OrderStatusHistory { OrderId = order.Id, ToStatus = order.OrderStatus, Note = "Tạo đơn tại quầy (POS)", ChangedBy = staffUserId, CreatedDate = now });
         await _orders.SaveChangesAsync();
         return order.Id;
     }
+
+    private static bool IsManualPaymentMethod(string? method) =>
+        method is PaymentMethod.Cash or PaymentMethod.BankTransfer;
 
     private async Task<int> GetOrCreateWalkInCustomerAsync(DateTime now)
     {
@@ -438,6 +457,8 @@ public class OrderService : IOrderService
     {
         var order = await _orders.GetDetailAsync(orderId) ?? throw new OrderException("Không tìm thấy đơn hàng.");
         if (order.OrderStatus == OrderStatus.Cancelled) throw new OrderException("Đơn đã hủy.");
+        if (order.OrderStatus == OrderStatus.Delivered || order.FulfillmentStatus == FulfillmentStatus.Fulfilled)
+            throw new OrderException("Đơn đã giao, không thể soạn/xuất kho lại.");
         if (req.Allocations is null || req.Allocations.Count == 0) throw new OrderException("Chưa có dòng xuất kho.");
 
         // Mỗi dòng phải được xuất kho đủ số lượng.
@@ -482,10 +503,10 @@ public class OrderService : IOrderService
         }
 
         var from = order.OrderStatus;
-        order.FulfillmentStatus = FulfillmentStatus.Allocated;
-        order.OrderStatus = OrderStatus.Allocated;
+        order.FulfillmentStatus = FulfillmentStatus.Shipped;
+        order.OrderStatus = OrderStatus.Shipping;
         order.UpdatedDate = now;
-        _orders.AddStatusHistory(new OrderStatusHistory { OrderId = orderId, FromStatus = from, ToStatus = OrderStatus.Allocated, Note = "Soạn hàng & xuất kho", ChangedBy = userId, CreatedDate = now });
+        _orders.AddStatusHistory(new OrderStatusHistory { OrderId = orderId, FromStatus = from, ToStatus = OrderStatus.Shipping, Note = "Soạn hàng & xuất kho", ChangedBy = userId, CreatedDate = now });
         await _orders.SaveChangesAsync();
     }
 
@@ -533,11 +554,39 @@ public class OrderService : IOrderService
             }
         }
 
+        // Giao tiền mặt/COD: thu tiền ngay khi giao (Đã giao + Đã thanh toán).
+        if (order.PaymentMethod is PaymentMethod.COD or PaymentMethod.Cash
+            && order.PaymentStatus is not (PaymentStatus.Paid or PaymentStatus.Refunded))
+        {
+            var paidSoFar = await _payments.GetTotalPaidAsync(orderId);
+            var due = order.GrandTotal - paidSoFar;
+            if (due > 0)
+            {
+                _payments.Add(new Payment
+                {
+                    Code = $"TT{now:yyyyMMddHHmmssfff}", OrderId = orderId, PaymentType = PaymentRecordType.Full,
+                    Amount = due, Method = PaymentMethod.Cash, PaymentRecordStatus = PaymentRecordStatus.Paid,
+                    Note = "Thu tiền khi giao hàng", RecordedBy = userId, PaidAt = now, CreatedDate = now,
+                });
+                _db.CashTransactions.Add(new CashTransaction
+                {
+                    Code = $"CT{now:yyyyMMddHHmmssfff}", TransactionType = "Receipt", Category = "CustomerPayment",
+                    Amount = due, Method = PaymentMethod.Cash, ReferenceType = "Payment", ReferenceId = orderId,
+                    Note = $"Thu tiền khi giao đơn {order.Code}", RecordedBy = userId, OccurredAt = now, CreatedDate = now,
+                });
+            }
+            var payFrom = order.PaymentStatus;
+            order.PaymentStatus = PaymentStatus.Paid;
+            order.RemainingAmount = 0;
+            if (payFrom != PaymentStatus.Paid)
+                _orders.AddStatusHistory(new OrderStatusHistory { OrderId = orderId, FromStatus = payFrom, ToStatus = PaymentStatus.Paid, Note = "PaymentStatus: Thu tiền khi giao", ChangedBy = userId, CreatedDate = now });
+        }
+
         var from = order.OrderStatus;
         order.FulfillmentStatus = FulfillmentStatus.Fulfilled;
-        order.OrderStatus = order.PaymentStatus == PaymentStatus.Paid ? OrderStatus.Completed : OrderStatus.Allocated;
+        order.OrderStatus = OrderStatus.Delivered; // Đã giao = hoàn tất bán hàng (trục thanh toán tách riêng).
         order.UpdatedDate = now;
-        _orders.AddStatusHistory(new OrderStatusHistory { OrderId = orderId, FromStatus = from, ToStatus = order.OrderStatus, Note = "Giao hàng & xuất kho", ChangedBy = userId, CreatedDate = now });
+        _orders.AddStatusHistory(new OrderStatusHistory { OrderId = orderId, FromStatus = from, ToStatus = OrderStatus.Delivered, Note = "Giao hàng & xuất kho", ChangedBy = userId, CreatedDate = now });
         await _orders.SaveChangesAsync();
     }
 
@@ -548,8 +597,8 @@ public class OrderService : IOrderService
     private async Task UpdateOrderCoreAsync(int orderId, UpdateOrderRequest req, int? userId)
     {
         var order = await _orders.GetDetailAsync(orderId) ?? throw new OrderException("Không tìm thấy đơn hàng.");
-        if (order.OrderStatus is OrderStatus.Completed or OrderStatus.Cancelled)
-            throw new OrderException("Đơn đã hoàn tất hoặc đã hủy, không thể sửa.");
+        if (order.OrderStatus is OrderStatus.Delivered or OrderStatus.Cancelled)
+            throw new OrderException("Đơn đã giao hoặc đã hủy, không thể sửa.");
 
         var now = DateTime.UtcNow;
 
@@ -559,12 +608,14 @@ public class OrderService : IOrderService
         order.ShippingEmail = req.ShippingEmail;
         order.ShippingAddress = req.ShippingAddress;
         order.Note = req.Note;
+        order.FulfillmentNote = req.FulfillmentNote;
+        order.PickupAppointmentAt = req.PickupAppointmentAt;
 
         // Sửa sản phẩm chỉ khi đơn còn Chờ thanh toán (chưa thu tiền, chưa xuất kho).
         if (req.Lines is { Count: > 0 })
         {
-            if (order.OrderStatus != OrderStatus.AwaitingPayment)
-                throw new OrderException("Chỉ sửa được sản phẩm khi đơn đang Chờ thanh toán (chưa xác nhận/thu tiền).");
+            if (order.OrderStatus != OrderStatus.Pending || order.PaymentStatus != PaymentStatus.Unpaid)
+                throw new OrderException("Chỉ sửa được sản phẩm khi đơn đang Chờ xác nhận và chưa thu tiền.");
 
             // Gỡ giữ chỗ cũ + dòng cũ.
             foreach (var r in await _reservations.GetByOrderAsync(orderId))
@@ -624,11 +675,13 @@ public class OrderService : IOrderService
     {
         var order = await _orders.GetDetailAsync(orderId) ?? throw new OrderException("Không tìm thấy đơn hàng.");
         if (order.OrderStatus == OrderStatus.Cancelled) throw new OrderException("Đơn đã hủy.");
+        if (order.OrderStatus == OrderStatus.Delivered || order.FulfillmentStatus == FulfillmentStatus.Fulfilled)
+            throw new OrderException("Đơn đã giao, không thể hủy. Hãy tạo phiếu đổi trả/hoàn tiền nếu cần.");
 
         var now = DateTime.UtcNow;
 
-        // Đã phân phối → trả tồn về kho.
-        if (order.FulfillmentStatus == FulfillmentStatus.Allocated)
+        // Đã phân phối / đã xuất kho (Allocated hoặc Shipped) → trả tồn về kho.
+        if (order.FulfillmentStatus is FulfillmentStatus.Allocated or FulfillmentStatus.Shipped)
         {
             foreach (var line in order.Lines)
             {
@@ -659,6 +712,59 @@ public class OrderService : IOrderService
             }
         }
 
+        // Hoàn lại lượt voucher đã trừ khi tạo đơn (đơn hủy = không tiêu thụ lượt).
+        if (order.VoucherId is int vid)
+        {
+            var voucher = await _voucherRepo.GetByIdAsync(vid);
+            if (voucher is not null && voucher.UsedCount > 0)
+            {
+                voucher.UsedCount--; voucher.UpdatedDate = now; _voucherRepo.Update(voucher);
+            }
+        }
+
+        // Hủy mọi phiếu chuyển khoản còn chờ xác nhận của đơn.
+        foreach (var p in await _payments.GetByOrderAsync(orderId))
+        {
+            if (p.PaymentRecordStatus == PaymentRecordStatus.Pending)
+            {
+                p.PaymentRecordStatus = PaymentRecordStatus.Cancelled;
+                p.Note = string.IsNullOrWhiteSpace(p.Note) ? "Hủy đơn" : $"{p.Note} | Hủy đơn";
+                p.UpdatedDate = now;
+                _payments.Update(p);
+            }
+        }
+
+        // Trạng thái thanh toán sau khi hủy (trục độc lập với trạng thái đơn).
+        var totalPaid = await _payments.GetTotalPaidAsync(orderId);
+        var payBefore = order.PaymentStatus;
+        if (totalPaid > 0)
+        {
+            // Đã thu tiền → hoàn tiền cho khách (chi quỹ) + đánh dấu Đã hoàn tiền để sổ sách cân.
+            _db.CashTransactions.Add(new CashTransaction
+            {
+                Code = $"CT{now:yyyyMMddHHmmssfff}", TransactionType = "Payment", Category = "Refund",
+                Amount = totalPaid, Method = order.PaymentMethod, ReferenceType = "Order", ReferenceId = orderId,
+                Note = $"Hoàn tiền hủy đơn {order.Code}", RecordedBy = userId, OccurredAt = now, CreatedDate = now,
+            });
+            order.PaymentStatus = PaymentStatus.Refunded;
+            order.RemainingAmount = 0;
+            _orders.AddStatusHistory(new OrderStatusHistory
+            {
+                OrderId = orderId, FromStatus = payBefore, ToStatus = PaymentStatus.Refunded,
+                Note = $"PaymentStatus: Hoàn tiền {totalPaid:n0}đ khi hủy đơn", ChangedBy = userId, CreatedDate = now,
+            });
+        }
+        else if (payBefore == PaymentStatus.PendingConfirmation)
+        {
+            // Chuyển khoản không hoàn tất / quá hạn → Thanh toán thất bại.
+            order.PaymentStatus = PaymentStatus.Failed;
+            _orders.AddStatusHistory(new OrderStatusHistory
+            {
+                OrderId = orderId, FromStatus = payBefore, ToStatus = PaymentStatus.Failed,
+                Note = "PaymentStatus: Chuyển khoản không hoàn tất khi hủy đơn", ChangedBy = userId, CreatedDate = now,
+            });
+        }
+
         var from = order.OrderStatus;
         order.OrderStatus = OrderStatus.Cancelled;
         order.UpdatedDate = now;
@@ -668,19 +774,31 @@ public class OrderService : IOrderService
 
     public async Task UpdateStatusAsync(int orderId, UpdateOrderStatusRequest req, int? userId)
     {
-        var order = await _orders.GetByIdAsync(orderId) ?? throw new OrderException("Không tìm thấy đơn hàng.");
-        var allowed = new HashSet<string> { OrderStatus.AwaitingPayment, OrderStatus.Confirmed, OrderStatus.Allocated, OrderStatus.Shipping, OrderStatus.Delivered, OrderStatus.Completed };
-        if (!allowed.Contains(req.ToStatus)) throw new OrderException("Invalid order status.");
+        var order = await _orders.GetDetailAsync(orderId) ?? throw new OrderException("Không tìm thấy đơn hàng.");
+        var toStatus = NormalizeAdminOrderStatus(req.ToStatus);
+        var allowed = new HashSet<string> { OrderStatus.Pending, OrderStatus.Shipping, OrderStatus.Delivered, OrderStatus.Cancelled };
+        if (!allowed.Contains(toStatus)) throw new OrderException("Invalid order status.");
+        if (toStatus == OrderStatus.Cancelled)
+        {
+            await CancelOrderAsync(orderId, req.Note, userId);
+            return;
+        }
+        if (toStatus == OrderStatus.Delivered)
+        {
+            await _unitOfWork.ExecuteInTransactionAsync(() => FulfillCoreAsync(orderId, userId));
+            return;
+        }
+        if (order.OrderStatus is OrderStatus.Delivered or OrderStatus.Cancelled)
+            throw new OrderException("Đơn đã kết thúc, không thể cập nhật trạng thái.");
         var from = order.OrderStatus;
         var fulfillmentFrom = order.FulfillmentStatus;
         var now = DateTime.UtcNow;
-        order.OrderStatus = req.ToStatus;
-        if (req.ToStatus == OrderStatus.Allocated) order.FulfillmentStatus = FulfillmentStatus.Allocated;
-        if (req.ToStatus == OrderStatus.Shipping) order.FulfillmentStatus = FulfillmentStatus.Shipped;
-        if (req.ToStatus is OrderStatus.Delivered or OrderStatus.Completed) order.FulfillmentStatus = FulfillmentStatus.Fulfilled;
+        order.OrderStatus = toStatus;
+        if (toStatus == OrderStatus.Pending) order.FulfillmentStatus = FulfillmentStatus.Unallocated;
+        if (toStatus == OrderStatus.Shipping) order.FulfillmentStatus = FulfillmentStatus.Shipped;
         order.UpdatedDate = now;
         _orders.Update(order);
-        _orders.AddStatusHistory(new OrderStatusHistory { OrderId = orderId, FromStatus = from, ToStatus = req.ToStatus, Note = req.Note, ChangedBy = userId, CreatedDate = now });
+        _orders.AddStatusHistory(new OrderStatusHistory { OrderId = orderId, FromStatus = from, ToStatus = toStatus, Note = req.Note, ChangedBy = userId, CreatedDate = now });
         if (order.FulfillmentStatus != fulfillmentFrom)
         {
             _orders.AddStatusHistory(new OrderStatusHistory
@@ -692,28 +810,27 @@ public class OrderService : IOrderService
         await _orders.SaveChangesAsync();
     }
 
+    // Chấp nhận cả giá trị cũ (AwaitingPayment/Confirmed/Allocated/Completed) lẫn mới → quy về 4 trạng thái.
+    private static string NormalizeAdminOrderStatus(string? status) => status switch
+    {
+        "Pending" or "AwaitingPayment" or "Confirmed" => OrderStatus.Pending,
+        "Allocated" or "Shipping" => OrderStatus.Shipping,
+        "Completed" or "Delivered" => OrderStatus.Delivered,
+        "Cancelled" => OrderStatus.Cancelled,
+        _ => status ?? string.Empty,
+    };
+
     public async Task UpdateFulfillmentStatusAsync(int orderId, UpdateFulfillmentStatusRequest req, int? userId)
     {
-        var order = await _orders.GetByIdAsync(orderId) ?? throw new OrderException("Order not found.");
-        var allowed = new HashSet<string> { FulfillmentStatus.Unallocated, FulfillmentStatus.Allocated, FulfillmentStatus.Shipped, FulfillmentStatus.Fulfilled };
-        if (!allowed.Contains(req.ToStatus)) throw new OrderException("Invalid fulfillment status.");
-        var from = order.FulfillmentStatus;
-        var now = DateTime.UtcNow;
-        order.FulfillmentStatus = req.ToStatus;
-        if (req.ToStatus == FulfillmentStatus.Shipped) order.OrderStatus = OrderStatus.Shipping;
-        if (req.ToStatus == FulfillmentStatus.Fulfilled) order.OrderStatus = OrderStatus.Delivered;
-        order.UpdatedDate = now;
-        _orders.Update(order);
-        _orders.AddStatusHistory(new OrderStatusHistory
+        var mappedOrderStatus = req.ToStatus switch
         {
-            OrderId = orderId,
-            FromStatus = from,
-            ToStatus = req.ToStatus,
-            Note = string.IsNullOrWhiteSpace(req.Note) ? "FulfillmentStatus" : $"FulfillmentStatus: {req.Note}",
-            ChangedBy = userId,
-            CreatedDate = now,
-        });
-        await _orders.SaveChangesAsync();
+            FulfillmentStatus.Unallocated => OrderStatus.Pending,
+            FulfillmentStatus.Allocated or FulfillmentStatus.Shipped => OrderStatus.Shipping,
+            FulfillmentStatus.Fulfilled => OrderStatus.Delivered,
+            _ => throw new OrderException("Invalid fulfillment status."),
+        };
+
+        await UpdateStatusAsync(orderId, new UpdateOrderStatusRequest(mappedOrderStatus, req.Note), userId);
     }
 
     // ===== Mapping =====
@@ -727,7 +844,26 @@ public class OrderService : IOrderService
         {
             var sku = await _skus.GetByIdAsync(i.SkuId);
             var product = sku is null ? null : await _products.GetByIdAsync(sku.ProductId);
-            items.Add(new CartItemDto(i.Id, i.SkuId, sku?.SkuCode ?? "", product?.Name ?? "", i.Qty, i.UnitPriceSnapshot, i.UnitPriceSnapshot * i.Qty, null));
+            var imageUrl = product is null
+                ? null
+                : _db.ProductImages
+                    .Where(x => x.ProductId == product.Id)
+                    .OrderByDescending(x => x.SkuId == i.SkuId && x.IsPrimary)
+                    .ThenByDescending(x => x.IsPrimary)
+                    .ThenBy(x => x.SortOrder)
+                    .Select(x => x.Url)
+                    .FirstOrDefault();
+
+            items.Add(new CartItemDto(
+                i.Id,
+                product?.Id ?? 0,
+                i.SkuId,
+                sku?.SkuCode ?? "",
+                product?.Name ?? "",
+                i.Qty,
+                i.UnitPriceSnapshot,
+                i.UnitPriceSnapshot * i.Qty,
+                imageUrl));
         }
         return new CartDto(cart.Id, items, items.Sum(x => x.Qty), items.Sum(x => x.LineTotal));
     }
@@ -740,17 +876,18 @@ public class OrderService : IOrderService
             var allocs = new List<AllocationDto>();
             foreach (var a in l.Allocations)
                 allocs.Add(new AllocationDto(a.Id, a.Qty, a.AllocationStatus));
-            lines.Add(new OrderLineDto(l.Id, l.SkuId, l.ProductNameSnapshot, l.SkuCodeSnapshot, l.UnitPrice, l.Qty, l.LineTotal, allocs));
+            var sku = await _skus.GetByIdAsync(l.SkuId);
+            lines.Add(new OrderLineDto(l.Id, sku?.ProductId ?? 0, l.SkuId, l.ProductNameSnapshot, l.SkuCodeSnapshot, l.UnitPrice, l.Qty, l.LineTotal, allocs));
         }
 
         var names = await UserNameMapAsync(new[] { o.UserId });
         var histories = await _orders.GetHistoriesAsync(o.Id);
         var payments = await _payments.GetByOrderAsync(o.Id);
         return new OrderDetail(
-            o.Id, o.Code, o.UserId, o.OrderType, o.OrderStatus, o.PaymentStatus, o.FulfillmentStatus,
+            o.Id, o.Code, o.UserId, o.OrderType, o.OrderStatus, o.PaymentMethod, o.PaymentStatus, o.FulfillmentStatus,
             o.Subtotal, o.DiscountTotal, o.ShippingFee, o.GrandTotal, o.DepositAmount, o.RemainingAmount,
             o.ShippingRecipient, o.ShippingPhone, o.ShippingEmail, o.ShippingAddress, o.ReceivingMethod,
-            o.Note, o.PlacedAt, names.GetValueOrDefault(o.UserId), lines,
+            o.Note, o.FulfillmentNote, o.PickupAppointmentAt, o.PlacedAt, names.GetValueOrDefault(o.UserId), lines,
             histories.Select(x => new OrderHistoryDto(
                 x.Id,
                 x.Note?.StartsWith("FulfillmentStatus", StringComparison.Ordinal) == true ? "ShippingStatus"

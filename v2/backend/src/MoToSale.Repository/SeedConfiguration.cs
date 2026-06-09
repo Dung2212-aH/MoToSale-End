@@ -332,11 +332,11 @@ public static class SeedConfiguration
 
         var orders = new[]
         {
-            Order("DEMO-2026-001", "customer@motosale.local", OrderStatus.AwaitingPayment, PaymentStatus.Unpaid, FulfillmentStatus.Unallocated, 0, 0, "SP-VISION-TC"),
-            Order("DEMO-2026-002", "minhanh@example.com", OrderStatus.Confirmed, PaymentStatus.Paid, FulfillmentStatus.Unallocated, 1, 200_000, "PT-LOP-MICH-8090", "PT-MAPHANH-HONDA"),
+            Order("DEMO-2026-001", "customer@motosale.local", OrderStatus.Pending, PaymentStatus.Unpaid, FulfillmentStatus.Unallocated, 0, 0, "SP-VISION-TC"),
+            Order("DEMO-2026-002", "minhanh@example.com", OrderStatus.Pending, PaymentStatus.Paid, FulfillmentStatus.Unallocated, 1, 200_000, "PT-LOP-MICH-8090", "PT-MAPHANH-HONDA"),
             Order("DEMO-2026-003", "quochuy@example.com", OrderStatus.Shipping, PaymentStatus.Paid, FulfillmentStatus.Shipped, 3, 1_000_000, "SP-EX155-ABS"),
             Order("DEMO-2026-004", "hoangnam@example.com", OrderStatus.Delivered, PaymentStatus.Paid, FulfillmentStatus.Fulfilled, 8, 0, "SP-AB160-TC"),
-            Order("DEMO-2026-005", "thutrang@example.com", OrderStatus.Completed, PaymentStatus.Paid, FulfillmentStatus.Fulfilled, 15, 0, "SP-WAVE-TC", "PT-NHOT-HONDA-10"),
+            Order("DEMO-2026-005", "thutrang@example.com", OrderStatus.Delivered, PaymentStatus.Paid, FulfillmentStatus.Fulfilled, 15, 0, "SP-WAVE-TC", "PT-NHOT-HONDA-10"),
             Order("DEMO-2026-006", "customer@motosale.local", OrderStatus.Cancelled, PaymentStatus.Unpaid, FulfillmentStatus.Unallocated, 5, 0, "PT-MBH-DEN-M"),
         };
         db.Orders.AddRange(orders);
@@ -344,9 +344,9 @@ public static class SeedConfiguration
 
         foreach (var order in orders)
         {
-            db.OrderStatusHistories.Add(new OrderStatusHistory { OrderId = order.Id, ToStatus = OrderStatus.AwaitingPayment, Note = "Tạo đơn dữ liệu mẫu", ChangedBy = order.UserId, CreatedDate = order.CreatedDate });
-            if (order.OrderStatus != OrderStatus.AwaitingPayment)
-                db.OrderStatusHistories.Add(new OrderStatusHistory { OrderId = order.Id, FromStatus = OrderStatus.AwaitingPayment, ToStatus = order.OrderStatus, Note = "Cập nhật trạng thái dữ liệu mẫu", ChangedBy = staffId, CreatedDate = order.CreatedDate.AddHours(3) });
+            db.OrderStatusHistories.Add(new OrderStatusHistory { OrderId = order.Id, ToStatus = OrderStatus.Pending, Note = "Tạo đơn dữ liệu mẫu", ChangedBy = order.UserId, CreatedDate = order.CreatedDate });
+            if (order.OrderStatus != OrderStatus.Pending)
+                db.OrderStatusHistories.Add(new OrderStatusHistory { OrderId = order.Id, FromStatus = OrderStatus.Pending, ToStatus = order.OrderStatus, Note = "Cập nhật trạng thái dữ liệu mẫu", ChangedBy = staffId, CreatedDate = order.CreatedDate.AddHours(3) });
             if (order.PaymentStatus == PaymentStatus.Paid)
                 db.Payments.Add(new Payment { Code = $"PAY-{order.Code}", OrderId = order.Id, PaymentType = PaymentRecordType.Full, Amount = order.GrandTotal, Method = order.Id % 2 == 0 ? PaymentMethod.BankTransfer : PaymentMethod.Cash, PaymentRecordStatus = PaymentRecordStatus.Paid, RecordedBy = staffId, PaidAt = order.CreatedDate.AddHours(2), CreatedDate = order.CreatedDate.AddHours(2), Note = "Thanh toán dữ liệu mẫu" });
         }

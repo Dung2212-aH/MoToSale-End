@@ -360,13 +360,11 @@ public class UsersController : ControllerBase
             && !await _users.AnyUserInRoleAsync(RoleConstant.Admin, excludingUserId: id, status: (int)EntityStatus.Active))
             return BadRequest(new { message = "Không thể xóa Admin hoạt động cuối cùng." });
 
-        if (await _db.Orders.AnyAsync(o => o.UserId == id))
-            return BadRequest(new { message = "Tài khoản đã phát sinh đơn hàng, không thể xóa. Hãy khóa tài khoản (đặt trạng thái Khóa) thay vì xóa." });
-
-        user.UserRoles.Clear();
-        _users.Delete(user);
+        // Khóa mềm thay vì xóa cứng: giữ lịch sử (đơn/đánh giá/địa chỉ), tránh mồ côi dữ liệu.
+        user.Status = (int)EntityStatus.Inactive;
+        user.UpdatedDate = DateTime.UtcNow;
         await _users.SaveChangesAsync();
-        return Ok(new { message = "Đã xóa tài khoản." });
+        return Ok(new { message = "Đã khóa tài khoản. Có thể mở lại bằng cập nhật trạng thái." });
     }
 
     private static bool HasRole(User user, string role) => user.UserRoles.Any(ur => ur.Role.Code == role);

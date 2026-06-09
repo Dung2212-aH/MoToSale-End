@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FiLoader } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
-import { orderApi, voucherApi, shopApi } from '../services/api.js';
+import { orderApi, voucherApi, shopApi, userApi } from '../services/api.js';
 import Breadcrumb from '../components/Breadcrumb.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { useCart } from '../contexts/CartContext.jsx';
@@ -141,6 +141,10 @@ function CheckoutPage() {
   const [paymentInfo, setPaymentInfo] = useState(null);
   const [claiming, setClaiming] = useState(false);
 
+  // Hồ sơ khách (tự điền thông tin giao hàng)
+  const [savedProfile, setSavedProfile] = useState(null);
+  const [profileFilled, setProfileFilled] = useState(false);
+
   useEffect(() => {
     if (!isAuthenticated) navigate('/login?redirect=/checkout', { replace: true });
   }, [isAuthenticated, navigate]);
@@ -148,6 +152,40 @@ function CheckoutPage() {
   useEffect(() => {
     shopApi.getPaymentInfo().then(setPaymentInfo).catch(() => {});
   }, []);
+
+  // Tải hồ sơ + địa chỉ mặc định để tự điền thông tin giao hàng
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    Promise.all([
+      userApi.getProfile().catch(() => null),
+      userApi.getAddress().catch(() => null),
+    ]).then(([profile, address]) => setSavedProfile({ profile, address }));
+  }, [isAuthenticated]);
+
+  function fillFromProfile() {
+    const p = savedProfile?.profile || {};
+    const a = savedProfile?.address || {};
+    setForm((prev) => ({
+      ...prev,
+      shippingFullName: a.recipientName || a.RecipientName || p.fullName || p.FullName || prev.shippingFullName,
+      shippingPhoneNumber: a.phone || a.Phone || p.phoneNumber || p.PhoneNumber || prev.shippingPhoneNumber,
+      shippingEmail: p.email || p.Email || prev.shippingEmail,
+      shippingAddressLine: a.line || a.Line || prev.shippingAddressLine,
+      shippingWard: a.ward || a.Ward || prev.shippingWard,
+      shippingDistrict: a.district || a.District || prev.shippingDistrict,
+      shippingProvince: a.province || a.Province || prev.shippingProvince,
+    }));
+    setFieldErrors({});
+  }
+
+  // Tự điền lần đầu nếu khách chưa nhập gì
+  useEffect(() => {
+    if (savedProfile && !profileFilled && !form.shippingFullName && !form.shippingPhoneNumber) {
+      fillFromProfile();
+      setProfileFilled(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedProfile]);
 
   useEffect(() => {
     if (isAuthenticated && !items.length) refreshCart().catch(() => {});
@@ -175,6 +213,44 @@ function CheckoutPage() {
       setApplicableVouchers([]);
     }
   }, [items, subtotal, form.orderType]);
+
+  useEffect(() => {
+    if (!appliedVoucher?.code || !items.length || subtotal <= 0) return undefined;
+
+    let active = true;
+    const revalidateAppliedVoucher = async () => {
+      try {
+        const { productIds, categoryIds, brandIds } = getCartVoucherContext(items);
+        const res = await voucherApi.validateVoucher({
+          code: appliedVoucher.code,
+          subtotal,
+          productIds,
+          categoryIds,
+          brandIds,
+          orderType: form.orderType,
+        });
+
+        if (!active) return;
+        if (res.valid) {
+          setAppliedVoucher(res.voucher);
+          setVoucherDiscount(res.discountAmount || 0);
+          setVoucherError('');
+        } else {
+          setAppliedVoucher(null);
+          setVoucherDiscount(0);
+          setVoucherError(res.message || 'Voucher không còn phù hợp với giỏ hàng hiện tại');
+        }
+      } catch {
+        if (!active) return;
+        setAppliedVoucher(null);
+        setVoucherDiscount(0);
+        setVoucherError('Không thể kiểm tra lại voucher, vui lòng áp dụng lại');
+      }
+    };
+
+    revalidateAppliedVoucher();
+    return () => { active = false; };
+  }, [appliedVoucher?.code, items, subtotal, form.orderType]);
 
   const shippingFee = 0;
   const totalAmount = Math.max(0, subtotal - voucherDiscount + shippingFee);
@@ -313,11 +389,11 @@ function CheckoutPage() {
     <>
       <Breadcrumb items={[{ label: 'Giỏ hàng', to: '/cart' }, { label: 'Thanh toán' }]} />
 
-      <section className="bg-[linear-gradient(180deg,#f5f6f8_0%,#ffffff_26%)] px-4 py-10">
-        <div className="mx-auto grid w-full max-w-[1200px] gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <section className="bg-[linear-gradient(180deg,#f5f6f8_0%,#ffffff_26%)] px-3 py-10 sm:px-4">
+        <div className="mx-auto grid min-w-0 w-full max-w-[1200px] gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
           {/* ── Left: Shipping Form ── */}
-          <form onSubmit={handleSubmit} className="space-y-5" id="checkout-form">
-            <div className="rounded-[30px] border border-zinc-200 bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.07)]">
+          <form onSubmit={handleSubmit} className="min-w-0 space-y-5" id="checkout-form">
+            <div className="rounded-[24px] border border-zinc-200 bg-white px-4 py-5 shadow-[0_18px_50px_rgba(15,23,42,0.07)] sm:rounded-[30px] sm:px-6 sm:py-6">
               <div className="text-[12px] font-extrabold uppercase tracking-[0.18em] text-zinc-400">Thanh toán</div>
               <h1 className="mt-2 text-[28px] font-black text-zinc-950 sm:text-[34px]">Thông tin giao hàng</h1>
             </div>
@@ -327,8 +403,19 @@ function CheckoutPage() {
             )}
 
             {/* Contact Info */}
-            <div className="rounded-[28px] border border-zinc-200 bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.07)]">
-              <h2 className="text-[18px] font-black text-zinc-950">Thông tin liên hệ</h2>
+            <div className="rounded-[24px] border border-zinc-200 bg-white px-4 py-5 shadow-[0_18px_50px_rgba(15,23,42,0.07)] sm:rounded-[28px] sm:px-6 sm:py-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-[18px] font-black text-zinc-950">Thông tin liên hệ</h2>
+                {(savedProfile?.profile || savedProfile?.address) && (
+                  <button
+                    type="button"
+                    onClick={fillFromProfile}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[#d71920] px-4 py-1.5 text-xs font-bold text-[#d71920] transition hover:bg-red-50"
+                  >
+                    Điền từ hồ sơ
+                  </button>
+                )}
+              </div>
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 <Field label="Họ và tên *" id="shippingFullName" name="shippingFullName" value={form.shippingFullName} onChange={handleChange} error={fieldErrors.shippingFullName} placeholder="Nguyễn Văn A" />
                 <Field label="Số điện thoại *" id="shippingPhoneNumber" name="shippingPhoneNumber" value={form.shippingPhoneNumber} onChange={handleChange} error={fieldErrors.shippingPhoneNumber} placeholder="0912345678" type="tel" />
@@ -339,7 +426,7 @@ function CheckoutPage() {
             </div>
 
             {/* Receiving Method */}
-            <div className="rounded-[28px] border border-zinc-200 bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.07)]">
+            <div className="rounded-[24px] border border-zinc-200 bg-white px-4 py-5 shadow-[0_18px_50px_rgba(15,23,42,0.07)] sm:rounded-[28px] sm:px-6 sm:py-6">
               <h2 className="text-[18px] font-black text-zinc-950">Phương thức nhận hàng</h2>
               <div className="mt-4 flex flex-wrap gap-3">
                 {RECEIVING_METHODS.map((m) => (
@@ -350,7 +437,7 @@ function CheckoutPage() {
 
             {/* Address */}
             {form.receivingMethod === 'Delivery' && (
-              <div className="rounded-[28px] border border-zinc-200 bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.07)]">
+              <div className="rounded-[24px] border border-zinc-200 bg-white px-4 py-5 shadow-[0_18px_50px_rgba(15,23,42,0.07)] sm:rounded-[28px] sm:px-6 sm:py-6">
                 <h2 className="text-[18px] font-black text-zinc-950">Địa chỉ giao hàng</h2>
                 <div className="mt-5"><Field label="Địa chỉ *" id="shippingAddressLine" name="shippingAddressLine" value={form.shippingAddressLine} onChange={handleChange} error={fieldErrors.shippingAddressLine} placeholder="Số nhà, tên đường..." /></div>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -362,7 +449,7 @@ function CheckoutPage() {
 
             {/* Pickup */}
             {form.receivingMethod === 'Pickup' && (
-              <div className="rounded-[28px] border border-zinc-200 bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.07)]">
+              <div className="rounded-[24px] border border-zinc-200 bg-white px-4 py-5 shadow-[0_18px_50px_rgba(15,23,42,0.07)] sm:rounded-[28px] sm:px-6 sm:py-6">
                 <h2 className="text-[18px] font-black text-zinc-950">Hẹn ngày nhận xe</h2>
                 <div className="mt-5"><Field label="Ngày hẹn nhận" id="pickupAppointmentAt" name="pickupAppointmentAt" value={form.pickupAppointmentAt} onChange={handleChange} type="datetime-local" /></div>
                 <div className="mt-4"><Field label="Ghi chú giao nhận" id="fulfillmentNote" name="fulfillmentNote" value={form.fulfillmentNote} onChange={handleChange} placeholder="Ghi chú cho showroom..." multiline /></div>
@@ -370,7 +457,7 @@ function CheckoutPage() {
             )}
 
             {/* Order Type */}
-            <div className="rounded-[28px] border border-zinc-200 bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.07)]">
+            <div className="rounded-[24px] border border-zinc-200 bg-white px-4 py-5 shadow-[0_18px_50px_rgba(15,23,42,0.07)] sm:rounded-[28px] sm:px-6 sm:py-6">
               <h2 className="text-[18px] font-black text-zinc-950">Hình thức thanh toán</h2>
               <div className="mt-4 flex flex-wrap gap-3">
                 {ORDER_TYPES.map((t) => (
@@ -383,7 +470,7 @@ function CheckoutPage() {
             </div>
 
             {/* Payment Method */}
-            <div className="rounded-[28px] border border-zinc-200 bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.07)]">
+            <div className="rounded-[24px] border border-zinc-200 bg-white px-4 py-5 shadow-[0_18px_50px_rgba(15,23,42,0.07)] sm:rounded-[28px] sm:px-6 sm:py-6">
               <h2 className="text-[18px] font-black text-zinc-950">Phương thức thanh toán</h2>
               <div className="mt-4 space-y-3">
                 {PAYMENT_METHODS.map((m) => (
@@ -403,15 +490,15 @@ function CheckoutPage() {
             </div>
 
             {/* Note */}
-            <div className="rounded-[28px] border border-zinc-200 bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.07)]">
+            <div className="rounded-[24px] border border-zinc-200 bg-white px-4 py-5 shadow-[0_18px_50px_rgba(15,23,42,0.07)] sm:rounded-[28px] sm:px-6 sm:py-6">
               <h2 className="text-[18px] font-black text-zinc-950">Ghi chú đơn hàng</h2>
               <div className="mt-4"><Field id="note" name="note" value={form.note} onChange={handleChange} placeholder="Ghi chú thêm cho đơn hàng..." multiline /></div>
             </div>
           </form>
 
           {/* ── Right: Order Summary ── */}
-          <aside className="space-y-5 lg:sticky lg:top-28 lg:self-start">
-            <div className="rounded-[28px] border border-zinc-200 bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
+          <aside className="min-w-0 space-y-5 lg:sticky lg:top-28 lg:self-start">
+            <div className="rounded-[24px] border border-zinc-200 bg-white p-4 shadow-[0_18px_50px_rgba(15,23,42,0.08)] sm:rounded-[28px] sm:p-6">
               <h2 className="text-[22px] font-black text-zinc-950">Đơn hàng của bạn</h2>
 
               <div className="mt-5 max-h-[340px] space-y-3 overflow-y-auto pr-1">

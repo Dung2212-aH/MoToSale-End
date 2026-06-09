@@ -14,7 +14,7 @@ public class BusinessOperationsService : IBusinessOperationsService
 
     public async Task<object> GetLookupsAsync()
     {
-        var delivered = await _db.Orders.AsNoTracking().Where(x => x.OrderStatus == OrderStatus.Delivered || x.OrderStatus == OrderStatus.Completed)
+        var delivered = await _db.Orders.AsNoTracking().Where(x => x.OrderStatus == OrderStatus.Delivered)
             .OrderByDescending(x => x.Id).Select(x => new { x.Id, x.Code, x.UserId, x.GrandTotal, lines = x.Lines.Select(l => new { l.Id, l.SkuId, l.ProductNameSnapshot, l.SkuCodeSnapshot, l.Qty, l.UnitPrice }) }).ToListAsync();
         var users = await _db.Users.AsNoTracking().OrderBy(x => x.FullName).Select(x => new { x.Id, x.FullName, x.Email, x.PhoneNumber }).ToListAsync();
         var staffIds = await _db.UserRoles.AsNoTracking().Where(x => x.Role.Code == "Staff").Select(x => x.UserId).Distinct().ToListAsync();

@@ -1,15 +1,36 @@
 import api from './api';
 
-const normalizeSku = (sku) => ({
-  ...sku,
-  sku: sku.sku ?? sku.skuCode ?? '',
-  tenBienThe: sku.tenBienThe ?? sku.variantName ?? '',
-  mauSac: sku.mauSac ?? sku.color ?? '',
-  phienBan: sku.phienBan ?? sku.version ?? '',
-  giaNiemYet: sku.giaNiemYet ?? sku.listPrice ?? 0,
-  giaKhuyenMai: sku.giaKhuyenMai ?? sku.salePrice ?? null,
-  trangThai: sku.trangThai ?? (sku.status === 0 ? 'Inactive' : 'Available'),
-});
+const buildSkuDisplayName = (version, color) =>
+  [String(version || '').trim(), String(color || '').trim()].filter(Boolean).join(' - ');
+
+const inferSkuVersion = (sku, color) => {
+  const explicitVersion = sku.phienBan ?? sku.version;
+  if (explicitVersion) return explicitVersion;
+
+  const name = sku.variantName ?? sku.tenBienThe ?? '';
+  const colorSuffix = color ? ` - ${color}` : '';
+  if (colorSuffix && String(name).endsWith(colorSuffix)) {
+    return String(name).slice(0, -colorSuffix.length).trim();
+  }
+  return name;
+};
+
+const normalizeSku = (sku) => {
+  const color = sku.mauSac ?? sku.color ?? '';
+  const version = inferSkuVersion(sku, color);
+  const displayName = sku.tenBienThe ?? sku.variantName ?? buildSkuDisplayName(version, color);
+
+  return {
+    ...sku,
+    sku: sku.sku ?? sku.skuCode ?? '',
+    tenBienThe: displayName,
+    mauSac: color,
+    phienBan: version,
+    giaNiemYet: sku.giaNiemYet ?? sku.listPrice ?? 0,
+    giaKhuyenMai: sku.giaKhuyenMai ?? sku.salePrice ?? null,
+    trangThai: sku.trangThai ?? (sku.status === 0 ? 'Inactive' : 'Available'),
+  };
+};
 
 const normalizeImage = (image) => ({
   ...image,
@@ -73,11 +94,15 @@ const mapCollection = async (request, mapper) => {
 
 const mapSkuPayload = (data, includeStatus = false) => {
   const salePrice = data.salePrice ?? data.giaKhuyenMai;
+  const version = String(data.version ?? data.phienBan ?? '').trim();
+  const color = String(data.color ?? data.mauSac ?? '').trim();
+  const derivedName = [version, color].filter(Boolean).join(' - ');
+  const variantName = String(data.variantName ?? data.tenBienThe ?? '').trim() || derivedName || null;
   const payload = {
     skuCode: data.skuCode ?? data.sku ?? null,
-    variantName: data.variantName ?? data.tenBienThe ?? null,
-    color: data.color ?? data.mauSac ?? null,
-    version: data.version ?? data.phienBan ?? null,
+    variantName,
+    color: color || null,
+    version: version || null,
     listPrice: Number(data.listPrice ?? data.giaNiemYet ?? data.giaGhiDe) || 0,
     salePrice: salePrice === '' || salePrice == null ? null : Number(salePrice),
     barcode: data.barcode ?? null,

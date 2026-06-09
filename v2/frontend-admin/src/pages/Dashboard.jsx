@@ -11,6 +11,24 @@ import warrantyService from '../services/warrantyService';
 import { useAuth } from '../contexts/AuthContext';
 import { formatCurrency } from '../utils/formatCurrency';
 import { formatDate } from '../utils/formatDate';
+import { cn } from '../utils/cn';
+
+const cardClass = 'relative mb-4 flex min-w-0 flex-col rounded border border-black/10 bg-white shadow-[0_0_1px_rgba(0,0,0,0.125),0_1px_3px_rgba(0,0,0,0.2)]';
+const cardHeaderClass = 'flex min-h-12 items-center justify-between gap-4 border-b border-black/10 px-5 py-3';
+const cardTitleClass = 'm-0 text-lg font-normal';
+const cardBodyClass = 'min-h-px flex-auto p-5';
+const tableClass = 'mb-0 w-full border-collapse bg-white text-[#212529]';
+const thClass = 'whitespace-nowrap border border-[#dee2e6] border-b-2 px-3 py-2 align-bottom';
+const tdClass = 'border border-[#dee2e6] px-3 py-2 align-middle';
+const emptyCellClass = cn(tdClass, 'py-4 text-center text-[#6c757d]');
+const badgeClass = (variant = 'info') => cn(
+  'inline-block rounded px-1.5 py-1 text-[75%] font-bold leading-none',
+  {
+    info: 'bg-info text-white',
+    danger: 'bg-danger text-white',
+    warning: 'bg-warning text-[#1f2933]',
+  }[variant] || 'bg-secondary text-white',
+);
 
 const Dashboard = () => {
   const { isAdmin } = useAuth();
@@ -100,30 +118,24 @@ const Dashboard = () => {
   const getOrderStatus = (order) => reportService.getOrderStatusLabel(order);
 
   return (
-    <div className="content-wrapper">
-      <div className="content-header">
-        <div className="container-fluid">
-          <div className="row mb-2">
-            <div className="col-sm-6">
-              <h1 className="m-0">Tổng quan</h1>
-            </div>
-          </div>
-        </div>
+    <div className="min-h-[calc(100vh-57px-38px)] bg-[#f4f6f9]">
+      <div className="px-2 py-[15px]">
+        <h1 className="m-0 text-3xl font-normal">Tổng quan</h1>
       </div>
 
-      <section className="content">
-        <div className="container-fluid">
-          {error && <div className="alert alert-danger">{error}</div>}
+      <section className="px-2 pb-4">
+        <div className="w-full">
+          {error && <div className="mb-4 rounded border border-[#f5c6cb] bg-[#f8d7da] px-5 py-3 text-[#721c24]">{error}</div>}
 
           {loading ? (
-            <div className="text-center py-5">
-              <div className="spinner-border text-primary" role="status">
-                <span className="sr-only">Đang tải...</span>
+            <div className="py-5 text-center text-primary">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-current border-r-transparent" role="status">
+                <span className="sr-only absolute h-px w-px overflow-hidden whitespace-nowrap">Đang tải...</span>
               </div>
             </div>
           ) : (
             <>
-              <div className="row">
+              <div className="-mx-[7.5px] flex flex-wrap">
                 <StatCard
                   color="info"
                   icon="fas fa-motorcycle"
@@ -156,49 +168,49 @@ const Dashboard = () => {
                 />
               </div>
 
-              <div className="row">
+              <div className="-mx-[7.5px] flex flex-wrap">
                 <StatCard color="primary" icon="fas fa-clipboard-check" label="Đơn cần xử lý" value={operations.awaitingOrders} to="/orders" />
                 <StatCard color="warning" icon="fas fa-money-bill-wave" label="Chưa thanh toán" value={operations.unpaidOrders} to="/orders" />
                 <StatCard color="info" icon="fas fa-truck" label="Đang giao/chuẩn bị" value={operations.shippingOrders} to="/orders" />
                 <StatCard color="danger" icon="fas fa-box-open" label="Hết hàng" value={operations.outOfStock} to="/inventory" />
               </div>
 
-              <div className="row">
+              <div className="-mx-[7.5px] flex flex-wrap">
                 <StatCard color="warning" icon="fas fa-exclamation-triangle" label="Sắp hết hàng" value={operations.lowStock} to="/inventory" />
                 <StatCard color="secondary" icon="fas fa-truck-loading" label="Đơn mua đang xử lý" value={operations.pendingPurchases} to="/supply" />
                 <StatCard color="success" icon="fas fa-ticket-alt" label="Voucher sắp hết hạn" value={operations.expiringVouchers} to="/vouchers" />
                 <StatCard color="info" icon="fas fa-tools" label="Bảo hành đang xử lý" value={operations.activeWarranties} to="/warranties" />
               </div>
 
-              <div className="row">
+              <div className="-mx-[7.5px] flex flex-wrap">
                 <StatCard color="success" icon="fas fa-calendar-day" label="Doanh thu hôm nay" value={formatCurrency(operations.todayRevenue || 0)} to="/reports" />
                 <StatCard color="danger" icon="fas fa-hand-holding-usd" label="Còn phải thu" value={formatCurrency(operations.customerReceivable || 0)} to="/reports" />
                 <StatCard color="warning" icon="fas fa-file-invoice-dollar" label="Cần trả NCC" value={formatCurrency(operations.supplierPayable || 0)} to="/supply" />
                 <StatCard color="primary" icon="fas fa-phone-volume" label="CSKH cần xử lý" value={operations.openCrmTasks || 0} to="/service-crm" />
               </div>
 
-              <div className="row">
-                <div className="col-lg-8">
-                  <div className="card">
-                    <div className="card-header">
-                      <h3 className="card-title">Doanh thu 7 ngày gần nhất</h3>
+              <div className="-mx-[7.5px] flex flex-wrap">
+                <div className="w-full px-[7.5px] lg:w-2/3">
+                  <div className={cardClass}>
+                    <div className={cardHeaderClass}>
+                      <h3 className={cardTitleClass}>Doanh thu 7 ngày gần nhất</h3>
                     </div>
-                    <div className="card-body">
+                    <div className={cardBodyClass}>
                       <RevenueChart data={data.revenueSeries} />
                     </div>
                   </div>
                 </div>
 
-                <div className="col-lg-4">
-                  <div className="card">
-                    <div className="card-header">
-                      <h3 className="card-title">Đơn hàng theo trạng thái</h3>
+                <div className="w-full px-[7.5px] lg:w-1/3">
+                  <div className={cardClass}>
+                    <div className={cardHeaderClass}>
+                      <h3 className={cardTitleClass}>Đơn hàng theo trạng thái</h3>
                     </div>
-                    <div className="card-body">
+                    <div className={cardBodyClass}>
                       {data.orderStatusSeries.length > 0 ? (
                         <OrderStatusChart data={data.orderStatusSeries} />
                       ) : (
-                        <div className="text-center text-muted py-5">
+                        <div className="py-5 text-center text-[#6c757d]">
                           <i className="fas fa-chart-pie fa-3x mb-3"></i>
                           <p>Chưa có dữ liệu đơn hàng.</p>
                         </div>
@@ -208,47 +220,47 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              <div className="row">
-                <div className="col-lg-7">
-                  <div className="card">
-                    <div className="card-header">
-                      <h3 className="card-title">Đơn hàng mới nhất</h3>
-                      <div className="card-tools">
-                        <Link to="/orders" className="btn btn-tool" title="Xem tất cả">
+              <div className="-mx-[7.5px] flex flex-wrap">
+                <div className="w-full px-[7.5px] lg:w-7/12">
+                  <div className={cardClass}>
+                    <div className={cardHeaderClass}>
+                      <h3 className={cardTitleClass}>Đơn hàng mới nhất</h3>
+                      <div className="ml-auto">
+                        <Link to="/orders" className="inline-flex items-center justify-center rounded border border-transparent px-3 py-1.5 text-primary hover:text-[#0056b3]" title="Xem tất cả">
                           <i className="fas fa-external-link-alt"></i>
                         </Link>
                       </div>
                     </div>
-                    <div className="card-body table-responsive p-0">
-                      <table className="table table-bordered table-striped mb-0">
+                    <div className="block w-full overflow-x-auto">
+                      <table className={tableClass}>
                         <thead>
                           <tr>
-                            <th className="table-col-code">Mã đơn</th>
-                            <th className="table-col-text">Khách hàng</th>
-                            <th className="table-col-money">Tổng tiền</th>
-                            <th className="table-col-status">Trạng thái</th>
-                            <th className="table-col-date">Ngày tạo</th>
+                            <th className={cn(thClass, 'text-center')}>Mã đơn</th>
+                            <th className={cn(thClass, 'text-left')}>Khách hàng</th>
+                            <th className={cn(thClass, 'text-right')}>Tổng tiền</th>
+                            <th className={cn(thClass, 'text-center')}>Trạng thái</th>
+                            <th className={cn(thClass, 'text-center')}>Ngày tạo</th>
                           </tr>
                         </thead>
                         <tbody>
                           {data.recentOrders.length === 0 ? (
                             <tr>
-                              <td colSpan="5" className="text-center text-muted py-4">
+                              <td colSpan="5" className={emptyCellClass}>
                                 Chưa có đơn hàng mới.
                               </td>
                             </tr>
                           ) : (
                             data.recentOrders.map((order) => (
-                              <tr key={getOrderCode(order)}>
-                                <td className="table-col-code">
+                              <tr key={getOrderCode(order)} className="odd:bg-black/[0.025] hover:bg-black/[0.055]">
+                                <td className={cn(tdClass, 'text-center')}>
                                   <Link to={`/orders/${getOrderId(order)}`}>
                                     <strong>{getOrderCode(order)}</strong>
                                   </Link>
                                 </td>
-                                <td className="table-col-text">{getCustomerName(order)}</td>
-                                <td className="table-col-money">{formatCurrency(getOrderAmount(order))}</td>
-                                <td className="table-col-status"><span className="badge badge-info">{getOrderStatus(order)}</span></td>
-                                <td className="table-col-date">{formatDate(order.ngayTao || order.createdAt || order.placedAt)}</td>
+                                <td className={tdClass}>{getCustomerName(order)}</td>
+                                <td className={cn(tdClass, 'text-right')}>{formatCurrency(getOrderAmount(order))}</td>
+                                <td className={cn(tdClass, 'text-center')}><span className={badgeClass('info')}>{getOrderStatus(order)}</span></td>
+                                <td className={cn(tdClass, 'text-center')}>{formatDate(order.ngayTao || order.createdAt || order.placedAt)}</td>
                               </tr>
                             ))
                           )}
@@ -258,33 +270,33 @@ const Dashboard = () => {
                   </div>
                 </div>
 
-                <div className="col-lg-5">
-                  <div className="card">
-                    <div className="card-header">
-                      <h3 className="card-title">Top sản phẩm bán chạy</h3>
+                <div className="w-full px-[7.5px] lg:w-5/12">
+                  <div className={cardClass}>
+                    <div className={cardHeaderClass}>
+                      <h3 className={cardTitleClass}>Top sản phẩm bán chạy</h3>
                     </div>
-                    <div className="card-body p-0">
-                      <table className="table table-bordered table-striped mb-0">
+                    <div className="block w-full overflow-x-auto">
+                      <table className={tableClass}>
                         <thead>
                           <tr>
-                            <th className="table-col-text">Sản phẩm</th>
-                            <th className="table-col-number">Đã bán</th>
-                            <th className="table-col-money">Doanh thu</th>
+                            <th className={cn(thClass, 'text-left')}>Sản phẩm</th>
+                            <th className={cn(thClass, 'text-right')}>Đã bán</th>
+                            <th className={cn(thClass, 'text-right')}>Doanh thu</th>
                           </tr>
                         </thead>
                         <tbody>
                           {data.topProducts.length === 0 ? (
                             <tr>
-                              <td colSpan="3" className="text-center text-muted py-4">
+                              <td colSpan="3" className={emptyCellClass}>
                                 Chưa có dữ liệu bán chạy.
                               </td>
                             </tr>
                           ) : (
                             data.topProducts.map((product) => (
-                              <tr key={product.id || product.name}>
-                                <td className="table-col-text">{product.name}</td>
-                                <td className="table-col-number">{product.sold}</td>
-                                <td className="table-col-money">{formatCurrency(product.revenue)}</td>
+                              <tr key={product.id || product.name} className="odd:bg-black/[0.025] hover:bg-black/[0.055]">
+                                <td className={tdClass}>{product.name}</td>
+                                <td className={cn(tdClass, 'text-right')}>{product.sold}</td>
+                                <td className={cn(tdClass, 'text-right')}>{formatCurrency(product.revenue)}</td>
                               </tr>
                             ))
                           )}
@@ -295,34 +307,34 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              <div className="row">
-                <div className="col-lg-7">
-                  <div className="card">
-                    <div className="card-header">
-                      <h3 className="card-title">Cảnh báo tồn kho</h3>
-                      <div className="card-tools">
-                        <Link to="/inventory" className="btn btn-tool" title="Xem tồn kho"><i className="fas fa-external-link-alt"></i></Link>
+              <div className="-mx-[7.5px] flex flex-wrap">
+                <div className="w-full px-[7.5px] lg:w-7/12">
+                  <div className={cardClass}>
+                    <div className={cardHeaderClass}>
+                      <h3 className={cardTitleClass}>Cảnh báo tồn kho</h3>
+                      <div className="ml-auto">
+                        <Link to="/inventory" className="inline-flex items-center justify-center rounded border border-transparent px-3 py-1.5 text-primary hover:text-[#0056b3]" title="Xem tồn kho"><i className="fas fa-external-link-alt"></i></Link>
                       </div>
                     </div>
-                    <div className="card-body table-responsive p-0">
-                      <table className="table table-bordered table-striped mb-0">
+                    <div className="block w-full overflow-x-auto">
+                      <table className={tableClass}>
                         <thead>
                           <tr>
-                            <th>SKU</th>
-                            <th>Sản phẩm</th>
-                            <th className="text-right">Khả dụng</th>
-                            <th className="text-center">Cảnh báo</th>
+                            <th className={thClass}>SKU</th>
+                            <th className={thClass}>Sản phẩm</th>
+                            <th className={cn(thClass, 'text-right')}>Khả dụng</th>
+                            <th className={cn(thClass, 'text-center')}>Cảnh báo</th>
                           </tr>
                         </thead>
                         <tbody>
                           {(data.inventoryWarnings || []).length === 0 ? (
-                            <tr><td colSpan="4" className="text-center text-muted py-4">Không có cảnh báo tồn kho.</td></tr>
+                            <tr><td colSpan="4" className={emptyCellClass}>Không có cảnh báo tồn kho.</td></tr>
                           ) : data.inventoryWarnings.map((item) => (
-                            <tr key={item.skuId}>
-                              <td>{item.skuCode}</td>
-                              <td>{item.productName}</td>
-                              <td className="text-right">{item.available}</td>
-                              <td className="text-center"><span className={`badge badge-${item.available <= 0 ? 'danger' : 'warning'}`}>{item.warningStatus}</span></td>
+                            <tr key={item.skuId} className="odd:bg-black/[0.025] hover:bg-black/[0.055]">
+                              <td className={tdClass}>{item.skuCode}</td>
+                              <td className={tdClass}>{item.productName}</td>
+                              <td className={cn(tdClass, 'text-right')}>{item.available}</td>
+                              <td className={cn(tdClass, 'text-center')}><span className={badgeClass(item.available <= 0 ? 'danger' : 'warning')}>{item.warningStatus}</span></td>
                             </tr>
                           ))}
                         </tbody>
@@ -330,31 +342,31 @@ const Dashboard = () => {
                     </div>
                   </div>
                 </div>
-                <div className="col-lg-5">
-                  <div className="card">
-                    <div className="card-header">
-                      <h3 className="card-title">CSKH cần xử lý</h3>
-                      <div className="card-tools">
-                        <Link to="/service-crm" className="btn btn-tool" title="Xem CSKH"><i className="fas fa-external-link-alt"></i></Link>
+                <div className="w-full px-[7.5px] lg:w-5/12">
+                  <div className={cardClass}>
+                    <div className={cardHeaderClass}>
+                      <h3 className={cardTitleClass}>CSKH cần xử lý</h3>
+                      <div className="ml-auto">
+                        <Link to="/service-crm" className="inline-flex items-center justify-center rounded border border-transparent px-3 py-1.5 text-primary hover:text-[#0056b3]" title="Xem CSKH"><i className="fas fa-external-link-alt"></i></Link>
                       </div>
                     </div>
-                    <div className="card-body table-responsive p-0">
-                      <table className="table table-bordered table-striped mb-0">
+                    <div className="block w-full overflow-x-auto">
+                      <table className={tableClass}>
                         <thead>
                           <tr>
-                            <th>Khách hàng</th>
-                            <th>Nội dung</th>
-                            <th>Hẹn xử lý</th>
+                            <th className={thClass}>Khách hàng</th>
+                            <th className={thClass}>Nội dung</th>
+                            <th className={thClass}>Hẹn xử lý</th>
                           </tr>
                         </thead>
                         <tbody>
                           {(data.crmTasks || []).length === 0 ? (
-                            <tr><td colSpan="3" className="text-center text-muted py-4">Không có lịch CSKH mở.</td></tr>
+                            <tr><td colSpan="3" className={emptyCellClass}>Không có lịch CSKH mở.</td></tr>
                           ) : data.crmTasks.slice(0, 8).map((task) => (
-                            <tr key={task.id}>
-                              <td>{task.customerName}</td>
-                              <td>{task.subject}</td>
-                              <td><span className={task.isOverdue ? 'text-danger font-weight-bold' : ''}>{formatDate(task.followUpAt)}</span></td>
+                            <tr key={task.id} className="odd:bg-black/[0.025] hover:bg-black/[0.055]">
+                              <td className={tdClass}>{task.customerName}</td>
+                              <td className={tdClass}>{task.subject}</td>
+                              <td className={tdClass}><span className={task.isOverdue ? 'font-bold text-danger' : ''}>{formatDate(task.followUpAt)}</span></td>
                             </tr>
                           ))}
                         </tbody>

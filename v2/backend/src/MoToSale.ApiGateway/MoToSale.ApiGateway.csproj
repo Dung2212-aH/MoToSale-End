@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <Content Update="ocelot.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="ocelot.Docker.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

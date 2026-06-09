@@ -203,7 +203,7 @@ function normalizeImage(image, variants = []) {
   const raw = image?.raw || image;
   const url = valueOf(image, 'imageUrl', 'url', 'src') || valueOf(raw, 'imageUrl', 'url', 'src') || '';
   const altText = valueOf(image, 'altText', 'name', 'title') || '';
-  const productVariantId = valueOf(image, 'productVariantId', 'maBienSanPham') ?? valueOf(raw, 'productVariantId', 'maBienSanPham');
+  const productVariantId = valueOf(image, 'productVariantId', 'skuId', 'maBienSanPham') ?? valueOf(raw, 'productVariantId', 'skuId', 'maBienSanPham');
   const linkedVariant = productVariantId
     ? variants.find((variant) => String(variant.id) === String(productVariantId))
     : null;
@@ -242,7 +242,7 @@ export function normalizeProductOptions(product) {
 
     return variantImages.map((image) => ({
       ...(image?.raw || image),
-      productVariantId: valueOf(image, 'productVariantId') ?? parentVariant?.id,
+      productVariantId: valueOf(image, 'productVariantId', 'skuId') ?? parentVariant?.id,
       color: valueOf(image, 'color', 'colorName') || parentVariant?.color,
       version: valueOf(image, 'version') || parentVariant?.version,
     }));
@@ -265,6 +265,7 @@ export function normalizeProductOptions(product) {
     .filter((variant) => variant.imageUrl)
     .map((variant) => ({
       id: `variant-image-${variant.id || variant.imageUrl}`,
+      productVariantId: variant.id,
       imageUrl: variant.imageUrl,
       altText: variant.variantName || product?.name || '',
       sortOrder: -1,

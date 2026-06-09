@@ -10,6 +10,7 @@
     "test:ui": "playwright test"
   },
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.2.0",
     "axios": "^1.13.4",
     "chart.js": "^4.5.1",
     "exceljs": "^4.4.0",

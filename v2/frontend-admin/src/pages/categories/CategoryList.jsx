@@ -26,6 +26,9 @@ const emptyForm = {
 const getCategoryId = (category) => category.id || category.maDanhMuc;
 const getParentId = (category) => category.danhMucChaId || category.maDanhMucCha || category.parentId || null;
 const getCategoryName = (category) => category.tenDanhMuc || category.name || '';
+const getCategoryKind = (category) => Number(category.kind ?? category.loai ?? 0);
+const SYSTEM_ROOT_SLUGS = new Set(['xe-may', 'phu-tung']);
+const isSystemRootCategory = (category) => !getParentId(category) && SYSTEM_ROOT_SLUGS.has(category.slug);
 
 const CategoryList = () => {
   const { isAdmin } = useAuth();
@@ -98,13 +101,18 @@ const CategoryList = () => {
     return descendants;
   }, [categories]);
 
+  const rootParentOptions = useMemo(
+    () => categories.filter(isSystemRootCategory).sort((a, b) => (getCategoryKind(a) || 0) - (getCategoryKind(b) || 0)),
+    [categories],
+  );
+
   const parentOptions = useMemo(() => {
-    if (!editItem) return categories;
-    const currentId = getCategoryId(editItem);
-    const blockedIds = getDescendantIds(currentId);
-    blockedIds.add(String(currentId));
-    return categories.filter((category) => !blockedIds.has(String(getCategoryId(category))));
-  }, [categories, editItem, getDescendantIds]);
+    if (editItem && isSystemRootCategory(editItem)) {
+      return [];
+    }
+
+    return rootParentOptions;
+  }, [editItem, rootParentOptions]);
 
   const visibleRows = useMemo(() => {
     if (levelFilter === 'child') {
@@ -163,7 +171,7 @@ const CategoryList = () => {
     const { name, value } = e.target;
     setForm((prev) => {
       const updated = { ...prev, [name]: value };
-      if (name === 'tenDanhMuc') {
+      if (name === 'tenDanhMuc' && !(editItem && isSystemRootCategory(editItem))) {
         updated.slug = generateSlug(value);
       }
       return updated;
@@ -174,6 +182,12 @@ const CategoryList = () => {
     e.preventDefault();
     if (!form.tenDanhMuc.trim()) {
       alert('Tên danh mục là bắt buộc.');
+      return;
+    }
+    const editingSystemRoot = editItem && isSystemRootCategory(editItem);
+    const selectedParent = rootParentOptions.find((category) => String(getCategoryId(category)) === String(form.danhMucChaId));
+    if (!editingSystemRoot && !selectedParent) {
+      alert('Vui lòng chọn danh mục cha là Xe máy hoặc Phụ tùng.');
       return;
     }
     if (editItem && form.danhMucChaId) {
@@ -191,7 +205,8 @@ const CategoryList = () => {
         tenDanhMuc: form.tenDanhMuc.trim(),
         slug: form.slug.trim(),
         moTa: form.moTa,
-        danhMucChaId: form.danhMucChaId ? Number(form.danhMucChaId) : null,
+        danhMucChaId: editingSystemRoot ? null : Number(form.danhMucChaId),
+        kind: editingSystemRoot ? getCategoryKind(editItem) : getCategoryKind(selectedParent),
         thuTu: Number(form.thuTu) || 0,
         dangHoatDong: form.dangHoatDong,
       };
@@ -384,16 +399,34 @@ const CategoryList = () => {
                   </div>
                   <div className="form-group">
                     <label>Slug</label>
-                    <input type="text" className="form-control" name="slug" value={form.slug} onChange={handleChange} />
+                    <input
+                      type="text"
+                      className="form-control"
+                      name="slug"
+                      value={form.slug}
+                      onChange={handleChange}
+                      disabled={editItem && isSystemRootCategory(editItem)}
+                    />
                   </div>
                   <div className="form-group">
                     <label>Mô tả</label>
                     <textarea className="form-control" name="moTa" value={form.moTa} onChange={handleChange} rows="3" />
                   </div>
                   <div className="form-group">
-                    <label>Danh mục cha</label>
-                    <select className="form-control" name="danhMucChaId" value={form.danhMucChaId} onChange={handleChange}>
-                      <option value="">Không có - danh mục gốc</option>
+                    <label>Danh mục cha <span className="text-danger">*</span></label>
+                    <select
+                      className="form-control"
+                      name="danhMucChaId"
+                      value={form.danhMucChaId}
+                      onChange={handleChange}
+                      disabled={editItem && isSystemRootCategory(editItem)}
+                      required={!(editItem && isSystemRootCategory(editItem))}
+                    >
+                      <option value="">
+                        {editItem && isSystemRootCategory(editItem)
+                          ? 'Danh mục gốc hệ thống'
+                          : '-- Chọn Xe máy hoặc Phụ tùng --'}
+                      </option>
                       {parentOptions.map((category) => (
                         <option key={getCategoryId(category)} value={String(getCategoryId(category))}>
                           {getCategoryName(category)}
@@ -401,7 +434,7 @@ const CategoryList = () => {
                       ))}
                     </select>
                     <small className="form-text text-muted">
-                      Để trống khi tạo nhóm gốc như Xe máy hoặc Phụ tùng.
+                      Chỉ có 2 danh mục cha cấp gốc: Xe máy và Phụ tùng. Danh mục mới phải nằm dưới một trong 2 nhóm này.
                     </small>
                   </div>
                   <div className="row">
@@ -421,6 +454,7 @@ const CategoryList = () => {
                             id="catDangHoatDong"
                             checked={form.dangHoatDong}
                             onChange={(e) => setForm((prev) => ({ ...prev, dangHoatDong: e.target.checked }))}
+                            disabled={editItem && isSystemRootCategory(editItem)}
                           />
                           <label className="custom-control-label" htmlFor="catDangHoatDong">
                             {form.dangHoatDong ? 'Hoạt động' : 'Ẩn'}

@@ -1,8 +1,24 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { brandAssets } from '../assets/siteData.js';
 import { FaFacebookF, FaYoutube, FaInstagram, FaTiktok } from 'react-icons/fa';
 
 function Footer() {
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterMessage, setNewsletterMessage] = useState('');
+
+  function handleNewsletterSubmit(event) {
+    event.preventDefault();
+    const email = newsletterEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setNewsletterMessage('Vui lòng nhập email hợp lệ.');
+      return;
+    }
+
+    setNewsletterMessage('Cảm ơn bạn, EURO Moto sẽ gửi ưu đãi mới qua email này.');
+    setNewsletterEmail('');
+  }
+
   return (
     <footer className="bg-[#151515] text-white">
       <div className="mx-auto grid w-full max-w-[1200px] gap-10 px-4 py-12 md:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1.4fr]">
@@ -60,11 +76,17 @@ function Footer() {
 
         <div>
           <h3 className="text-[17px] font-bold text-white">Nhận tin khuyến mãi</h3>
-          <form className="mt-4 flex gap-2" onSubmit={(event) => event.preventDefault()}>
+          <form className="mt-4 flex gap-2" onSubmit={handleNewsletterSubmit}>
             <input
               className="min-h-[44px] min-w-0 flex-1 rounded-xl border border-white/10 bg-white px-4 text-sm text-zinc-900 outline-none"
               type="email"
               placeholder="Nhập email nhận tin khuyến mãi"
+              value={newsletterEmail}
+              required
+              onChange={(event) => {
+                setNewsletterEmail(event.target.value);
+                setNewsletterMessage('');
+              }}
             />
             <button
               className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-[#d71920] px-4 text-sm font-extrabold uppercase tracking-[0.08em] text-white transition hover:bg-[#b61016]"
@@ -73,6 +95,7 @@ function Footer() {
               Đăng ký
             </button>
           </form>
+          {newsletterMessage && <p className="mt-2 text-xs font-semibold text-zinc-300">{newsletterMessage}</p>}
 
           <div className="mt-5 flex gap-2" aria-label="Mạng xã hội">
             {[

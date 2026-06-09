@@ -38,8 +38,8 @@ public class AdvancedOperationsService : IAdvancedOperationsService
         await using var transaction = await BeginSerializableTransactionAsync();
         var order = await _db.Orders.Include(x => x.Lines).FirstOrDefaultAsync(x => x.Id == r.OrderId)
             ?? throw new AdvancedOperationsException("Không tìm thấy đơn hàng.");
-        if (order.OrderStatus is not (OrderStatus.Delivered or OrderStatus.Completed))
-            throw new AdvancedOperationsException("Chỉ đơn đã giao hoặc hoàn thành mới được trả hàng.");
+        if (order.OrderStatus != OrderStatus.Delivered)
+            throw new AdvancedOperationsException("Chỉ đơn đã giao mới được trả hàng.");
         var now = DateTime.UtcNow;
         var salesReturn = new SalesReturn
         {
@@ -119,7 +119,16 @@ public class AdvancedOperationsService : IAdvancedOperationsService
                 throw new AdvancedOperationsException("Sản phẩm đã được trả ở phiếu khác. Vui lòng kiểm tra lại phiếu.");
         }
         var maxRefund = CalculateRefundableAmount(order, row.Lines.Select(x => (x.OrderLineId, x.Qty)));
-        if (r.RefundAmount < 0 || r.RefundAmount > maxRefund) throw new AdvancedOperationsException($"Số tiền hoàn không hợp lệ. Tối đa {maxRefund:n0} đ.");
+        // Không hoàn quá số tiền khách đã THỰC TRẢ (trừ phần đã hoàn trước đó) — tránh chi quỹ cho tiền chưa thu.
+        var paidForOrder = await _db.Payments
+            .Where(p => p.OrderId == order.Id && p.PaymentRecordStatus == PaymentRecordStatus.Paid)
+            .SumAsync(p => (decimal?)p.Amount) ?? 0;
+        var refundedForOrder = await _db.Refunds
+            .Where(x => x.OrderId == order.Id)
+            .SumAsync(x => (decimal?)x.Amount) ?? 0;
+        var refundCeiling = Math.Min(maxRefund, Math.Max(0, paidForOrder - refundedForOrder));
+        if (r.RefundAmount < 0 || r.RefundAmount > refundCeiling)
+            throw new AdvancedOperationsException($"Số tiền hoàn không hợp lệ. Tối đa {refundCeiling:n0} đ (đã thu {paidForOrder:n0} đ, đã hoàn {refundedForOrder:n0} đ).");
         var now = DateTime.UtcNow;
         foreach (var line in row.Lines.Where(x => x.ItemCondition == "Resellable"))
         {
@@ -270,8 +279,8 @@ public class AdvancedOperationsService : IAdvancedOperationsService
     {
         var order = await _db.Orders.Include(x => x.Lines).FirstOrDefaultAsync(x => x.Id == orderId)
             ?? throw new AdvancedOperationsException("Không tìm thấy đơn hàng.");
-        if (order.OrderStatus is not (OrderStatus.Delivered or OrderStatus.Completed))
-            throw new AdvancedOperationsException("Chỉ đơn đã giao hoặc hoàn thành mới được trả hàng.");
+        if (order.OrderStatus != OrderStatus.Delivered)
+            throw new AdvancedOperationsException("Chỉ đơn đã giao mới được trả hàng.");
         return order;
     }
 

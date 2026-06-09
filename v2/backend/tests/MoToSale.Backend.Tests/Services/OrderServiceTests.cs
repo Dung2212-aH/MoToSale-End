@@ -31,7 +31,7 @@ public class OrderServiceTests
 
         var created = await service.GetOrderAsync(orderId);
         Assert.NotNull(created);
-        Assert.Equal(OrderStatus.AwaitingPayment, created.OrderStatus);
+        Assert.Equal(OrderStatus.Pending, created.OrderStatus);
         Assert.Single(created.Lines);
         Assert.Single(f.Db.Reservations.Where(x => x.OrderId == orderId && x.ReservationStatus == ReservationStatus.Active));
 

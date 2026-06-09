@@ -153,8 +153,8 @@ function Header() {
                           <FiChevronDown className={`h-3.5 w-3.5 translate-y-[1px] transition duration-300 ${productMenuOpen ? 'rotate-180' : ''}`} />
                         </button>
 
-                        <div className={`absolute left-0 top-full z-30 pt-3 transition duration-300 ${productMenuOpen ? 'visible translate-y-0 opacity-100' : 'invisible translate-y-3 opacity-0'}`}>
-                          <div className="w-[1040px] max-w-[calc(100vw-120px)] overflow-hidden rounded-[22px] border border-zinc-200 bg-white px-6 py-5 shadow-[0_24px_60px_rgba(0,0,0,0.16)]">
+                        <div className={`absolute left-1/2 top-full z-30 w-[min(1040px,calc(100vw-32px))] -translate-x-1/2 pt-3 transition duration-300 ${productMenuOpen ? 'visible translate-y-0 opacity-100 pointer-events-auto' : 'invisible translate-y-3 opacity-0 pointer-events-none'}`}>
+                          <div className="overflow-hidden rounded-[22px] border border-zinc-200 bg-white px-6 py-5 shadow-[0_24px_60px_rgba(0,0,0,0.16)]">
                             <div className="grid grid-cols-3 gap-12">
                               {productBrandGroups.map((group) => (
                                 <div key={group.brandSlug}>

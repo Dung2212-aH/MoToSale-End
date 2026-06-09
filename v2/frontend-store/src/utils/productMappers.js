@@ -22,6 +22,8 @@ function normalizeVariant(raw) {
     productId: valueOf(raw, 'productId', 'ProductId', 'maSanPham', 'MaSanPham'),
     variantName: valueOf(raw, 'variantName', 'VariantName', 'tenBienThe', 'TenBienThe') || '',
     sku: valueOf(raw, 'sku', 'SKU') || '',
+    listPrice: valueOf(raw, 'listPrice', 'ListPrice') == null ? null : Number(valueOf(raw, 'listPrice', 'ListPrice')),
+    salePrice: valueOf(raw, 'salePrice', 'SalePrice') == null ? null : Number(valueOf(raw, 'salePrice', 'SalePrice')),
     priceOverride: valueOf(raw, 'priceOverride', 'PriceOverride', 'giaGhiDe', 'GiaGhiDe') == null ? null : Number(valueOf(raw, 'priceOverride', 'PriceOverride', 'giaGhiDe', 'GiaGhiDe')),
     stockQuantity: valueOf(raw, 'stockQuantity', 'StockQuantity', 'soLuongTon', 'SoLuongTon'),
     status: valueOf(raw, 'status', 'Status', 'trangThai', 'TrangThai'),
@@ -32,7 +34,7 @@ function normalizeVariant(raw) {
     images: images
       .map((image) => ({
         id: valueOf(image, 'id', 'Id', 'maAnhSanPham', 'MaAnhSanPham'),
-        productVariantId: valueOf(image, 'productVariantId', 'ProductVariantId', 'maBienSanPham', 'MaBienSanPham') ?? valueOf(raw, 'id', 'Id', 'maBienSanPham', 'MaBienSanPham'),
+        productVariantId: valueOf(image, 'productVariantId', 'ProductVariantId', 'skuId', 'SkuId', 'maBienSanPham', 'MaBienSanPham') ?? valueOf(raw, 'id', 'Id', 'maBienSanPham', 'MaBienSanPham'),
         imageUrl: normalizeImageUrl(valueOf(image, 'imageUrl', 'ImageUrl', 'urlAnh', 'UrlAnh') || valueOf(image, 'url')),
         altText: valueOf(image, 'altText'),
         isPrimary: valueOf(image, 'isPrimary', 'IsPrimary', 'laAnhChinh', 'LaAnhChinh'),
@@ -93,6 +95,8 @@ export function normalizeProduct(raw) {
         sku: valueOf(s, 'skuCode', 'SkuCode') || '',
         color: valueOf(s, 'color', 'Color'),
         version: valueOf(s, 'version', 'Version'),
+        listPrice: sList > 0 ? sList : null,
+        salePrice: sSale != null && sSale > 0 ? sSale : null,
         priceOverride: effective > 0 ? effective : null,
         stockQuantity: valueOf(s, 'available', 'Available', 'stockQuantity', 'StockQuantity', 'soLuongTon', 'SoLuongTon'),
         status: valueOf(s, 'status', 'Status'),
@@ -115,7 +119,8 @@ export function normalizeProduct(raw) {
     carModelName: valueOf(raw, 'carModelName', 'CarModelName', 'tenDongXe', 'TenDongXe') || valueOf(valueOf(raw, 'carModel'), 'name'),
     showroomId: valueOf(raw, 'showroomId', 'ShowroomId', 'maShowroom', 'MaShowroom'),
     showroomName: valueOf(raw, 'showroomName', 'ShowroomName', 'tenShowroom', 'TenShowroom') || valueOf(valueOf(raw, 'showroom'), 'name'),
-    productType: valueOf(raw, 'productType', 'ProductType', 'loaiSanPham', 'LoaiSanPham'),
+    kind: valueOf(raw, 'kind', 'Kind'),
+    productType: valueOf(raw, 'productType', 'ProductType', 'kind', 'Kind', 'loaiSanPham', 'LoaiSanPham'),
     shortDescription: valueOf(raw, 'shortDescription', 'ShortDescription', 'moTaNgan', 'MoTaNgan'),
     description: valueOf(raw, 'description', 'Description', 'moTa', 'MoTa'),
     basePrice,
@@ -157,7 +162,7 @@ export function normalizeProduct(raw) {
     images: images
       .map((image) => ({
         id: valueOf(image, 'id', 'Id', 'maAnhSanPham', 'MaAnhSanPham'),
-        productVariantId: valueOf(image, 'productVariantId', 'ProductVariantId', 'maBienSanPham', 'MaBienSanPham'),
+        productVariantId: valueOf(image, 'productVariantId', 'ProductVariantId', 'skuId', 'SkuId', 'maBienSanPham', 'MaBienSanPham'),
         imageUrl: normalizeImageUrl(valueOf(image, 'imageUrl', 'ImageUrl', 'urlAnh', 'UrlAnh') || valueOf(image, 'url')),
         altText: valueOf(image, 'altText'),
         isPrimary: valueOf(image, 'isPrimary', 'IsPrimary', 'laAnhChinh', 'LaAnhChinh'),
@@ -189,8 +194,10 @@ export function normalizeCategory(raw) {
     id: valueOf(raw, 'id', 'Id', 'maDanhMuc', 'MaDanhMuc'),
     name: valueOf(raw, 'name', 'Name', 'tenDanhMuc', 'TenDanhMuc') || '',
     slug: valueOf(raw, 'slug'),
-    parentCategoryId: valueOf(raw, 'parentCategoryId', 'ParentCategoryId', 'maDanhMucCha', 'MaDanhMucCha'),
+    parentCategoryId: valueOf(raw, 'parentCategoryId', 'ParentCategoryId', 'parentId', 'ParentId', 'maDanhMucCha', 'MaDanhMucCha'),
     description: valueOf(raw, 'description', 'Description', 'moTa', 'MoTa'),
+    kind: valueOf(raw, 'kind', 'Kind'),
+    status: valueOf(raw, 'status', 'Status'),
     sortOrder: valueOf(raw, 'sortOrder', 'SortOrder', 'thuTuHienThi', 'ThuTuHienThi') || 0,
     isActive: valueOf(raw, 'isActive', 'IsActive', 'dangHoatDong', 'DangHoatDong') !== false,
   };
@@ -217,24 +224,34 @@ export function normalizeFilters(response) {
 export function normalizeCart(response) {
   const items = response?.items || response?.Items || [];
   const normalizedItems = items.map((item) => {
-    const quantity = Number(valueOf(item, 'quantity', 'Quantity', 'soLuong', 'SoLuong') || 1);
+    const quantity = Number(valueOf(item, 'quantity', 'Quantity', 'qty', 'Qty', 'soLuong', 'SoLuong') || 1);
     const unitPrice = Number(valueOf(item, 'unitPrice', 'UnitPrice', 'donGia', 'DonGia') || 0);
     const lineTotal = Number(valueOf(item, 'lineTotal', 'LineTotal', 'thanhTien', 'ThanhTien') || unitPrice * quantity);
+    const productId = valueOf(item, 'productId', 'ProductId', 'maSanPham', 'MaSanPham');
+    const skuCode = valueOf(item, 'skuCode', 'SkuCode', 'skuSnapshot', 'SkuSnapshot', 'maSku', 'MaSku');
+    const imageUrl = normalizeImageUrl(valueOf(item, 'imageUrl', 'ImageUrl', 'mainImageUrl', 'MainImageUrl', 'anhChinhUrl', 'AnhChinhUrl'));
+    const rawVariant = valueOf(item, 'productVariant');
 
     return {
       id: valueOf(item, 'id', 'Id', 'maChiTietGioHang', 'MaChiTietGioHang'),
       cartId: valueOf(item, 'cartId', 'CartId', 'maGioHang', 'MaGioHang'),
-      productId: valueOf(item, 'productId', 'ProductId', 'maSanPham', 'MaSanPham'),
-      productVariantId: valueOf(item, 'productVariantId', 'ProductVariantId', 'maBienSanPham', 'MaBienSanPham'),
+      productId,
+      skuCode,
+      productVariantId: valueOf(item, 'productVariantId', 'ProductVariantId', 'skuId', 'SkuId', 'maBienSanPham', 'MaBienSanPham'),
       quantity,
       unitPrice,
       lineTotal,
+      imageUrl,
       product: normalizeProduct(valueOf(item, 'product')) || {
-        id: valueOf(item, 'productId', 'ProductId', 'maSanPham', 'MaSanPham'),
+        id: productId,
         name: valueOf(item, 'productName', 'ProductName', 'tenSanPham', 'TenSanPham') || '',
-        mainImageUrl: normalizeImageUrl(valueOf(item, 'mainImageUrl', 'MainImageUrl', 'anhChinhUrl', 'AnhChinhUrl')),
+        mainImageUrl: imageUrl,
       },
-      productVariant: normalizeVariant(valueOf(item, 'productVariant')) || valueOf(item, 'productVariant'),
+      productVariant: normalizeVariant(rawVariant) || rawVariant || {
+        id: valueOf(item, 'skuId', 'SkuId', 'productVariantId', 'ProductVariantId'),
+        sku: skuCode,
+        variantName: skuCode,
+      },
     };
   });
 

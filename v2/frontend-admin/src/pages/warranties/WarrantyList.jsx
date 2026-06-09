@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import warrantyService from '../../services/warrantyService';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { formatDate } from '../../utils/formatDate';
+import { formatMoneyInput, normalizeMoneyInput } from '../../utils/moneyInput';
 
 const STATUS = {
   Received: { label: 'Tiếp nhận', color: 'info' },
@@ -298,10 +299,11 @@ const WarrantyList = () => {
                       <div className="form-group">
                         <label>{label}</label>
                         <input
-                          type={field.includes('ngay') || field.includes('hetHan') ? 'date' : field.includes('chiPhi') || field.startsWith('ma') ? 'number' : 'text'}
+                          type={field.includes('ngay') || field.includes('hetHan') ? 'date' : field.includes('chiPhi') ? 'text' : field.startsWith('ma') ? 'number' : 'text'}
+                          inputMode={field.includes('chiPhi') ? 'numeric' : undefined}
                           className="form-control"
-                          value={form[field]}
-                          onChange={(e) => setField(field, e.target.value)}
+                          value={field.includes('chiPhi') ? formatMoneyInput(form[field]) : form[field]}
+                          onChange={(e) => setField(field, field.includes('chiPhi') ? normalizeMoneyInput(e.target.value) : e.target.value)}
                         />
                       </div>
                     </div>
@@ -356,7 +358,7 @@ const WarrantyList = () => {
                   </div>
                   <div className="col-md-3">
                     <label>Chi phí thực tế</label>
-                    <input type="number" className="form-control" value={statusForm.chiPhiThucTe} onChange={(e) => setStatusForm((prev) => ({ ...prev, chiPhiThucTe: e.target.value }))} />
+                    <input type="text" inputMode="numeric" className="form-control" value={formatMoneyInput(statusForm.chiPhiThucTe)} onChange={(e) => setStatusForm((prev) => ({ ...prev, chiPhiThucTe: normalizeMoneyInput(e.target.value) }))} />
                   </div>
                   <div className="col-md-6">
                     <label>Ghi chú xử lý</label>

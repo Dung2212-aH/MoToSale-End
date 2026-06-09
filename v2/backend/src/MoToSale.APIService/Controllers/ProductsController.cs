@@ -27,6 +27,40 @@ public class ProductsController : ControllerBase
     public async Task<IActionResult> Search([FromQuery] ProductSearchRequest request) =>
         Ok(await _catalog.SearchProductsAsync(request));
 
+    [HttpGet("filters")]
+    public async Task<IActionResult> GetFilters()
+    {
+        var categories = (await _catalog.GetCategoriesAsync())
+            .Where(x => x.Status == (int)MoToSale.Common.EntityStatus.Active)
+            .OrderBy(x => x.SortOrder)
+            .ThenBy(x => x.Name)
+            .ToList();
+        var brands = (await _catalog.GetBrandsAsync())
+            .Where(x => x.Status == (int)MoToSale.Common.EntityStatus.Active)
+            .OrderBy(x => x.Name)
+            .ToList();
+        var brandMap = brands.ToDictionary(x => x.Id, x => x.Name);
+        var carModels = (await _catalog.GetVehicleModelsAsync(null))
+            .Where(x => x.Status == (int)MoToSale.Common.EntityStatus.Active)
+            .OrderBy(x => brandMap.GetValueOrDefault(x.BrandId))
+            .ThenBy(x => x.Name)
+            .ToList();
+
+        return Ok(new
+        {
+            categories,
+            brands,
+            carModels,
+            partCompatibleTypes = carModels.Select(x => new
+            {
+                id = x.Id,
+                name = x.Name,
+                brandId = x.BrandId,
+                brandName = brandMap.GetValueOrDefault(x.BrandId) ?? "",
+            }),
+        });
+    }
+
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {

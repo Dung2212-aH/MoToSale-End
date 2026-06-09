@@ -184,6 +184,11 @@ public class InventoryService : IInventoryService
         {
             throw new InventoryException($"Tồn kho không đủ cho SKU #{skuId}.");
         }
+        // Không cho giảm tồn xuống dưới số đang giữ chỗ (DB có CHECK OnHand >= Reserved) → báo lỗi rõ thay vì 500.
+        if (qtyDelta < 0 && balanceAfter < item.Reserved)
+        {
+            throw new InventoryException($"Không thể giảm tồn SKU #{skuId} xuống {balanceAfter} vì đang giữ chỗ {item.Reserved} cho đơn hàng. Hãy hủy/giao bớt đơn giữ chỗ trước.");
+        }
 
         item.OnHand = balanceAfter;
         item.UpdatedDate = now;

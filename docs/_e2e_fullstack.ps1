@@ -104,7 +104,7 @@ $o1d=(Api GET "/orders/$($o1.id)" $admin).data
 Api POST '/payments' @{ orderId=$o1.id; paymentType='Full'; amount=$o1d.grandTotal; method='Cash'; transactionRef=$null; note='E2E full pay' } $admin | Out-Null
 Api POST "/orders/$($o1.id)/fulfill" $null $admin | Out-Null
 $o1after=(Api GET "/orders/$($o1.id)" $custA).data
-Chk ($o1after.paymentStatus -eq 'Paid' -and $o1after.orderStatus -eq 'Completed') 'X1 Thu du + giao -> khach thay Completed/Paid'
+Chk ($o1after.paymentStatus -eq 'Paid' -and $o1after.orderStatus -eq 'Delivered') 'X1 Thu du + giao -> khach thay Da giao/Da thanh toan'
 $rstate=(Api GET "/reviews/product/$prodId/me" $custA).data
 Chk ($rstate.canReview -eq $true) 'X3 Khach du dieu kien danh gia'
 Api POST "/products/$prodId/reviews" @{ rating=5; title='Tot'; comment='E2E review 2 chieu'; orderId=$o1.id } $custA | Out-Null
@@ -128,7 +128,7 @@ Chk (@($pubItems|Where-Object{$_.title -eq "Bai E2E $rnd"}).Count -ge 1 -and @($
 $custList=(Api GET '/users/customers?Page=1&PageSize=200' $admin).data; $custItems = if($custList.items){$custList.items}else{$custList}
 Chk (@($custItems|Where-Object{$_.email -eq $emailA}).Count -ge 1) 'X7 Khach dang ky tu storefront hien o admin'
 $posDep=(Api POST '/orders/pos' @{ customerName='Khach Coc'; customerPhone='0900000444'; note='E2E coc'; orderType='Deposit'; depositAmount=50000; paymentMethod='Cash'; paidAmount=50000; lines=@(@{ skuId=$skuId; qty=1; unitPrice=300000 }) } $admin)
-if($posDep.ok){ $dep=(Api GET "/orders/$($posDep.data.id)" $admin).data; Chk ($dep.paymentStatus -eq 'DepositPaid' -and $dep.remainingAmount -gt 0) 'X2 Don coc (DepositPaid, con no)' } else { Chk $false 'X2 Don coc' $posDep.raw }
+if($posDep.ok){ $dep=(Api GET "/orders/$($posDep.data.id)" $admin).data; Chk ($dep.paymentStatus -eq 'Unpaid' -and $dep.remainingAmount -gt 0 -and $dep.depositAmount -gt 0) 'X2 Don coc (Cho thanh toan + da cot coc + con no)' } else { Chk $false 'X2 Don coc' $posDep.raw }
 
 '#################### X-SEC ####################'
 Chk ((Api GET "/orders/$($o1.id)" $custB).ok -eq $false) 'X-SEC-1 Khach B KHONG xem duoc don khach A'

@@ -181,14 +181,31 @@ erDiagram
 **Settings** — cấu hình vận hành (key/value). **AuditLogs** — nhật ký mọi thay đổi.
 
 ### 3.4 Bảng trạng thái (state values)
+Trạng thái đơn được tách thành **2 trục độc lập**: trạng thái đơn/giao hàng và trạng thái thanh toán. Việc thu/hoàn tiền **không** tự đổi trạng thái đơn (admin chủ động duyệt giao), tránh phụ thuộc chéo gây sai lệch.
+
 | Lĩnh vực | Giá trị |
 |---|---|
-| OrderStatus | Pending · AwaitingPayment · Confirmed · Allocated · Shipping · Delivered · Completed · Cancelled |
-| PaymentStatus | Unpaid · DepositPaid · PartiallyPaid · Paid · Refunded |
+| **OrderStatus** (giao/nhận) | `Pending` (Chờ xác nhận) · `Shipping` (Đang giao) · `Delivered` (Đã giao = hoàn tất bán hàng) · `Cancelled` (Đã hủy) |
+| **PaymentStatus** (thanh toán) | `Unpaid` (Chờ thanh toán — gồm cả đơn mới đặt cọc) · `PendingConfirmation` (Chờ xác nhận chuyển khoản) · `Paid` (Đã thanh toán) · `Refunded` (Đã hoàn tiền) · `Failed` (Thanh toán thất bại) |
 | FulfillmentStatus | Unallocated · Allocated · Shipped · Fulfilled |
 | OrderType | FullPayment · Deposit · Installment |
 | StockMovementType | Receipt · Issue · AdjustIn/Out · TransferIn/Out · ReserveHold/Release |
 | ReservationStatus | Active · Confirmed · Released · Expired |
+
+**Ghi chú đặt cọc:** tính năng đặt cọc vẫn hỗ trợ (theo dõi `DepositAmount`/`RemainingAmount` + phiếu thu), nhưng **không** thể hiện thành trạng thái riêng — đơn chưa thu đủ là `Unpaid`, thu đủ là `Paid`.
+
+**Mapping nghiệp vụ chuẩn:**
+| Tình huống | OrderStatus | PaymentStatus |
+|---|---|---|
+| Đơn online/COD vừa tạo | Pending | Unpaid |
+| Khách báo đã chuyển khoản | Pending | PendingConfirmation |
+| Admin đối soát đủ tiền | Pending | Paid |
+| Admin duyệt giao | Shipping | (giữ nguyên) |
+| Giao xong (COD thu tiền khi giao) | Delivered | Paid |
+| POS bán đứt | Delivered | Paid |
+| Hủy đơn chưa thu | Cancelled | Unpaid / Failed |
+| Hủy đơn đã thu (hoàn tiền) | Cancelled | Refunded |
+| Đổi trả sau giao | Delivered (giữ) | quản lý ở phiếu đổi trả/hoàn tiền riêng |
 
 ---
 

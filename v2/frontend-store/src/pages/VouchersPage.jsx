@@ -38,7 +38,7 @@ function VouchersPage() {
     loadVouchers();
   }, [isAuthenticated]);
 
-  const savedCodes = new Set(myVouchers.map((v) => v.code));
+  const savedCodes = new Set(myVouchers.map((v) => String(v.code || '').toUpperCase()));
 
   async function handleSave(voucher) {
     if (!isAuthenticated) {
@@ -51,7 +51,11 @@ function VouchersPage() {
       const result = await voucherApi.saveVoucher(voucher.code);
       if (result.success) {
         notify('Đã nhận voucher thành công!', 'success');
-        setMyVouchers((prev) => [...prev, voucher]);
+        setMyVouchers((prev) => (
+          prev.some((item) => String(item.code || '').toUpperCase() === String(voucher.code || '').toUpperCase())
+            ? prev
+            : [...prev, voucher]
+        ));
       } else {
         notify(result.message || 'Không thể nhận voucher', 'error');
       }
@@ -118,7 +122,7 @@ function VouchersPage() {
                   <VoucherCard
                     key={voucher.id}
                     voucher={voucher}
-                    saved={savedCodes.has(voucher.code)}
+                    saved={savedCodes.has(String(voucher.code || '').toUpperCase())}
                     saving={savingCode === voucher.code}
                     onSave={() => handleSave(voucher)}
                     getDiscountLabel={getDiscountLabel}

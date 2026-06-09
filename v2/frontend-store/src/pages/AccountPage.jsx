@@ -51,9 +51,9 @@ function normalizeProfile(data = {}) {
   return {
     id: data.id ?? data.userId ?? data.UserId,
     username: data.username ?? data.Username ?? data.email ?? data.Email ?? '',
-    name: data.name ?? data.Name ?? '',
+    name: data.name ?? data.Name ?? data.fullName ?? data.FullName ?? '',
     email: data.email ?? data.Email ?? '',
-    phone: data.phone ?? data.Phone ?? '',
+    phone: data.phone ?? data.Phone ?? data.phoneNumber ?? data.PhoneNumber ?? '',
     created: data.created ?? data.Created ?? '',
   };
 }
@@ -62,10 +62,11 @@ function normalizeAddress(data = {}) {
   const address = data.address || data.Address || data;
 
   return {
-    fullName: address.fullName ?? address.FullName ?? '',
-    phoneNumber: address.phoneNumber ?? address.PhoneNumber ?? '',
-    addressLine: address.addressLine ?? address.AddressLine ?? '',
+    fullName: address.fullName ?? address.FullName ?? address.recipientName ?? address.RecipientName ?? '',
+    phoneNumber: address.phoneNumber ?? address.PhoneNumber ?? address.phone ?? address.Phone ?? '',
+    addressLine: address.addressLine ?? address.AddressLine ?? address.line ?? address.Line ?? '',
     ward: address.ward ?? address.Ward ?? '',
+    district: address.district ?? address.District ?? '',
     province: address.province ?? address.Province ?? '',
     note: address.note ?? address.Note ?? '',
   };
@@ -252,11 +253,11 @@ function AccountPage() {
           <div className="rounded-[30px] border border-zinc-200 bg-white px-6 py-6 shadow-[0_18px_50px_rgba(15,23,42,0.07)]">
             <div className="text-[12px] font-extrabold uppercase tracking-[0.18em] text-zinc-400">Tài khoản</div>
             <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div>
+              <div className="min-w-0">
                 <h1 className="text-[28px] font-black text-zinc-950 sm:text-[34px]">{displayName}</h1>
-                <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm font-medium text-zinc-500">
-                  <span className="inline-flex items-center gap-1.5"><FiMail />{profile.email || 'Chưa có email'}</span>
-                  <span className="inline-flex items-center gap-1.5"><FiPhone />{profile.phone || 'Chưa có số điện thoại'}</span>
+                <div className="mt-2 flex min-w-0 flex-wrap gap-x-5 gap-y-2 text-sm font-medium text-zinc-500">
+                  <span className="inline-flex min-w-0 items-center gap-1.5 break-all"><FiMail className="shrink-0" />{profile.email || 'Chưa có email'}</span>
+                  <span className="inline-flex min-w-0 items-center gap-1.5 break-all"><FiPhone className="shrink-0" />{profile.phone || 'Chưa có số điện thoại'}</span>
                 </div>
               </div>
               <button
@@ -340,7 +341,7 @@ function AccountPage() {
                     <form onSubmit={handleProfileSubmit} className="grid gap-4">
                       <Field label="Họ và tên" name="name" value={profile.name} onChange={handleProfileChange} error={profileErrors.name} icon={FiUser} />
                       <div className="grid gap-4 sm:grid-cols-2">
-                        <Field label="Email" name="email" type="email" value={profile.email} onChange={handleProfileChange} error={profileErrors.email} icon={FiMail} />
+                        <Field label="Email" name="email" type="email" value={profile.email} onChange={handleProfileChange} error={profileErrors.email} icon={FiMail} readOnly />
                         <Field label="Số điện thoại" name="phone" type="tel" value={profile.phone} onChange={handleProfileChange} error={profileErrors.phone} icon={FiPhone} placeholder="0123456789" />
                       </div>
                       <Actions saving={savingProfile} label="Lưu thông tin" />
@@ -408,7 +409,7 @@ function Panel({ eyebrow, title, description, children }) {
   );
 }
 
-function Field({ label, name, value, onChange, error, type = 'text', icon: Icon, placeholder, multiline }) {
+function Field({ label, name, value, onChange, error, type = 'text', icon: Icon, placeholder, multiline, readOnly = false }) {
   const inputClass = `min-h-12 w-full rounded-2xl border bg-zinc-50 px-4 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-[#d71920] focus:bg-white focus:ring-2 focus:ring-[#d71920]/10 ${
     Icon ? 'pl-11' : ''
   } ${error ? 'border-red-300' : 'border-zinc-200'}`;
@@ -433,8 +434,9 @@ function Field({ label, name, value, onChange, error, type = 'text', icon: Icon,
             type={type}
             value={value}
             onChange={onChange}
+            readOnly={readOnly}
             placeholder={placeholder}
-            className={inputClass}
+            className={`${inputClass} ${readOnly ? 'cursor-not-allowed text-zinc-500' : ''}`}
           />
         )}
       </span>

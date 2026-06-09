@@ -1,33 +1,30 @@
 export const ORDER_STATUS_LABELS = {
-  Pending: { label: 'Legacy: chờ xử lý', color: 'secondary' },
-  Checkout: { label: 'Đang checkout', color: 'secondary' },
-  AwaitingPayment: { label: 'Chờ thanh toán / xác nhận', color: 'warning' },
-  Confirmed: { label: 'Đã xác nhận', color: 'primary' },
-  Allocated: { label: 'Đã soạn hàng', color: 'info' },
+  Pending: { label: 'Chờ xác nhận', color: 'warning' },
+  Checkout: { label: 'Chờ xác nhận', color: 'warning' },
+  AwaitingPayment: { label: 'Chờ xác nhận', color: 'warning' },
+  Confirmed: { label: 'Chờ xác nhận', color: 'warning' },
+  Allocated: { label: 'Đang giao', color: 'info' },
   Shipping: { label: 'Đang giao', color: 'info' },
   Delivered: { label: 'Đã giao', color: 'success' },
-  Completed: { label: 'Hoàn tất', color: 'success' },
+  Completed: { label: 'Đã giao', color: 'success' },
   Cancelled: { label: 'Đã hủy', color: 'danger' },
 };
 
 export const ORDER_STATUS_OPTIONS = [
-  { value: 'AwaitingPayment', label: 'Chờ thanh toán / xác nhận' },
-  { value: 'Confirmed', label: 'Đã xác nhận' },
-  { value: 'Allocated', label: 'Đã soạn hàng' },
+  { value: 'Pending', label: 'Chờ xác nhận' },
   { value: 'Shipping', label: 'Đang giao' },
   { value: 'Delivered', label: 'Đã giao' },
-  { value: 'Completed', label: 'Hoàn tất' },
   { value: 'Cancelled', label: 'Đã hủy' },
 ];
 
 export const ORDER_NEXT_STATUS = {
-  Pending: ['AwaitingPayment', 'Confirmed', 'Cancelled'],
-  Checkout: ['AwaitingPayment', 'Confirmed', 'Cancelled'],
-  AwaitingPayment: ['Confirmed', 'Cancelled'],
-  Confirmed: ['Allocated', 'Cancelled'],
-  Allocated: ['Shipping', 'Cancelled'],
-  Shipping: ['Delivered'],
-  Delivered: ['Completed'],
+  Pending: ['Shipping', 'Delivered', 'Cancelled'],
+  Checkout: ['Shipping', 'Delivered', 'Cancelled'],
+  AwaitingPayment: ['Shipping', 'Delivered', 'Cancelled'],
+  Confirmed: ['Shipping', 'Delivered', 'Cancelled'],
+  Allocated: ['Delivered', 'Cancelled'],
+  Shipping: ['Delivered', 'Cancelled'],
+  Delivered: [],
   Completed: [],
   Cancelled: [],
 };
@@ -39,23 +36,24 @@ export const getOrderStatusMeta = (status) => (
 );
 
 export const PAYMENT_STATUS = {
-  Unpaid: { label: 'Chưa thanh toán', color: 'secondary' },
-  Pending: { label: 'Chờ xác nhận thanh toán', color: 'warning' },
-  PartiallyPaid: { label: 'Thanh toán một phần / đã đặt cọc', color: 'info' },
+  Unpaid: { label: 'Chờ thanh toán', color: 'secondary' },
+  PendingConfirmation: { label: 'Chờ xác nhận chuyển khoản', color: 'warning' },
   Paid: { label: 'Đã thanh toán', color: 'success' },
-  Failed: { label: 'Thanh toán thất bại', color: 'danger' },
   Refunded: { label: 'Đã hoàn tiền', color: 'dark' },
+  Failed: { label: 'Thanh toán thất bại', color: 'danger' },
+  // alias dữ liệu cũ
+  Pending: { label: 'Chờ xác nhận chuyển khoản', color: 'warning' },
+  DepositPaid: { label: 'Đã đặt cọc (còn nợ)', color: 'info' },
+  PartiallyPaid: { label: 'Đã thanh toán một phần', color: 'info' },
   Cancelled: { label: 'Đã hủy thanh toán', color: 'secondary' },
 };
 
 export const PAYMENT_STATUS_OPTIONS = [
-  { value: 'Unpaid', label: 'Chưa thanh toán' },
-  { value: 'Pending', label: 'Chờ xác nhận thanh toán' },
-  { value: 'PartiallyPaid', label: 'Thanh toán một phần / đã đặt cọc' },
+  { value: 'Unpaid', label: 'Chờ thanh toán' },
+  { value: 'PendingConfirmation', label: 'Chờ xác nhận chuyển khoản' },
   { value: 'Paid', label: 'Đã thanh toán' },
-  { value: 'Failed', label: 'Thanh toán thất bại' },
   { value: 'Refunded', label: 'Đã hoàn tiền' },
-  { value: 'Cancelled', label: 'Đã hủy thanh toán' },
+  { value: 'Failed', label: 'Thanh toán thất bại' },
 ];
 
 export const SHIPPING_STATUS = {

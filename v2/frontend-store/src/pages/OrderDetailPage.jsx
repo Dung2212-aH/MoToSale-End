@@ -37,6 +37,43 @@ function getOrderPaymentDisplay(order) {
   return 'Chưa cập nhật';
 }
 
+function formatDateTime(value, options = {}) {
+  const { assumeUtcWhenMissingZone = true } = options;
+  const normalizedValue = assumeUtcWhenMissingZone && typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(value)
+    ? `${value}Z`
+    : value;
+  const date = normalizedValue ? new Date(normalizedValue) : null;
+  if (!date || Number.isNaN(date.getTime())) return 'Chưa cập nhật';
+  return date.toLocaleDateString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Ho_Chi_Minh',
+  });
+}
+
+const SHIPPING_HISTORY_ALIASES = {
+  Unallocated: 'NotShipped',
+  Allocated: 'Preparing',
+  Shipped: 'Shipping',
+  Fulfilled: 'Delivered',
+};
+
+function getHistoryTypeLabel(eventType) {
+  if (eventType === 'PaymentStatus') return 'Thanh toán';
+  if (eventType === 'ShippingStatus') return 'Giao nhận';
+  return 'Trạng thái đơn';
+}
+
+function getHistoryValueLabel(eventType, value) {
+  if (!value) return 'Chưa có';
+  if (eventType === 'PaymentStatus') return getPaymentStatusLabel(value);
+  if (eventType === 'ShippingStatus') return getShippingStatusLabel(SHIPPING_HISTORY_ALIASES[value] || value);
+  return getOrderStatusLabel(value);
+}
+
 function OrderDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -45,6 +82,7 @@ function OrderDetailPage() {
   const [details, setDetails] = useState([]);
   const [vouchers, setVouchers] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [histories, setHistories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [cancelling, setCancelling] = useState(false);
@@ -74,12 +112,15 @@ function OrderDetailPage() {
       setOrder(res.order || res);
       setDetails(res.details?.$values || res.details || []);
       setVouchers(res.vouchers?.$values || res.vouchers || []);
+      setHistories(res.histories?.$values || res.histories || res.order?.histories || []);
+      const responsePayments = res.payments?.$values || res.payments || res.order?.payments || [];
+      setPayments(responsePayments);
 
       try {
         const payRes = await paymentApi.getPaymentsByOrder(id);
         setPayments(Array.isArray(payRes) ? payRes : payRes?.$values || []);
       } catch {
-        setPayments([]);
+        setPayments(responsePayments);
       }
     } catch (err) {
       setError(err?.message || 'Không thể tải thông tin đơn hàng');
@@ -132,18 +173,24 @@ function OrderDetailPage() {
 
   if (!order) return null;
 
-  const canCancel = order.orderStatus === 'AwaitingPayment';
+  const canCancel = order.orderStatus === 'Pending';
   const shippingSteps = order.receivingMethod === 'Pickup' ? PICKUP_SHIPPING_STEPS : DELIVERY_SHIPPING_STEPS;
   const currentShipIdx = shippingSteps.indexOf(order.shippingStatus);
+  const orderDateValue = order.createdAt || order.placedAt || order.PlacedAt;
+  const orderDateLabel = formatDateTime(orderDateValue);
+  const shippingAddress = [order.shippingAddressLine, order.shippingWard, order.shippingDistrict, order.shippingProvince].filter(Boolean).join(', ') || order.shippingAddress || order.ShippingAddress || '—';
+  const paymentMethod = order.paymentMethod || order.PaymentMethod;
+  const totalAmount = Number(order.totalAmount ?? order.grandTotal ?? order.GrandTotal ?? 0);
+  const pickupAppointmentLabel = formatDateTime(order.pickupAppointmentAt || order.PickupAppointmentAt, { assumeUtcWhenMissingZone: false });
 
   // Thanh toán chuyển khoản
   const pendingClaim = payments.find((p) => (p.paymentStatus || p.status) === 'Pending');
   const isPaid = order.paymentStatus === 'Paid';
   const amountDue = (order.orderType === 'Deposit' && order.depositAmount > 0 && order.paymentStatus === 'Unpaid')
     ? order.depositAmount
-    : Number(order.remainingAmount || order.totalAmount || order.grandTotal || 0);
+    : Number(order.remainingAmount || totalAmount || 0);
   const payMemo = order.orderCode || order.code || `DH${order.id}`;
-  const canPayTransfer = !isPaid && !pendingClaim && order.orderStatus !== 'Cancelled' && amountDue > 0;
+  const canPayTransfer = paymentMethod === 'BankTransfer' && !isPaid && !pendingClaim && order.orderStatus !== 'Cancelled' && amountDue > 0;
   const payQrUrl = buildQrUrl(paymentInfo, amountDue, payMemo);
 
   return (
@@ -160,7 +207,7 @@ function OrderDetailPage() {
                 <div className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-zinc-400">Đơn hàng</div>
                 <h1 className="mt-1 text-[26px] font-black text-zinc-950 sm:text-[30px]">#{order.orderCode || order.id}</h1>
                 <p className="mt-1 text-sm text-zinc-500">
-                  Đặt ngày {new Date(order.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  Đặt ngày {orderDateLabel}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -198,6 +245,46 @@ function OrderDetailPage() {
             </div>
           </div>
 
+          {/* ── Order History ── */}
+          {histories.length > 0 && (
+            <div className="rounded-[28px] border border-zinc-200 bg-white p-6 shadow-sm">
+              <h2 className="text-lg font-black text-zinc-950">Lịch sử đơn hàng</h2>
+              <div className="mt-5 space-y-5">
+                {histories.map((history, index) => {
+                  const eventType = history.eventType || history.EventType || 'OrderStatus';
+                  const oldValue = history.oldValue ?? history.OldValue;
+                  const newValue = history.newValue ?? history.NewValue;
+                  const note = history.note || history.Note;
+                  const actor = history.actorUserId ?? history.ActorUserId;
+                  const createdAt = history.createdAt || history.CreatedAt;
+
+                  return (
+                    <div key={history.id || history.Id || index} className="flex gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#d71920] text-xs font-black text-white">
+                        {index + 1}
+                      </div>
+                      <div className="min-w-0 flex-1 border-b border-zinc-100 pb-5 last:border-0 last:pb-0">
+                        <div className="font-black text-zinc-950">{getHistoryTypeLabel(eventType)}</div>
+                        <time className="mt-1 block text-xs font-semibold text-zinc-500">{formatDateTime(createdAt)}</time>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-zinc-700">
+                          {oldValue && (
+                            <>
+                              <span>Từ: <b>{getHistoryValueLabel(eventType, oldValue)}</b></span>
+                              <span className="text-zinc-400">→</span>
+                            </>
+                          )}
+                          <span>Sang: <b>{getHistoryValueLabel(eventType, newValue)}</b></span>
+                        </div>
+                        {note && <p className="mt-1 break-words text-sm text-zinc-500">{note}</p>}
+                        {actor && <p className="mt-1 text-xs font-semibold text-zinc-400">Người thực hiện: #{actor}</p>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* ── Recipient Info ── */}
           <div className="rounded-[28px] border border-zinc-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-black text-zinc-950">Thông tin nhận hàng</h2>
@@ -206,8 +293,10 @@ function OrderDetailPage() {
               <DT label="Số điện thoại" value={order.shippingPhoneNumber} />
               <DT label="Email" value={order.shippingEmail || '—'} />
               <DT label="Phương thức" value={getReceivingMethodLabel(order.receivingMethod)} />
-              <DT label="Địa chỉ" value={[order.shippingAddressLine, order.shippingWard, order.shippingDistrict, order.shippingProvince].filter(Boolean).join(', ') || '—'} className="sm:col-span-2" />
+              <DT label="Địa chỉ" value={shippingAddress} className="sm:col-span-2" />
+              {(order.pickupAppointmentAt || order.PickupAppointmentAt) && <DT label="Lịch hẹn nhận" value={pickupAppointmentLabel} />}
               {order.note && <DT label="Ghi chú" value={order.note} className="sm:col-span-2" />}
+              {(order.fulfillmentNote || order.FulfillmentNote) && <DT label="Ghi chú giao nhận" value={order.fulfillmentNote || order.FulfillmentNote} className="sm:col-span-2" />}
             </dl>
           </div>
 
@@ -230,8 +319,9 @@ function OrderDetailPage() {
                       <td className="py-3">
                         <div className="font-bold text-zinc-900">{d.productNameSnapshot || d.productName || 'Sản phẩm'}</div>
                         {d.skuSnapshot && <div className="text-xs text-zinc-400 mt-0.5">SKU: {d.skuSnapshot}</div>}
-                        {order.orderStatus === 'Completed' && (
+                        {order.orderStatus === 'Delivered' && (
                           <button
+                            type="button"
                             onClick={() => setReviewProduct(d)}
                             className="mt-2 text-xs font-bold text-[#d71920] hover:underline"
                           >
@@ -259,7 +349,7 @@ function OrderDetailPage() {
                 <div className="flex justify-between text-green-600"><span>Giảm voucher</span><span className="font-bold">-{formatCurrency(order.discountAmount)}</span></div>
               )}
               <div className="flex justify-between"><span className="text-zinc-500">Phí giao hàng</span><span className="font-bold">{formatCurrency(order.shippingFee)}</span></div>
-              <div className="flex justify-between border-t border-zinc-200 pt-3 text-base text-[#d71920]"><span className="font-extrabold">Tổng cộng</span><span className="text-xl font-black">{formatCurrency(order.totalAmount)}</span></div>
+              <div className="flex justify-between border-t border-zinc-200 pt-3 text-base text-[#d71920]"><span className="font-extrabold">Tổng cộng</span><span className="text-xl font-black">{formatCurrency(totalAmount)}</span></div>
               {order.depositAmount > 0 && (
                 <>
                   <div className="flex justify-between text-amber-600"><span>Đặt cọc</span><span className="font-bold">{formatCurrency(order.depositAmount)}</span></div>
@@ -392,7 +482,7 @@ function DT({ label, value, className = '' }) {
   return (
     <div className={className}>
       <dt className="text-xs font-bold uppercase tracking-wider text-zinc-400">{label}</dt>
-      <dd className="mt-0.5 text-sm font-medium text-zinc-800">{value}</dd>
+      <dd className="mt-0.5 break-words text-sm font-medium text-zinc-800">{value}</dd>
     </div>
   );
 }

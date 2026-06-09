@@ -28,9 +28,9 @@ const BusinessOperations = lazy(() => import('./pages/operations/BusinessOperati
 const OperationalImports = lazy(() => import('./pages/operations/OperationalImports'));
 
 const RouteFallback = () => (
-  <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '60vh' }}>
-    <div className="spinner-border text-primary" role="status">
-      <span className="sr-only">Đang tải...</span>
+  <div className="flex min-h-[60vh] items-center justify-center">
+    <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" role="status">
+      <span className="sr-only absolute h-px w-px overflow-hidden whitespace-nowrap">Đang tải...</span>
     </div>
   </div>
 );
@@ -40,9 +40,9 @@ const PublicRoute = ({ children }) => {
 
   if (loading) {
     return (
-      <div className="d-flex justify-content-center align-items-center" style={{ height: '100vh' }}>
-        <div className="spinner-border text-primary" role="status">
-          <span className="sr-only">Đang tải...</span>
+      <div className="flex h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-r-transparent" role="status">
+          <span className="sr-only absolute h-px w-px overflow-hidden whitespace-nowrap">Đang tải...</span>
         </div>
       </div>
     );

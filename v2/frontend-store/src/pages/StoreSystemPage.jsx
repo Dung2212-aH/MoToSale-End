@@ -117,7 +117,7 @@ function StoreSystemPage() {
 
           {error && (
             <div className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-medium text-rose-700">
-              Không tải được dữ liệu cửa hàng từ hệ thống. Vui lòng kiểm tra API /api/stores.
+              Không tải được dữ liệu cửa hàng từ hệ thống. Vui lòng kiểm tra API /api/showrooms.
               <button type="button" className="ml-2 font-extrabold text-[#d71920] hover:underline" onClick={reload}>
                 Thử tải lại
               </button>

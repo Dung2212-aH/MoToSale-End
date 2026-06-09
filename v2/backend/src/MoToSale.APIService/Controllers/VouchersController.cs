@@ -19,6 +19,10 @@ public class VouchersController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Search([FromQuery] PagingRequest request) => Ok(await _vouchers.SearchAsync(request));
 
+    [AllowAnonymous]
+    [HttpGet("available")]
+    public async Task<IActionResult> Available() => Ok(new { items = await _vouchers.GetAvailableAsync() });
+
     [Authorize(Roles = $"{RoleConstant.Admin},{RoleConstant.Staff}")]
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Get(int id)

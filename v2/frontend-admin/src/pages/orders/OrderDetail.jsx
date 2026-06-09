@@ -5,27 +5,25 @@ import paymentService from '../../services/paymentService';
 import operationsService from '../../services/operationsService';
 import inventoryService from '../../services/inventoryService';
 import {
-  DELIVERY_SHIPPING_STATUS_OPTIONS,
   ORDER_NEXT_STATUS,
   ORDER_STATUS_OPTIONS,
   PAYMENT_METHODS,
-  PICKUP_SHIPPING_STATUS_OPTIONS,
-  SHIPPING_STATUS_OPTIONS,
   getOrderStatusMeta,
   getPaymentStatusMeta,
   getShippingStatusMeta,
 } from '../../utils/constants';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { formatDate } from '../../utils/formatDate';
+import { formatMoneyInput, normalizeMoneyInput } from '../../utils/moneyInput';
 import { printVatInvoice } from '../../utils/vatInvoice';
 
-const isLockedOrder = (status) => ['Cancelled', 'Completed'].includes(status);
+const isLockedOrder = (status) => ['Cancelled', 'Delivered', 'Completed'].includes(status);
 const canCancelOrder = (status) => !['Cancelled', 'Delivered', 'Completed'].includes(status);
 const EVENT_LABELS = {
   Created: 'Tạo đơn',
   OrderStatus: 'Trạng thái đơn',
   PaymentStatus: 'Thanh toán',
-  ShippingStatus: 'Vận chuyển',
+  ShippingStatus: 'Đồng bộ giao nhận',
 };
 
 const formatTimelineDate = (value) => {
@@ -63,15 +61,12 @@ const OrderDetail = () => {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showShippingModal, setShowShippingModal] = useState(false);
   const [newStatus, setNewStatus] = useState('');
-  const [newShippingStatus, setNewShippingStatus] = useState('');
   const [cancelReason, setCancelReason] = useState('');
   const [paymentNote, setPaymentNote] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [paymentType, setPaymentType] = useState('Full');
-  const [shippingNote, setShippingNote] = useState('');
   const [updating, setUpdating] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState({ recipient: '', phone: '', email: '', address: '', note: '' });
@@ -109,8 +104,10 @@ const OrderDetail = () => {
 
   const orderStatus = order?.trangThaiDonHang || order?.trangThai || order?.status || order?.orderStatus || '';
   const paymentStatus = order?.trangThaiThanhToan || order?.paymentStatus || order?.thanhToan?.trangThai || order?.payment?.status || '';
-  const shippingStatus = order?.trangThaiVanChuyen || order?.shippingStatus || order?.fulfillmentStatus || '';
-  const receiveMethod = order?.phuongThucNhanHang || order?.receivingMethod || 'Delivery';
+  const currentPayments = order?.payments || [];
+  const getPaymentRecordStatus = (item) => item?.status || item?.paymentRecordStatus || item?.trangThai || '';
+  const pendingPayments = currentPayments.filter((item) => getPaymentRecordStatus(item) === 'Pending');
+  const hasPendingPayment = pendingPayments.length > 0;
   const orderType = order?.orderType || order?.loaiDon || 'FullPayment';
   const depositAmount = Number(order?.depositAmount ?? order?.tienCoc ?? 0);
   const remainingAmount = Number(order?.remainingAmount ?? order?.tienConLai ?? 0);
@@ -123,6 +120,10 @@ const OrderDetail = () => {
     : [['Full', 'Thanh toán đủ'], ['Deposit', 'Đặt cọc'], ['Installment', 'Trả góp/đợt']];
 
   const openPaymentModal = () => {
+    if (hasPendingPayment) {
+      alert('Đơn đang có phiếu chuyển khoản chờ xác nhận. Hãy xác nhận hoặc hủy phiếu chuyển khoản đó trước khi ghi nhận thanh toán thủ công.');
+      return;
+    }
     setPaymentType(paidSoFar > 0 ? 'Remaining' : (orderType === 'Deposit' ? 'Deposit' : 'Full'));
     setPaymentAmount(remainingAmount > 0 ? String(remainingAmount) : '');
     setPaymentMethod('Cash');
@@ -134,12 +135,6 @@ const OrderDetail = () => {
     const allowed = ORDER_NEXT_STATUS[orderStatus] || [];
     return ORDER_STATUS_OPTIONS.filter((opt) => allowed.includes(opt.value));
   }, [orderStatus]);
-
-  const shippingOptions = useMemo(() => {
-    if (receiveMethod === 'Pickup') return PICKUP_SHIPPING_STATUS_OPTIONS;
-    if (receiveMethod === 'Delivery') return DELIVERY_SHIPPING_STATUS_OPTIONS;
-    return SHIPPING_STATUS_OPTIONS;
-  }, [receiveMethod]);
 
   const renderBadge = (meta) => <span className={`badge badge-${meta.color}`}>{meta.label}</span>;
 
@@ -193,14 +188,15 @@ const OrderDetail = () => {
     );
   };
 
-  const handleFulfill = async () => {
-    if (!window.confirm('Xác nhận giao hàng & xuất kho cho đơn này? Tồn kho sẽ bị trừ thật.')) return;
-    await runUpdate(() => orderService.fulfill(id));
-  };
-
   const handleConfirmPayment = async (paymentId) => {
     if (!window.confirm('Xác nhận đã nhận được khoản chuyển khoản này? Đơn sẽ chuyển sang đã thanh toán.')) return;
     await runUpdate(() => paymentService.confirm(paymentId));
+  };
+
+  const handleCancelPendingPayment = async (paymentId) => {
+    const reason = window.prompt('Nhập lý do hủy phiếu chuyển khoản chờ xác nhận:', 'Khách đổi phương thức thanh toán');
+    if (reason === null) return;
+    await runUpdate(() => paymentService.cancel(paymentId, { reason: reason.trim() || 'Hủy phiếu chuyển khoản chờ xác nhận' }));
   };
 
   const openEditModal = () => {
@@ -219,7 +215,7 @@ const OrderDetail = () => {
       qty: Number(l.qty ?? l.soLuong ?? 0),
     })));
     setShowEditModal(true);
-    if (orderStatus === 'AwaitingPayment' && editSkus.length === 0) {
+    if (orderStatus === 'Pending' && editSkus.length === 0) {
       inventoryService.getSkus().then((res) => {
         const d = res.data; setEditSkus(Array.isArray(d) ? d : d.items || d.data || []);
       }).catch(() => {});
@@ -243,24 +239,12 @@ const OrderDetail = () => {
       shippingAddress: editForm.address.trim() || null,
       note: editForm.note.trim() || null,
     };
-    if (orderStatus === 'AwaitingPayment') {
+    if (orderStatus === 'Pending') {
       if (editLines.length === 0) { alert('Đơn phải có ít nhất 1 sản phẩm.'); return; }
       if (editLines.some((l) => Number(l.qty) <= 0)) { alert('Số lượng không hợp lệ.'); return; }
       payload.lines = editLines.map((l) => ({ skuId: l.skuId, qty: Number(l.qty), unitPrice: Number(l.unitPrice) }));
     }
     await runUpdate(() => orderService.update(id, payload), () => setShowEditModal(false));
-  };
-
-  const handleUpdateShippingStatus = async () => {
-    if (!newShippingStatus) return;
-    await runUpdate(
-      () => orderService.updateFulfillmentStatus(id, { toStatus: newShippingStatus, note: shippingNote.trim() || undefined }),
-      () => {
-        setShowShippingModal(false);
-        setNewShippingStatus('');
-        setShippingNote('');
-      }
-    );
   };
 
   const handleCancel = async () => {
@@ -316,7 +300,7 @@ const OrderDetail = () => {
 
   const items = order.chiTiet || order.items || order.lines || [];
   const histories = order.lichSu || order.histories || order.orderHistories || [];
-  const payments = order.payments || [];
+  const payments = currentPayments;
   const payment = order.thanhToan || order.payment || payments.find((item) => item.status !== 'Cancelled') || payments[0] || null;
   const voucher = order.voucher || null;
   const inventoryHolds = order.tonKhoGiuCho || order.inventoryHolds || [];
@@ -370,7 +354,6 @@ const OrderDetail = () => {
               <div>Ngày tạo: ${formatDate(order.ngayTao || order.createdAt || order.placedAt)}</div>
               <div>Trạng thái đơn: ${getOrderStatusMeta(orderStatus).label}</div>
               <div>Thanh toán: ${getPaymentStatusMeta(paymentStatus).label}</div>
-              <div>Vận chuyển: ${getShippingStatusMeta(shippingStatus).label}</div>
             </div>
             <div>
               <h2>Khách hàng</h2>
@@ -401,6 +384,45 @@ const OrderDetail = () => {
 
   const handlePrintVatInvoice = () => printVatInvoice(order, settings);
 
+  const renderPendingPaymentCard = () => pendingPayments.length > 0 && (
+    <div className="card">
+      <div className="card-header">
+        <h3 className="card-title">Chuyển khoản chờ xác nhận</h3>
+      </div>
+      <div className="card-body p-0">
+        <table className="table table-bordered mb-0">
+          <thead>
+            <tr>
+              <th className="table-col-code">Mã phiếu</th>
+              <th className="table-col-text">Phương thức</th>
+              <th className="table-col-money">Số tiền</th>
+              <th className="table-col-date">Thời gian</th>
+              <th className="table-col-action"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {pendingPayments.map((p) => (
+              <tr key={p.id || p.maThanhToan}>
+                <td className="table-col-code">{p.code || p.maThanhToan || p.id}</td>
+                <td className="table-col-text">{PAYMENT_METHODS[p.method || p.phuongThuc] || p.method || p.phuongThuc || 'Chuyển khoản'}</td>
+                <td className="table-col-money">{formatCurrency(p.amount || p.soTien || 0)}</td>
+                <td className="table-col-date">{formatDate(p.createdAt || p.ngayTao || p.paidAt)}</td>
+                <td className="table-col-action text-right">
+                  <button className="btn btn-sm btn-success mr-2" disabled={updating} onClick={() => handleConfirmPayment(p.id)}>
+                    Xác nhận thanh toán
+                  </button>
+                  <button className="btn btn-sm btn-outline-danger" disabled={updating} onClick={() => handleCancelPendingPayment(p.id)}>
+                    Hủy phiếu
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
   return (
     <div className="content-wrapper">
       <div className="content-header">
@@ -414,12 +436,7 @@ const OrderDetail = () => {
           <button className="btn btn-outline-success mb-2 ml-2" onClick={handlePrintVatInvoice}>
             <i className="fas fa-file-invoice-dollar"></i> Hóa đơn VAT
           </button>
-          {shippingStatus !== 'Fulfilled' && !['Cancelled'].includes(orderStatus) && (
-            <button className="btn btn-success mb-2 ml-2" onClick={handleFulfill} disabled={updating}>
-              <i className="fas fa-dolly"></i> Giao hàng & xuất kho
-            </button>
-          )}
-          {!['Completed', 'Cancelled'].includes(orderStatus) && (
+          {!['Delivered', 'Completed', 'Cancelled'].includes(orderStatus) && (
             <button className="btn btn-outline-warning mb-2 ml-2" onClick={openEditModal} disabled={updating}>
               <i className="fas fa-pen"></i> Sửa đơn
             </button>
@@ -464,6 +481,8 @@ const OrderDetail = () => {
             </div>
           </div>
 
+          {renderPendingPaymentCard()}
+
           <div className="row">
             <StatusCard
               title="Trạng thái đơn hàng"
@@ -475,16 +494,9 @@ const OrderDetail = () => {
             <StatusCard
               title="Thanh toán"
               badge={renderBadge(getPaymentStatusMeta(paymentStatus))}
-              buttonText="Cập nhật thanh toán"
-              disabled={orderStatus === 'Cancelled'}
+              buttonText={hasPendingPayment ? 'Đang chờ xác nhận CK' : 'Cập nhật thanh toán'}
+              disabled={orderStatus === 'Cancelled' || hasPendingPayment}
               onClick={openPaymentModal}
-            />
-            <StatusCard
-              title="Vận chuyển"
-              badge={renderBadge(getShippingStatusMeta(shippingStatus))}
-              buttonText="Cập nhật vận chuyển"
-              disabled={actionsLocked}
-              onClick={() => setShowShippingModal(true)}
             />
           </div>
 
@@ -554,42 +566,6 @@ const OrderDetail = () => {
                     <tr><td><strong>Số tiền:</strong></td><td>{formatCurrency(payment.soTien || payment.amount || totalAmount)}</td></tr>
                     <tr><td><strong>Trạng thái:</strong></td><td>{renderBadge(getPaymentStatusMeta(paymentStatus))}</td></tr>
                     <tr><td><strong>Ngày thanh toán:</strong></td><td>{formatDate(payment.ngayThanhToan || payment.paidAt || order.ngayThanhToanThanhCong)}</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {payments.some((p) => (p.status || p.paymentRecordStatus || p.trangThai) === 'Pending') && (
-            <div className="card">
-              <div className="card-header">
-                <h3 className="card-title">Chuyển khoản chờ xác nhận</h3>
-              </div>
-              <div className="card-body p-0">
-                <table className="table table-bordered mb-0">
-                  <thead>
-                    <tr>
-                      <th className="table-col-code">Mã phiếu</th>
-                      <th className="table-col-text">Phương thức</th>
-                      <th className="table-col-money">Số tiền</th>
-                      <th className="table-col-date">Thời gian</th>
-                      <th className="table-col-action"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {payments.filter((p) => (p.status || p.paymentRecordStatus || p.trangThai) === 'Pending').map((p) => (
-                      <tr key={p.id || p.maThanhToan}>
-                        <td className="table-col-code">{p.code || p.maThanhToan || p.id}</td>
-                        <td className="table-col-text">{PAYMENT_METHODS[p.method || p.phuongThuc] || p.method || p.phuongThuc || 'Chuyển khoản'}</td>
-                        <td className="table-col-money">{formatCurrency(p.amount || p.soTien || 0)}</td>
-                        <td className="table-col-date">{formatDate(p.createdAt || p.ngayTao || p.paidAt)}</td>
-                        <td className="table-col-action text-right">
-                          <button className="btn btn-sm btn-success" disabled={updating} onClick={() => handleConfirmPayment(p.id)}>
-                            Xác nhận thanh toán
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
                   </tbody>
                 </table>
               </div>
@@ -667,8 +643,8 @@ const OrderDetail = () => {
               <textarea className="form-control" rows="3" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
             </div>
           )}
-          {newStatus === 'Completed' && (
-            <div className="alert alert-warning">Hoàn tất đơn sẽ khóa các thao tác sửa/hủy thông thường.</div>
+          {newStatus === 'Delivered' && (
+            <div className="alert alert-warning">Chuyển sang Đã giao sẽ xuất kho thật và khóa các thao tác sửa/hủy thông thường.</div>
           )}
           <ModalFooter onClose={() => setShowStatusModal(false)} onSubmit={handleUpdateStatus} disabled={updating || !newStatus} loading={updating} submitText="Cập nhật" />
         </Modal>
@@ -695,7 +671,14 @@ const OrderDetail = () => {
           <div className="form-group">
             <label>Số tiền đã thu {remainingAmount > 0 && <span className="text-muted">(tối đa {formatCurrency(remainingAmount)})</span>}</label>
             <div className="input-group">
-              <input type="number" min="1" max={remainingAmount > 0 ? remainingAmount : undefined} className="form-control" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} disabled={isFullyPaid} />
+              <input
+                type="text"
+                inputMode="numeric"
+                className="form-control"
+                value={formatMoneyInput(paymentAmount)}
+                onChange={(e) => setPaymentAmount(normalizeMoneyInput(e.target.value))}
+                disabled={isFullyPaid}
+              />
               {remainingAmount > 0 && (
                 <div className="input-group-append">
                   <button type="button" className="btn btn-outline-secondary" onClick={() => setPaymentAmount(String(remainingAmount))}>Còn lại</button>
@@ -711,7 +694,6 @@ const OrderDetail = () => {
             <select className="form-control" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
               <option value="Cash">Tiền mặt</option>
               <option value="BankTransfer">Chuyển khoản</option>
-              <option value="Card">Thẻ</option>
             </select>
           </div>
           <div className="form-group">
@@ -719,23 +701,6 @@ const OrderDetail = () => {
             <textarea className="form-control" rows="3" value={paymentNote} onChange={(e) => setPaymentNote(e.target.value)} />
           </div>
           <ModalFooter onClose={() => setShowPaymentModal(false)} onSubmit={handleUpdatePaymentStatus} disabled={updating || isFullyPaid || Number(paymentAmount) <= 0 || (remainingAmount > 0 && Number(paymentAmount) > remainingAmount)} loading={updating} submitText="Ghi nhận" />
-        </Modal>
-      )}
-
-      {showShippingModal && (
-        <Modal title="Cập nhật vận chuyển" onClose={() => setShowShippingModal(false)}>
-          <div className="form-group">
-            <label>Trạng thái vận chuyển</label>
-            <select className="form-control" value={newShippingStatus} onChange={(e) => setNewShippingStatus(e.target.value)}>
-              <option value="">-- Chọn trạng thái --</option>
-              {shippingOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Ghi chú giao nhận</label>
-            <textarea className="form-control" rows="3" value={shippingNote} onChange={(e) => setShippingNote(e.target.value)} />
-          </div>
-          <ModalFooter onClose={() => setShowShippingModal(false)} onSubmit={handleUpdateShippingStatus} disabled={updating || !newShippingStatus} loading={updating} submitText="Cập nhật" />
         </Modal>
       )}
 
@@ -764,7 +729,7 @@ const OrderDetail = () => {
               <textarea className="form-control" rows="2" value={editForm.note} onChange={(e) => setEditForm({ ...editForm, note: e.target.value })} /></div>
           </div>
 
-          {orderStatus === 'AwaitingPayment' ? (
+          {orderStatus === 'Pending' ? (
             <>
               <hr />
               <div className="d-flex align-items-end mb-2" style={{ gap: 8 }}>
@@ -784,7 +749,7 @@ const OrderDetail = () => {
                     : editLines.map((l) => (
                       <tr key={l.skuId}>
                         <td>{l.productName}<div className="text-muted small">{l.skuCode}</div></td>
-                        <td><input type="number" min="0" className="form-control form-control-sm text-right" value={l.unitPrice} onChange={(e) => editUpdateLine(l.skuId, 'unitPrice', e.target.value)} /></td>
+                        <td><input type="text" inputMode="numeric" className="form-control form-control-sm text-right" value={formatMoneyInput(l.unitPrice)} onChange={(e) => editUpdateLine(l.skuId, 'unitPrice', normalizeMoneyInput(e.target.value))} /></td>
                         <td><input type="number" min="1" className="form-control form-control-sm text-right" value={l.qty} onChange={(e) => editUpdateLine(l.skuId, 'qty', Number(e.target.value))} /></td>
                         <td className="text-center align-middle"><button type="button" className="btn btn-xs btn-danger" onClick={() => editRemoveLine(l.skuId)}><i className="fas fa-trash"></i></button></td>
                       </tr>
@@ -804,7 +769,7 @@ const OrderDetail = () => {
 };
 
 const StatusCard = ({ title, badge, buttonText, disabled, onClick }) => (
-  <div className="col-md-4">
+  <div className="col-md-6">
     <div className="card">
       <div className="card-header"><h3 className="card-title">{title}</h3></div>
       <div className="card-body">
@@ -849,7 +814,7 @@ const OrderTimeline = ({ order, histories }) => {
       id: 'created',
       loaiSuKien: 'Created',
       giaTriCu: null,
-      giaTriMoi: order.trangThaiDonHang || order.status || order.orderStatus || 'AwaitingPayment',
+      giaTriMoi: order.trangThaiDonHang || order.status || order.orderStatus || 'Pending',
       ghiChu: 'Đơn hàng được tạo',
       thoiGian: createdAt,
     },
