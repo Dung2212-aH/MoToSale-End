@@ -61,6 +61,27 @@ const SHIPPING_HISTORY_ALIASES = {
   Fulfilled: 'Delivered',
 };
 
+const ORDER_HISTORY_VALUES = new Set([
+  'AwaitingPayment', 'Confirmed', 'Processing', 'Allocated', 'Shipping', 'Delivered', 'Completed', 'Cancelled', 'Pending', 'Checkout',
+]);
+
+const PAYMENT_HISTORY_VALUES = new Set([
+  'Unpaid', 'PendingConfirmation', 'Paid', 'Refunded', 'Failed', 'DepositPaid', 'PartiallyPaid', 'PartiallyRefunded',
+]);
+
+const SHIPPING_HISTORY_VALUES = new Set([
+  'NotShipped', 'Preparing', 'Shipping', 'Delivered', 'PickupReady', 'PickedUp', 'Cancelled', 'AwaitingPickup', 'InTransit',
+  ...Object.keys(SHIPPING_HISTORY_ALIASES),
+]);
+
+function resolveHistoryEventType(eventType, oldValue, newValue) {
+  if (eventType === 'PaymentStatus' || eventType === 'ShippingStatus' || eventType === 'OrderStatus') return eventType;
+  const values = [oldValue, newValue].filter(Boolean);
+  if (values.some((value) => PAYMENT_HISTORY_VALUES.has(value))) return 'PaymentStatus';
+  if (values.some((value) => SHIPPING_HISTORY_VALUES.has(value)) && !values.some((value) => ORDER_HISTORY_VALUES.has(value))) return 'ShippingStatus';
+  return 'OrderStatus';
+}
+
 function getHistoryTypeLabel(eventType) {
   if (eventType === 'PaymentStatus') return 'Thanh toán';
   if (eventType === 'ShippingStatus') return 'Giao nhận';
@@ -251,9 +272,9 @@ function OrderDetailPage() {
               <h2 className="text-lg font-black text-zinc-950">Lịch sử đơn hàng</h2>
               <div className="mt-5 space-y-5">
                 {histories.map((history, index) => {
-                  const eventType = history.eventType || history.EventType || 'OrderStatus';
                   const oldValue = history.oldValue ?? history.OldValue;
                   const newValue = history.newValue ?? history.NewValue;
+                  const eventType = resolveHistoryEventType(history.eventType || history.EventType, oldValue, newValue);
                   const note = history.note || history.Note;
                   const actor = history.actorUserId ?? history.ActorUserId;
                   const createdAt = history.createdAt || history.CreatedAt;
