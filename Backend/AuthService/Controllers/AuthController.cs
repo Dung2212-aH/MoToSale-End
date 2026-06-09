@@ -68,7 +68,7 @@ public class AuthController : ControllerBase
 
     [Authorize]
     [HttpGet("me")]
-    public IActionResult Me()
+    public IActionResult GetCurrentUser()
     {
         return Ok(new
         {

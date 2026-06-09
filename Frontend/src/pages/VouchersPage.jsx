@@ -25,7 +25,7 @@ function VouchersPage() {
     }
     try {
       if (isAuthenticated) {
-        const mine = await voucherApi.getMyVouchers();
+        const mine = await voucherApi.getMine();
         setMyVouchers(Array.isArray(mine) ? mine : []);
       }
     } catch {
@@ -48,7 +48,7 @@ function VouchersPage() {
 
     setSavingCode(voucher.code);
     try {
-      const result = await voucherApi.saveVoucher(voucher.code);
+      const result = await voucherApi.save(voucher.code);
       if (result.success) {
         notify('Đã nhận voucher thành công!', 'success');
         setMyVouchers((prev) => [...prev, voucher]);

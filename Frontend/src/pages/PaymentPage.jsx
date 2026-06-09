@@ -72,7 +72,7 @@ function PaymentPage() {
     if (!window.confirm('Bạn có chắc muốn hủy đơn hàng này?')) return;
     setCancelling(true);
     try {
-      await orderApi.cancelOrder(orderId, 'Khách hủy đơn trước khi thanh toán');
+      await orderApi.cancel(orderId, 'Khách hủy đơn trước khi thanh toán');
       navigate(`/orders/${orderId}`, { replace: true });
     } catch (err) {
       alert(err?.response?.data?.message || err?.message || 'Hủy đơn thất bại.');

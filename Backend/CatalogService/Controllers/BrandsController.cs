@@ -22,7 +22,7 @@ public class BrandsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<IActionResult> GetBrands([FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
         var query = _db.Brands.AsNoTracking().AsQueryable();
 
@@ -44,7 +44,7 @@ public class BrandsController : ControllerBase
     }
 
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetById(int id)
+    public async Task<IActionResult> GetBrandById(int id)
     {
         var brand = await _db.Brands.AsNoTracking().FirstOrDefaultAsync(b => b.MaHangXe == id);
         if (brand == null) return NotFound();
@@ -53,7 +53,7 @@ public class BrandsController : ControllerBase
 
     [Authorize(Roles = "Admin,Staff")]
     [HttpPost]
-    public async Task<IActionResult> Create(BrandRequest request)
+    public async Task<IActionResult> CreateBrand(BrandRequest request)
     {
         var now = DateTime.UtcNow;
         var brand = new CatalogService.Entities.Brand
@@ -69,12 +69,12 @@ public class BrandsController : ControllerBase
         _db.Brands.Add(brand);
         await _db.SaveChangesAsync();
         await _auditLog.WriteAsync(this, "Brand", brand.MaHangXe.ToString(), "Create", null, new { brand.MaHangXe, brand.TenHang, brand.Slug, brand.LogoUrl, brand.DangHoatDong });
-        return CreatedAtAction(nameof(GetById), new { id = brand.MaHangXe }, new { id = brand.MaHangXe, tenHang = brand.TenHang, slug = brand.Slug, logoUrl = brand.LogoUrl, dangHoatDong = brand.DangHoatDong });
+        return CreatedAtAction(nameof(GetBrandById), new { id = brand.MaHangXe }, new { id = brand.MaHangXe, tenHang = brand.TenHang, slug = brand.Slug, logoUrl = brand.LogoUrl, dangHoatDong = brand.DangHoatDong });
     }
 
     [Authorize(Roles = "Admin,Staff")]
     [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, BrandRequest request)
+    public async Task<IActionResult> UpdateBrand(int id, BrandRequest request)
     {
         var brand = await _db.Brands.FirstOrDefaultAsync(b => b.MaHangXe == id);
         if (brand is null) return NotFound();
@@ -93,7 +93,7 @@ public class BrandsController : ControllerBase
 
     [Authorize(Roles = "Admin")]
     [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    public async Task<IActionResult> DeleteBrand(int id)
     {
         var brand = await _db.Brands.FirstOrDefaultAsync(b => b.MaHangXe == id);
         if (brand is null) return NotFound();

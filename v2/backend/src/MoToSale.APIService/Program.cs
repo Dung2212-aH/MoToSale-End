@@ -80,7 +80,11 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
     // Không seed tài khoản tự động — quản trị viên tự tạo tài khoản (DB đã được khởi tạo sẵn).
-    await SeedConfiguration.SeedCatalogAsync(db);
+    // Seed dữ liệu mẫu catalog chỉ chạy khi bật cờ cấu hình "SeedCatalog" (mặc định TẮT để admin tự nhập tay).
+    if (builder.Configuration.GetValue<bool>("SeedCatalog"))
+    {
+        await SeedConfiguration.SeedCatalogAsync(db);
+    }
 }
 
 if (app.Environment.IsDevelopment())

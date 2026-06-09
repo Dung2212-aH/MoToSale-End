@@ -19,12 +19,16 @@ import ReviewList from './pages/reviews/ReviewList';
 import PostList from './pages/posts/PostList';
 import FaqList from './pages/faq/FaqList';
 import ContactList from './pages/contacts/ContactList';
+import HomeBannerList from './pages/content/HomeBannerList';
 import ReportsPage from './pages/reports/ReportsPage';
 import AuditLogList from './pages/audit/AuditLogList';
 import WarrantyList from './pages/warranties/WarrantyList';
 import OperationsSettings from './pages/settings/OperationsSettings';
 import PaymentSettings from './pages/settings/PaymentSettings';
 import InstallmentTermList from './pages/installments/InstallmentTermList';
+import AdvancedOperations from './pages/operations/AdvancedOperations';
+import BusinessOperations from './pages/operations/BusinessOperations';
+import OperationalImports from './pages/operations/OperationalImports';
 
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -78,6 +82,9 @@ function AppRoutes() {
       <Route path="/vouchers" element={<ProtectedRoute><MainLayout><VoucherList /></MainLayout></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><MainLayout><InventoryView /></MainLayout></ProtectedRoute>} />
       <Route path="/stock-documents" element={<ProtectedRoute><MainLayout><StockDocumentList /></MainLayout></ProtectedRoute>} />
+      <Route path="/advanced-operations" element={<ProtectedRoute><MainLayout><AdvancedOperations /></MainLayout></ProtectedRoute>} />
+      <Route path="/business-operations" element={<ProtectedRoute><MainLayout><BusinessOperations /></MainLayout></ProtectedRoute>} />
+      <Route path="/operational-imports" element={<ProtectedRoute roles={['Admin']}><MainLayout><OperationalImports /></MainLayout></ProtectedRoute>} />
 
       {/* Users & Content */}
       <Route path="/users" element={<ProtectedRoute roles={['Admin']}><MainLayout><UserList /></MainLayout></ProtectedRoute>} />
@@ -87,6 +94,7 @@ function AppRoutes() {
       <Route path="/posts" element={<ProtectedRoute><MainLayout><PostList /></MainLayout></ProtectedRoute>} />
       <Route path="/faq" element={<ProtectedRoute><MainLayout><FaqList /></MainLayout></ProtectedRoute>} />
       <Route path="/contacts" element={<ProtectedRoute><MainLayout><ContactList /></MainLayout></ProtectedRoute>} />
+      <Route path="/home-banners" element={<ProtectedRoute><MainLayout><HomeBannerList /></MainLayout></ProtectedRoute>} />
 
       {/* Reports */}
       <Route path="/reports" element={<ProtectedRoute><MainLayout><ReportsPage /></MainLayout></ProtectedRoute>} />

@@ -75,7 +75,7 @@ export function CartProvider({ children }) {
   }
 
   async function clearCart() {
-    const nextCart = await cartApi.clearCart();
+    const nextCart = await cartApi.clear();
     return applyCart(nextCart);
   }
 

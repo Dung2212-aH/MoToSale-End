@@ -282,7 +282,7 @@ function CheckoutPage() {
         try {
           const { productIds, categoryIds, brandIds } = getCartVoucherContext(items);
 
-          const res = await voucherApi.getApplicableVouchers({ subtotal, productIds, categoryIds, brandIds, orderType: form.orderType });
+          const res = await voucherApi.getApplicable({ subtotal, productIds, categoryIds, brandIds, orderType: form.orderType });
           setApplicableVouchers(res || []);
         } catch {
           setApplicableVouchers([]);
@@ -364,7 +364,7 @@ function CheckoutPage() {
 
     try {
       const { productIds, categoryIds, brandIds } = getCartVoucherContext(items);
-      const res = await voucherApi.validateVoucher({ code: code.trim(), subtotal, productIds, categoryIds, brandIds, orderType: form.orderType, shippingFee: originalShippingFee });
+      const res = await voucherApi.validate({ code: code.trim(), subtotal, productIds, categoryIds, brandIds, orderType: form.orderType, shippingFee: originalShippingFee });
       if (res.valid) {
         setAppliedVoucher(res.voucher);
         setVoucherDiscount(res.voucher?.discountType === 'FreeShipping' ? 0 : res.discountAmount || 0);
@@ -441,7 +441,7 @@ function CheckoutPage() {
         voucherDiscount,
         amounts: { needsDownPayment, depositNum },
       });
-      const res = await orderApi.createOrder(payload);
+      const res = await orderApi.create(payload);
       await refreshCart().catch(() => {});
       const order = res.order || res.Order || res;
       // Send the user to the QR payment page; they only reach /checkout/success after the

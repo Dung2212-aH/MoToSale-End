@@ -9,9 +9,11 @@ public class CatalogDbContext : DbContext
     {
     }
 
+    public DbSet<BannerTrangChu> BannerTrangChus { get; set; }
     public DbSet<Brand> Brands { get; set; }
     public DbSet<Category> Categories { get; set; }
     public DbSet<ContactRequest> ContactRequests { get; set; }
+    public DbSet<SanPhamLienQuan> SanPhamLienQuans { get; set; }
     public DbSet<Faq> Faqs { get; set; }
     public DbSet<Favorite> Favorites { get; set; }
     public DbSet<PartCompatibility> PartCompatibilities { get; set; }
@@ -29,9 +31,11 @@ public class CatalogDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
+        ConfigureBannerTrangChu(modelBuilder);
         ConfigureBrand(modelBuilder);
         ConfigureCategory(modelBuilder);
         ConfigureContactRequest(modelBuilder);
+        ConfigureSanPhamLienQuan(modelBuilder);
         ConfigureFaq(modelBuilder);
         ConfigureFavorite(modelBuilder);
         ConfigurePartCompatibility(modelBuilder);
@@ -101,6 +105,44 @@ public class CatalogDbContext : DbContext
             e.Property(e => e.TrangThai).HasMaxLength(20).IsUnicode(false).IsRequired();
             e.Property(e => e.NgayTao).HasColumnType("datetime2(0)");
             e.Property(e => e.DaXuLyLuc).HasColumnType("datetime2(0)");
+        });
+    }
+
+    private void ConfigureBannerTrangChu(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<BannerTrangChu>(e =>
+        {
+            e.ToTable("BANNER_TRANGCHU");
+            e.HasKey(e => e.MaBanner);
+            e.Property(e => e.MaBanner).ValueGeneratedOnAdd();
+            e.Property(e => e.ViTri).HasMaxLength(40).IsUnicode(false).IsRequired();
+            e.Property(e => e.TieuDe).HasMaxLength(255);
+            e.Property(e => e.UrlAnh).HasMaxLength(500).IsRequired();
+            e.Property(e => e.LienKet).HasMaxLength(500);
+            e.Property(e => e.ThuTuHienThi).IsRequired();
+            e.Property(e => e.DangHoatDong).IsRequired();
+            e.Property(e => e.NgayTao).HasColumnType("datetime2(0)");
+            e.Property(e => e.NgayCapNhat).HasColumnType("datetime2(0)");
+
+            e.HasIndex(e => new { e.ViTri, e.ThuTuHienThi });
+        });
+    }
+
+    private void ConfigureSanPhamLienQuan(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<SanPhamLienQuan>(e =>
+        {
+            e.ToTable("SANPHAM_LIENQUAN");
+            e.HasKey(e => e.MaLienQuan);
+            e.Property(e => e.MaLienQuan).ValueGeneratedOnAdd();
+            e.Property(e => e.LoaiLienQuan).HasMaxLength(20).IsUnicode(false).IsRequired();
+            e.Property(e => e.GhiChu).HasMaxLength(500);
+            e.Property(e => e.ThuTuHienThi).IsRequired();
+            e.Property(e => e.DangHoatDong).IsRequired();
+            e.Property(e => e.NgayTao).HasColumnType("datetime2(0)");
+            e.Property(e => e.NgayCapNhat).HasColumnType("datetime2(0)");
+
+            e.HasIndex(e => new { e.MaSanPham, e.MaSanPhamLienQuan }).IsUnique();
         });
     }
 

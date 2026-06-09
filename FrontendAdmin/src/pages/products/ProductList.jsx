@@ -8,6 +8,10 @@ import ProductForm from './ProductForm';
 import VariantManager from './VariantManager';
 import ImageManager from './ImageManager';
 import CompatibilityManager from './CompatibilityManager';
+import ProductPromotionsModal from './ProductPromotionsModal';
+import ProductRelatedManager from './ProductRelatedManager';
+import ProductInventoryAgingModal from './ProductInventoryAgingModal';
+import ProductBarcodeModal from './ProductBarcodeModal';
 import { useAuth } from '../../contexts/AuthContext';
 
 const PAGE_CONFIG = {
@@ -75,6 +79,10 @@ const ProductList = ({ productType = 'XeMay' }) => {
   const [showVariants, setShowVariants] = useState(null);
   const [showImages, setShowImages] = useState(null);
   const [showCompatibility, setShowCompatibility] = useState(null);
+  const [showPromotions, setShowPromotions] = useState(null);
+  const [showRelated, setShowRelated] = useState(null);
+  const [showAging, setShowAging] = useState(null);
+  const [showBarcodes, setShowBarcodes] = useState(null);
 
   const getProductId = (product) => product.maSanPham || product.id;
 
@@ -362,6 +370,18 @@ const ProductList = ({ productType = 'XeMay' }) => {
                                 <button type="button" className="btn btn-xs btn-success mr-1" title="Ảnh" onClick={() => setShowImages(getProductId(product))}>
                                   <i className="fas fa-images"></i>
                                 </button>
+                                <button type="button" className="btn btn-xs btn-secondary mr-1" title="Mã vạch" onClick={() => setShowBarcodes(product)}>
+                                  <i className="fas fa-barcode"></i>
+                                </button>
+                                <button type="button" className="btn btn-xs btn-secondary mr-1" title="Khuyến mại" onClick={() => setShowPromotions(product)}>
+                                  <i className="fas fa-tags"></i>
+                                </button>
+                                <button type="button" className="btn btn-xs btn-secondary mr-1" title="Sản phẩm bán kèm" onClick={() => setShowRelated(product)}>
+                                  <i className="fas fa-project-diagram"></i>
+                                </button>
+                                <button type="button" className="btn btn-xs btn-secondary mr-1" title="Tuổi tồn kho" onClick={() => setShowAging(product)}>
+                                  <i className="fas fa-hourglass-half"></i>
+                                </button>
                                 {isAdmin() && (
                                   <button type="button" className="btn btn-xs btn-danger" title="Xóa" onClick={() => handleDelete(getProductId(product), product.tenSanPham || product.name)}>
                                     <i className="fas fa-trash"></i>
@@ -421,6 +441,22 @@ const ProductList = ({ productType = 'XeMay' }) => {
           product={showCompatibility}
           onClose={() => setShowCompatibility(null)}
         />
+      )}
+
+      {showPromotions && (
+        <ProductPromotionsModal product={showPromotions} onClose={() => setShowPromotions(null)} />
+      )}
+
+      {showRelated && (
+        <ProductRelatedManager product={showRelated} onClose={() => setShowRelated(null)} />
+      )}
+
+      {showAging && (
+        <ProductInventoryAgingModal product={showAging} onClose={() => setShowAging(null)} />
+      )}
+
+      {showBarcodes && (
+        <ProductBarcodeModal product={showBarcodes} onClose={() => setShowBarcodes(null)} />
       )}
     </div>
   );

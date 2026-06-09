@@ -93,6 +93,26 @@ const Sidebar = ({ collapsed = false }) => {
                 <p>Phiếu kho</p>
               </Link>
             </li>
+            <li className="nav-item">
+              <Link to="/advanced-operations" className={`nav-link ${isActiveGroup('/advanced-operations')}`}>
+                <i className="nav-icon fas fa-store-alt"></i>
+                <p>Đổi trả, công nợ & phân ca</p>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link to="/business-operations" className={`nav-link ${isActiveGroup('/business-operations')}`}>
+                <i className="nav-icon fas fa-cash-register"></i>
+                <p>Nghiệp vụ cửa hàng</p>
+              </Link>
+            </li>
+            {isAdmin() && (
+              <li className="nav-item">
+                <Link to="/operational-imports" className={`nav-link ${isActiveGroup('/operational-imports')}`}>
+                  <i className="nav-icon fas fa-file-import"></i>
+                  <p>Import dữ liệu</p>
+                </Link>
+              </li>
+            )}
 
             <li className="nav-header">NGƯỜI DÙNG & NỘI DUNG</li>
             {isAdmin() && (
@@ -137,6 +157,12 @@ const Sidebar = ({ collapsed = false }) => {
               <Link to="/contacts" className={`nav-link ${isActiveGroup('/contacts')}`}>
                 <i className="nav-icon fas fa-envelope"></i>
                 <p>Liên hệ</p>
+              </Link>
+            </li>
+            <li className="nav-item">
+              <Link to="/home-banners" className={`nav-link ${isActiveGroup('/home-banners')}`}>
+                <i className="nav-icon fas fa-images"></i>
+                <p>Banner trang chủ</p>
               </Link>
             </li>
 

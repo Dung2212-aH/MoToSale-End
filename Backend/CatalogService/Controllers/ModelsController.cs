@@ -28,7 +28,7 @@ public class ModelsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] int? brandId, [FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<IActionResult> GetVehicleModels([FromQuery] int? brandId, [FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
         var query = _db.VehicleModels.AsNoTracking().AsQueryable();
         if (brandId.HasValue)
@@ -51,7 +51,7 @@ public class ModelsController : ControllerBase
     }
 
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetById(int id)
+    public async Task<IActionResult> GetVehicleModelById(int id)
     {
         var model = await _db.VehicleModels.AsNoTracking().FirstOrDefaultAsync(m => m.MaDongXe == id);
         if (model == null) return NotFound();
@@ -60,7 +60,7 @@ public class ModelsController : ControllerBase
 
     [Authorize(Roles = "Admin,Staff")]
     [HttpPost]
-    public async Task<IActionResult> Create(VehicleModelRequest request)
+    public async Task<IActionResult> CreateVehicleModel(VehicleModelRequest request)
     {
         if (!await _db.Brands.AnyAsync(b => b.MaHangXe == request.MaHangXe))
         {
@@ -88,12 +88,12 @@ public class ModelsController : ControllerBase
         _db.VehicleModels.Add(model);
         await _db.SaveChangesAsync();
         await _auditLog.WriteAsync(this, "VehicleModel", model.MaDongXe.ToString(), "Create", null, new { model.MaDongXe, model.MaHangXe, model.TenDongXe, model.Slug, model.LoaiXe, model.DangHoatDong });
-        return CreatedAtAction(nameof(GetById), new { id = model.MaDongXe }, new { id = model.MaDongXe, maHangXe = model.MaHangXe, tenDongXe = model.TenDongXe, slug = model.Slug, loaiXe = model.LoaiXe, dangHoatDong = model.DangHoatDong });
+        return CreatedAtAction(nameof(GetVehicleModelById), new { id = model.MaDongXe }, new { id = model.MaDongXe, maHangXe = model.MaHangXe, tenDongXe = model.TenDongXe, slug = model.Slug, loaiXe = model.LoaiXe, dangHoatDong = model.DangHoatDong });
     }
 
     [Authorize(Roles = "Admin,Staff")]
     [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, VehicleModelRequest request)
+    public async Task<IActionResult> UpdateVehicleModel(int id, VehicleModelRequest request)
     {
         var model = await _db.VehicleModels.FirstOrDefaultAsync(m => m.MaDongXe == id);
         if (model is null) return NotFound();
@@ -124,7 +124,7 @@ public class ModelsController : ControllerBase
 
     [Authorize(Roles = "Admin")]
     [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    public async Task<IActionResult> DeleteVehicleModel(int id)
     {
         var model = await _db.VehicleModels.FirstOrDefaultAsync(m => m.MaDongXe == id);
         if (model is null) return NotFound();

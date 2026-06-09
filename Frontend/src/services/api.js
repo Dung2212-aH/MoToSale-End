@@ -1,4 +1,20 @@
-import axios from 'axios';
+// Lớp service gọi backend của storefront (chỉ 2 lớp: page -> api -> http).
+// - Gọi axios qua `api` (httpClient.js lo baseURL/token/interceptor).
+// - Map dữ liệu ngay tại chỗ bằng các helper bên dưới, rồi trả shape ổn định cho UI.
+// Tên hàm rút gọn theo nhóm: get/getById/create/update/remove + tên nghiệp vụ rõ.
+import api, {
+  responseData,
+  getToken,
+  decodeJwtPayload,
+  getClaim,
+  isTokenExpired,
+  clearAuthStorage,
+  getStoredUser,
+  normalizeLoginResponse,
+  saveAuthUser,
+  mergeStoredUser,
+  AUTH_CHANGED_EVENT,
+} from './httpClient.js';
 import {
   normalizeCart,
   normalizeCategory,
@@ -9,72 +25,19 @@ import {
 import { notifyCartChanged } from '../utils/cartEvents.js';
 import { normalizeImageUrl } from '../utils/formatters.js';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
-const TOKEN_KEY = 'token';
-const USER_KEY = 'user';
+// ===== Helper map dữ liệu (backend trả nhiều kiểu key -> gom về 1 shape) =====
 
-export const AUTH_CHANGED_EVENT = 'basecore:auth-changed';
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-const getStorage = (type) => {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  try {
-    return window[type];
-  } catch {
-    return null;
-  }
-};
-
-const sessionAuthStorage = {
-  getItem(key) {
-    return getStorage('sessionStorage')?.getItem(key) ?? null;
-  },
-
-  setItem(key, value) {
-    getStorage('sessionStorage')?.setItem(key, value);
-  },
-
-  removeItem(key) {
-    getStorage('sessionStorage')?.removeItem(key);
-  },
-};
-
-const legacyAuthStorage = {
-  getItem(key) {
-    return getStorage('localStorage')?.getItem(key) ?? null;
-  },
-
-  setItem(key, value) {
-    getStorage('localStorage')?.setItem(key, value);
-  },
-
-  removeItem(key) {
-    getStorage('localStorage')?.removeItem(key);
-  },
-};
-
-const responseData = (response) => response.data;
-
+// Lấy giá trị đầu tiên không null/undefined theo danh sách key ưu tiên.
 const field = (source, ...keys) => {
   for (const key of keys) {
     if (source?.[key] !== undefined && source?.[key] !== null) {
       return source[key];
     }
   }
-
   return undefined;
 };
 
-const normalizeOrder = (raw = {}) => {
+const mapOrder = (raw = {}) => {
   const items = field(raw, 'items', 'Items') || [];
   const vouchers = field(raw, 'vouchers', 'Vouchers') || [];
 
@@ -124,7 +87,7 @@ const normalizeOrder = (raw = {}) => {
   };
 };
 
-const normalizePayment = (raw = {}) => ({
+const mapPayment = (raw = {}) => ({
   ...raw,
   id: field(raw, 'id', 'Id', 'maThanhToan', 'MaThanhToan'),
   paymentCode: field(raw, 'paymentCode', 'PaymentCode', 'maThanhToanKinhDoanh', 'MaThanhToanKinhDoanh'),
@@ -138,7 +101,7 @@ const normalizePayment = (raw = {}) => ({
   createdAt: field(raw, 'createdAt', 'CreatedAt', 'ngayTao', 'NgayTao'),
 });
 
-const normalizeVoucher = (raw = {}) => ({
+const mapVoucher = (raw = {}) => ({
   ...raw,
   id: field(raw, 'id', 'Id', 'maVoucher', 'MaVoucher'),
   code: field(raw, 'code', 'Code', 'maVoucherCode', 'MaVoucherCode'),
@@ -150,10 +113,8 @@ const normalizeVoucher = (raw = {}) => ({
   remainingUses: field(raw, 'remainingUses', 'RemainingUses') ?? null,
 });
 
-const normalizeFavorite = (raw = {}) => {
-  const productRaw = field(raw, 'product', 'Product') || raw;
-  const product = normalizeProduct(productRaw);
-
+const mapFavorite = (raw = {}) => {
+  const product = normalizeProduct(field(raw, 'product', 'Product') || raw);
   return {
     ...raw,
     userId: field(raw, 'userId', 'UserId', 'maNguoiDung', 'MaNguoiDung'),
@@ -163,7 +124,7 @@ const normalizeFavorite = (raw = {}) => {
   };
 };
 
-const normalizeReview = (raw = {}) => ({
+const mapReview = (raw = {}) => ({
   ...raw,
   id: field(raw, 'id', 'Id', 'maDanhGia', 'MaDanhGia'),
   productId: field(raw, 'productId', 'ProductId', 'maSanPham', 'MaSanPham'),
@@ -179,31 +140,20 @@ const normalizeReview = (raw = {}) => ({
   updatedAt: field(raw, 'updatedAt', 'UpdatedAt', 'ngayCapNhat', 'NgayCapNhat'),
 });
 
-const normalizeReviewPayload = (payload = {}) => {
-  const formData = new FormData();
-  formData.append('Diem', payload.rating ?? payload.diem);
-  formData.append('NoiDung', payload.comment ?? payload.noiDung ?? '');
-
-  if (payload.productId ?? payload.maSanPham) {
-    formData.append('MaSanPham', payload.productId ?? payload.maSanPham);
-  }
-
-  if (payload.orderId ?? payload.maDonHang) {
-    formData.append('MaDonHang', payload.orderId ?? payload.maDonHang);
-  }
-
-  if (payload.title ?? payload.tieuDe) {
-    formData.append('TieuDe', payload.title ?? payload.tieuDe);
-  }
-
-  if (payload.image) {
-    formData.append('Image', payload.image);
-  }
-
-  return formData;
+// Đóng gói payload đánh giá thành multipart/form-data theo đúng tên field backend.
+const buildReviewForm = (payload = {}) => {
+  const form = new FormData();
+  form.append('Diem', payload.rating ?? payload.diem);
+  form.append('NoiDung', payload.comment ?? payload.noiDung ?? '');
+  if (payload.productId ?? payload.maSanPham) form.append('MaSanPham', payload.productId ?? payload.maSanPham);
+  if (payload.orderId ?? payload.maDonHang) form.append('MaDonHang', payload.orderId ?? payload.maDonHang);
+  if (payload.title ?? payload.tieuDe) form.append('TieuDe', payload.title ?? payload.tieuDe);
+  if (payload.image) form.append('Image', payload.image);
+  return form;
 };
 
-const cleanParams = (params = {}) => {
+// Chuyển param UI (sortBy, categoryId...) sang tên query backend (MaDanhMuc, SortBy...).
+const toQuery = (params = {}) => {
   const sortMap = {
     'price-asc': { SortBy: 'price', SortDescending: false },
     'price-desc': { SortBy: 'price', SortDescending: true },
@@ -230,175 +180,31 @@ const cleanParams = (params = {}) => {
     maxPrice: 'GiaDen',
   };
 
-  const sourceParams = { ...params };
+  const source = { ...params };
   if (sortMap[params.sortBy]) {
-    delete sourceParams.sortBy;
-    Object.assign(sourceParams, sortMap[params.sortBy]);
+    delete source.sortBy;
+    Object.assign(source, sortMap[params.sortBy]);
   }
 
-  const mappedParams = Object.entries(sourceParams).reduce((acc, [key, value]) => {
+  const mapped = Object.entries(source).reduce((acc, [key, value]) => {
     acc[paramMap[key] || key] = value;
     return acc;
   }, {});
 
   return Object.fromEntries(
-    Object.entries(mappedParams).filter(
-      ([, value]) => value !== '' && value !== undefined && value !== null,
-    ),
+    Object.entries(mapped).filter(([, value]) => value !== '' && value !== undefined && value !== null),
   );
 };
 
-const notifyAuthChanged = (user = null) => {
-  window.dispatchEvent(new CustomEvent(AUTH_CHANGED_EVENT, { detail: { user } }));
-};
+// Lấy mảng items từ response (backend có thể trả mảng trực tiếp hoặc bọc trong items/Items).
+const listOf = (data) => (Array.isArray(data) ? data : data?.items || data?.Items || []);
 
-const clearAuthStorage = (notify = true) => {
-  sessionAuthStorage.removeItem(TOKEN_KEY);
-  sessionAuthStorage.removeItem(USER_KEY);
-  legacyAuthStorage.removeItem(TOKEN_KEY);
-  legacyAuthStorage.removeItem(USER_KEY);
-
-  if (notify) {
-    notifyAuthChanged(null);
-  }
-};
-
-const getStoredUser = () => {
-  const rawUser = sessionAuthStorage.getItem(USER_KEY) || legacyAuthStorage.getItem(USER_KEY);
-
-  if (!rawUser) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(rawUser);
-  } catch {
-    return null;
-  }
-};
-
-const isTokenExpired = (token) => {
-  const claims = decodeJwtPayload(token);
-  const expiresAt = Number(claims?.exp);
-
-  if (!Number.isFinite(expiresAt)) {
-    return true;
-  }
-
-  return Date.now() >= expiresAt * 1000;
-};
-
-const decodeJwtPayload = (token) => {
-  if (!token) {
-    return null;
-  }
-
-  try {
-    const [, payload] = token.split('.');
-    if (!payload) {
-      return null;
-    }
-
-    const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const decodedPayload = decodeURIComponent(
-      atob(normalizedPayload)
-        .split('')
-        .map((char) => `%${`00${char.charCodeAt(0).toString(16)}`.slice(-2)}`)
-        .join(''),
-    );
-
-    return JSON.parse(decodedPayload);
-  } catch {
-    return null;
-  }
-};
-
-const getClaim = (claims, key) => claims?.[key] || claims?.[`http://schemas.xmlsoap.org/ws/2005/05/identity/claims/${key}`];
-
-const normalizeLoginResponse = (data) => {
-  const user = data?.user || data?.User || data;
-  const roles = user?.roles || user?.Roles || [];
-  const role = data?.role || data?.Role || roles[0];
-
-  return {
-    token: data?.token || data?.Token,
-    userId: data?.userId || data?.UserId || user?.id || user?.Id,
-    username: data?.username || data?.Username || user?.email || user?.Email,
-    name: data?.name || data?.Name || user?.hoTen || user?.HoTen,
-    email: data?.email || data?.Email || user?.email || user?.Email,
-    phone: data?.phone || data?.Phone || user?.soDienThoai || user?.SoDienThoai,
-    role,
-    roles,
-    userType: data?.userType ?? data?.UserType,
-    expiresIn: data?.expiresIn || data?.ExpiresIn,
-    expiresAt: data?.expiresAt || data?.ExpiresAt,
-    raw: data,
-  };
-};
-
-const saveAuthUser = (user, rememberMe = false) => {
-  if (!user?.token) {
-    throw new Error('Không nhận được token đăng nhập từ máy chủ');
-  }
-
-  const targetStorage = rememberMe ? legacyAuthStorage : sessionAuthStorage;
-  const staleStorage = rememberMe ? sessionAuthStorage : legacyAuthStorage;
-
-  targetStorage.setItem(TOKEN_KEY, user.token);
-  targetStorage.setItem(USER_KEY, JSON.stringify(user));
-  staleStorage.removeItem(TOKEN_KEY);
-  staleStorage.removeItem(USER_KEY);
-
-  notifyAuthChanged(user);
-};
-
-const mergeStoredUser = (data = {}) => {
-  const currentUser = getStoredUser();
-  const token = currentUser?.token || getToken();
-
-  if (!token) {
-    return null;
-  }
-
-  const nextUser = {
-    ...currentUser,
-    ...data,
-    token,
-  };
-
-  const targetStorage = sessionAuthStorage.getItem(TOKEN_KEY) ? sessionAuthStorage : legacyAuthStorage;
-  targetStorage.setItem(USER_KEY, JSON.stringify(nextUser));
-  notifyAuthChanged(nextUser);
-  return nextUser;
-};
-
-api.interceptors.request.use(
-  (config) => {
-    const token = getToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error),
-);
-
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    const message = error.response?.data?.message || error.response?.data?.Message;
-    if (message) {
-      error.message = message;
-    }
-
-    return Promise.reject(error);
-  },
-);
+// ===== Auth =====
 
 export const authApi = {
   async login({ username, password, rememberMe }) {
-    const response = await api.post('/auth/login', { email: username, matKhau: password });
-    const user = normalizeLoginResponse(responseData(response));
+    const { data } = await api.post('/auth/login', { email: username, matKhau: password });
+    const user = normalizeLoginResponse(data);
     saveAuthUser(user, rememberMe === true || rememberMe === 'true' || rememberMe === 'on');
     return user;
   },
@@ -410,19 +216,13 @@ export const authApi = {
     matKhau: data.password,
   }),
 
-  async forgotPassword(email) {
-    const response = await api.post('/auth/forgot-password', { email });
-    return responseData(response);
-  },
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }).then(responseData),
 
-  async resetPassword(data) {
-    const response = await api.post('/auth/reset-password', {
-      email: data.email,
-      token: data.token,
-      matKhauMoi: data.password,
-    });
-    return responseData(response);
-  },
+  resetPassword: (data) => api.post('/auth/reset-password', {
+    email: data.email,
+    token: data.token,
+    matKhauMoi: data.password,
+  }).then(responseData),
 
   logout() {
     clearAuthStorage();
@@ -430,13 +230,7 @@ export const authApi = {
 
   getCurrentUser() {
     const token = getToken();
-
-    if (!token) {
-      clearAuthStorage(false);
-      return null;
-    }
-
-    if (isTokenExpired(token)) {
+    if (!token || isTokenExpired(token)) {
       clearAuthStorage(false);
       return null;
     }
@@ -460,53 +254,24 @@ export const authApi = {
 
   getToken: () => getToken(),
 
-  updateStoredUser(data) {
-    return mergeStoredUser(data);
-  },
+  updateStoredUser: (data) => mergeStoredUser(data),
 };
 
-function getToken() {
-  const token = sessionAuthStorage.getItem(TOKEN_KEY);
-
-  if (token) {
-    return token;
-  }
-
-  const legacyToken = legacyAuthStorage.getItem(TOKEN_KEY);
-  if (legacyToken) {
-    return legacyToken;
-  }
-
-  return null;
-}
+// ===== Sản phẩm =====
 
 export const productApi = {
-  async getAll(params) {
-    const response = await api.get('/products', { params: cleanParams({ DangHoatDong: true, ...params }) });
-    return normalizeProductList(responseData(response));
-  },
-
-  async getById(id) {
-    const response = await api.get(`/products/${id}`);
-    return normalizeProduct(responseData(response));
-  },
-
-  async getFilters() {
-    const response = await api.get('/products/filters');
-    return normalizeFilters(responseData(response));
-  },
+  getAll: (params) => api.get('/products', { params: toQuery({ DangHoatDong: true, ...params }) }).then((res) => normalizeProductList(res.data)),
+  getById: (id) => api.get(`/products/${id}`).then((res) => normalizeProduct(res.data)),
+  getFilters: () => api.get('/products/filters').then((res) => normalizeFilters(res.data)),
 };
 
+// ===== Đánh giá =====
+
 export const reviewApi = {
-  async getByProduct(productId) {
-    const response = await api.get(`/products/${productId}/reviews`);
-    const data = responseData(response);
-    return (Array.isArray(data) ? data : data?.items || data?.Items || []).map(normalizeReview);
-  },
+  getByProduct: (productId) => api.get(`/products/${productId}/reviews`).then((res) => listOf(res.data).map(mapReview)),
 
   async getSummary(productId) {
-    const response = await api.get(`/products/${productId}/reviews/summary`);
-    const data = responseData(response);
+    const { data } = await api.get(`/products/${productId}/reviews/summary`);
     return {
       productId: field(data, 'productId', 'ProductId', 'maSanPham', 'MaSanPham'),
       totalReviews: Number(field(data, 'totalReviews', 'TotalReviews', 'tongDanhGia', 'TongDanhGia') || 0),
@@ -515,10 +280,8 @@ export const reviewApi = {
   },
 
   async getMine(productId) {
-    const response = await api.get(`/reviews/product/${productId}/me`);
-    const data = responseData(response);
+    const { data } = await api.get(`/reviews/product/${productId}/me`);
     const myReview = field(data, 'myReview', 'MyReview', 'danhGiaCuaToi', 'DanhGiaCuaToi');
-
     return {
       productId: field(data, 'productId', 'ProductId', 'maSanPham', 'MaSanPham'),
       isAuthenticated: field(data, 'isAuthenticated', 'IsAuthenticated', 'daDangNhap', 'DaDangNhap') === true,
@@ -526,78 +289,59 @@ export const reviewApi = {
       canReview: field(data, 'canReview', 'CanReview', 'coTheDanhGia', 'CoTheDanhGia') === true,
       eligibleOrderId: field(data, 'eligibleOrderId', 'EligibleOrderId', 'maDonHangDuDieuKien', 'MaDonHangDuDieuKien'),
       reason: field(data, 'reason', 'Reason', 'lyDo', 'LyDo'),
-      myReview: myReview ? normalizeReview(myReview) : null,
+      myReview: myReview ? mapReview(myReview) : null,
     };
   },
 
   async create(productId, payload) {
-    const formData = normalizeReviewPayload({ ...payload, productId });
-    const response = await api.post(`/products/${productId}/reviews`, formData, {
+    const { data } = await api.post(`/products/${productId}/reviews`, buildReviewForm({ ...payload, productId }), {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
-    const data = responseData(response);
-    return {
-      ...data,
-      review: data?.review || data?.Review ? normalizeReview(data.review || data.Review) : null,
-    };
+    return { ...data, review: data?.review || data?.Review ? mapReview(data.review || data.Review) : null };
   },
 
   async updateMine(productId, payload) {
-    const formData = normalizeReviewPayload(payload);
-    const response = await api.patch(`/products/${productId}/reviews/me`, formData, {
+    const { data } = await api.patch(`/products/${productId}/reviews/me`, buildReviewForm(payload), {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
-    const data = responseData(response);
-    return {
-      ...data,
-      review: data?.review || data?.Review ? normalizeReview(data.review || data.Review) : null,
-    };
+    return { ...data, review: data?.review || data?.Review ? mapReview(data.review || data.Review) : null };
   },
 };
+
+// ===== Danh mục =====
 
 export const categoryApi = {
   async getAll() {
     const response = await api.get('/categories');
-    const data = responseData(response);
-    return {
-      ...response,
-      data: (Array.isArray(data) ? data : data?.items || data?.Items || []).map(normalizeCategory),
-    };
+    return { ...response, data: listOf(response.data).map(normalizeCategory) };
   },
 };
 
-const normalizeCartResponse = (response) => {
-  const cart = normalizeCart(responseData(response));
+// ===== Giỏ hàng =====
+
+const handleCart = (response) => {
+  const cart = normalizeCart(response.data);
   notifyCartChanged(cart);
   return cart;
 };
 
 export const cartApi = {
-  async getMine() {
-    const response = await api.get('/cart');
-    return normalizeCartResponse(response);
-  },
+  getMine: () => api.get('/cart').then(handleCart),
 
-  async getCount() {
-    const response = await api.get('/cart/count');
-    const data = responseData(response);
+  getCount: () => api.get('/cart/count').then((res) => {
+    const data = res.data;
     return Number(data?.count ?? data?.totalItems ?? data ?? 0);
-  },
+  }),
 
-  async addItem(data) {
-    const response = await api.post('/cart/items', {
-      maSanPham: data.productId,
-      maBienSanPham: data.variantId ?? data.productVariantId ?? null,
-      soLuong: data.quantity,
-    });
-    return normalizeCartResponse(response);
-  },
+  addItem: (data) => api.post('/cart/items', {
+    maSanPham: data.productId,
+    maBienSanPham: data.variantId ?? data.productVariantId ?? null,
+    soLuong: data.quantity,
+  }).then(handleCart),
 
   async updateItem(id, quantityOrData) {
     const data = typeof quantityOrData === 'object' ? quantityOrData : { quantity: quantityOrData };
-    await api.put(`/cart/items/${id}`, {
-      soLuong: data.quantity ?? data.soLuong,
-    });
+    await api.put(`/cart/items/${id}`, { soLuong: data.quantity ?? data.soLuong });
     return cartApi.getMine();
   },
 
@@ -606,202 +350,157 @@ export const cartApi = {
     return cartApi.getMine();
   },
 
-  async clearCart() {
-    const response = await api.delete('/cart/clear');
-    return normalizeCartResponse(response);
-  },
+  clear: () => api.delete('/cart/clear').then(handleCart),
 };
+
+// ===== Đơn hàng =====
 
 export const orderApi = {
   async getAll(params) {
-    const response = await api.get('/orders', { params });
-    const data = responseData(response);
-    if (Array.isArray(data)) {
-      return data.map(normalizeOrder);
-    }
-
+    const { data } = await api.get('/orders', { params });
+    if (Array.isArray(data)) return data.map(mapOrder);
     const items = data?.items || data?.Items;
-    return items ? items.map(normalizeOrder) : normalizeOrder(data);
+    return items ? items.map(mapOrder) : mapOrder(data);
   },
 
-  getMyOrders() {
-    return orderApi.getAll();
-  },
+  getMine: () => orderApi.getAll(),
 
   async getById(id) {
-    const response = await api.get(`/orders/${id}`);
-    const order = normalizeOrder(responseData(response));
-    return {
-      ...order,
-      order,
-      details: order.items,
-      vouchers: order.vouchers,
-    };
+    const { data } = await api.get(`/orders/${id}`);
+    const order = mapOrder(data);
+    return { ...order, order, details: order.items, vouchers: order.vouchers };
   },
 
-  async createOrder(data) {
-    const response = await api.post('/orders', {
-      maDiaChiNhanHang: data.shippingAddressId ?? data.maDiaChiNhanHang ?? null,
-      hoTenNhanHang: data.shippingFullName,
-      soDienThoaiNhanHang: data.shippingPhoneNumber,
-      emailNhanHang: data.shippingEmail,
-      diaChiNhanHang: [data.shippingAddressLine, data.shippingWard, data.shippingDistrict, data.shippingProvince].filter(Boolean).join(', '),
-      shippingProvince: data.shippingProvince,
-      maVoucherCode: data.voucherCode,
-      ghiChu: data.note,
-      phuongThucNhanHang: data.receivingMethod,
-      loaiDonHang: data.orderType,
-      phuongThucThanhToan: data.paymentMethod,
-      soKyTraGop: data.soKyTraGop ?? null,
-      hoSoTraGop: data.installmentApplication ?? null,
-      tienDatCoc: data.depositAmount ?? 0,
-      ngayHenNhanXe: data.pickupAppointmentAt,
-      ghiChuGiaoNhan: data.fulfillmentNote,
-      soPhutGiuCho: data.holdMinutes ?? 15,
-    });
-    return normalizeOrder(responseData(response));
-  },
+  create: (data) => api.post('/orders', {
+    maDiaChiNhanHang: data.shippingAddressId ?? data.maDiaChiNhanHang ?? null,
+    hoTenNhanHang: data.shippingFullName,
+    soDienThoaiNhanHang: data.shippingPhoneNumber,
+    emailNhanHang: data.shippingEmail,
+    diaChiNhanHang: [data.shippingAddressLine, data.shippingWard, data.shippingDistrict, data.shippingProvince].filter(Boolean).join(', '),
+    shippingProvince: data.shippingProvince,
+    maVoucherCode: data.voucherCode,
+    ghiChu: data.note,
+    phuongThucNhanHang: data.receivingMethod,
+    loaiDonHang: data.orderType,
+    phuongThucThanhToan: data.paymentMethod,
+    soKyTraGop: data.soKyTraGop ?? null,
+    hoSoTraGop: data.installmentApplication ?? null,
+    tienDatCoc: data.depositAmount ?? 0,
+    ngayHenNhanXe: data.pickupAppointmentAt,
+    ghiChuGiaoNhan: data.fulfillmentNote,
+    soPhutGiuCho: data.holdMinutes ?? 15,
+  }).then((res) => mapOrder(res.data)),
 
-  async getPaymentInfo(id) {
-    const response = await api.get(`/orders/${id}/payment-info`);
-    return responseData(response);
-  },
+  getPaymentInfo: (id) => api.get(`/orders/${id}/payment-info`).then(responseData),
 
-  async getShippingQuote(data) {
-    const response = await api.post('/orders/shipping-quote', {
-      phuongThucNhanHang: data.receivingMethod,
-      shippingProvince: data.shippingProvince,
-      maVoucherCode: data.voucherCode,
-      orderType: data.orderType,
-    });
-    return responseData(response);
-  },
+  getShippingQuote: (data) => api.post('/orders/shipping-quote', {
+    phuongThucNhanHang: data.receivingMethod,
+    shippingProvince: data.shippingProvince,
+    maVoucherCode: data.voucherCode,
+    orderType: data.orderType,
+  }).then(responseData),
 
-  async cancelOrder(id, reason) {
-    const response = await api.put(`/orders/${id}/cancel`, { lyDoHuyDon: reason });
-    return normalizeOrder(responseData(response));
-  },
+  cancel: (id, reason) => api.put(`/orders/${id}/cancel`, { lyDoHuyDon: reason }).then((res) => mapOrder(res.data)),
 
-  async requestRefund(id, data) {
-    const response = await api.post(`/orders/${id}/request-refund`, {
-      tenNganHang: data.bankName,
-      soTaiKhoan: data.accountNo,
-      chuTaiKhoan: data.accountName,
-      lyDo: data.reason,
-    });
-    return normalizeOrder(responseData(response));
-  },
+  requestRefund: (id, data) => api.post(`/orders/${id}/request-refund`, {
+    tenNganHang: data.bankName,
+    soTaiKhoan: data.accountNo,
+    chuTaiKhoan: data.accountName,
+    lyDo: data.reason,
+  }).then((res) => mapOrder(res.data)),
 };
+
+// ===== Thanh toán =====
 
 export const paymentApi = {
-  async getPaymentsByOrder(orderId) {
-    const response = await api.get(`/payments/order/${orderId}`);
-    const data = responseData(response);
+  getByOrder: (orderId) => api.get(`/payments/order/${orderId}`).then((res) => {
+    const data = res.data;
     const items = data?.items || data?.Items || data?.payments || data?.Payments || data;
-    return Array.isArray(items) ? items.map(normalizePayment) : items;
-  },
+    return Array.isArray(items) ? items.map(mapPayment) : items;
+  }),
 
-  async createPayment(data) {
-    const response = await api.post('/payments', {
-      maDonHang: data.orderId ?? data.maDonHang,
-      loaiThanhToan: data.paymentType ?? data.loaiThanhToan ?? 'Full',
-      soTien: data.amount ?? data.soTien,
-      phuongThuc: data.paymentMethod ?? data.phuongThuc ?? 'BankTransfer',
-      maGiaoDich: data.transactionRef ?? data.maGiaoDich,
-      noiDungChuyenKhoan: data.transferContent ?? data.noiDungChuyenKhoan,
-      maNganHang: data.bankCode ?? data.maNganHang,
-      responseRaw: data.responseRaw,
-    });
-    return normalizePayment(responseData(response));
-  },
+  create: (data) => api.post('/payments', {
+    maDonHang: data.orderId ?? data.maDonHang,
+    loaiThanhToan: data.paymentType ?? data.loaiThanhToan ?? 'Full',
+    soTien: data.amount ?? data.soTien,
+    phuongThuc: data.paymentMethod ?? data.phuongThuc ?? 'BankTransfer',
+    maGiaoDich: data.transactionRef ?? data.maGiaoDich,
+    noiDungChuyenKhoan: data.transferContent ?? data.noiDungChuyenKhoan,
+    maNganHang: data.bankCode ?? data.maNganHang,
+    responseRaw: data.responseRaw,
+  }).then((res) => mapPayment(res.data)),
 
-  async confirmSuccess(paymentId, data = {}) {
-    const response = await api.post(`/payments/${paymentId}/confirm-success`, {
-      maGiaoDich: data.transactionRef ?? data.maGiaoDich,
-      responseRaw: data.responseRaw,
-    });
-    return responseData(response);
-  },
+  confirmSuccess: (paymentId, data = {}) => api.post(`/payments/${paymentId}/confirm-success`, {
+    maGiaoDich: data.transactionRef ?? data.maGiaoDich,
+    responseRaw: data.responseRaw,
+  }).then(responseData),
 };
 
-export const voucherApi = {
-  async getAll(params) {
-    const response = await api.get('/vouchers', { params: cleanParams(params) });
-    const data = responseData(response);
-    const items = data?.items || data?.Items || data;
-    return Array.isArray(items) ? items.map(normalizeVoucher) : items;
-  },
+// ===== Voucher =====
 
-  async validateVoucher(data) {
-    const response = await api.post('/vouchers/validate', data);
-    const result = responseData(response);
+export const voucherApi = {
+  getAll: (params) => api.get('/vouchers', { params: toQuery(params) }).then((res) => {
+    const items = res.data?.items || res.data?.Items || res.data;
+    return Array.isArray(items) ? items.map(mapVoucher) : items;
+  }),
+
+  async validate(data) {
+    const { data: result } = await api.post('/vouchers/validate', data);
     return {
       ...result,
       valid: field(result, 'valid', 'Valid', 'hopLe', 'HopLe') === true,
       message: field(result, 'message', 'Message', 'lyDoKhongHopLe', 'LyDoKhongHopLe'),
       discountAmount: Number(field(result, 'discountAmount', 'DiscountAmount', 'soTienGiam', 'SoTienGiam') || 0),
-      voucher: normalizeVoucher(field(result, 'voucher', 'Voucher') || result),
+      voucher: mapVoucher(field(result, 'voucher', 'Voucher') || result),
     };
   },
 
-  async getApplicableVouchers(data) {
-    const response = await api.post('/vouchers/applicable', data);
-    const result = responseData(response);
-    const items = result?.items || result?.Items || result;
-    return Array.isArray(items) ? items.map(normalizeVoucher) : items;
-  },
+  getApplicable: (data) => api.post('/vouchers/applicable', data).then((res) => {
+    const items = res.data?.items || res.data?.Items || res.data;
+    return Array.isArray(items) ? items.map(mapVoucher) : items;
+  }),
 
-  async saveVoucher(code) {
-    const response = await api.post('/vouchers/save', { code });
-    return responseData(response);
-  },
+  save: (code) => api.post('/vouchers/save', { code }).then(responseData),
 
-  async getMyVouchers() {
-    const response = await api.get('/vouchers/my');
-    const data = responseData(response);
-    const items = data?.items || data?.Items || data;
-    return Array.isArray(items) ? items.map(normalizeVoucher) : items;
-  },
+  getMine: () => api.get('/vouchers/my').then((res) => {
+    const items = res.data?.items || res.data?.Items || res.data;
+    return Array.isArray(items) ? items.map(mapVoucher) : items;
+  }),
 
-  async getMyVoucherCount() {
-    const response = await api.get('/vouchers/my/count');
-    const data = responseData(response);
-    return data?.count ?? 0;
-  },
+  getMineCount: () => api.get('/vouchers/my/count').then((res) => res.data?.count ?? 0),
 };
 
+// ===== Người dùng & địa chỉ =====
+
+const mapAddressBody = (data) => ({
+  hoTenNhanHang: data.fullName,
+  soDienThoaiNhanHang: data.phoneNumber,
+  diaChiNhanHang: data.addressLine,
+  ward: data.ward,
+  district: data.district,
+  province: data.province,
+  ghiChu: data.note,
+});
+
 export const userApi = {
-  async getProfile() {
-    const response = await api.get('/users/me');
-    return responseData(response);
-  },
+  getProfile: () => api.get('/users/me').then(responseData),
 
-  async updateProfile(data) {
-    const response = await api.put('/users/me', {
-      hoTen: data.name,
-      email: data.email,
-      soDienThoai: data.phone,
-    });
-    return responseData(response);
-  },
+  updateProfile: (data) => api.put('/users/me', {
+    hoTen: data.name,
+    email: data.email,
+    soDienThoai: data.phone,
+  }).then(responseData),
 
-  async changePassword(data) {
-    const response = await api.put('/users/me/password', {
-      matKhauHienTai: data.currentPassword,
-      matKhauMoi: data.newPassword,
-    });
-    return responseData(response);
-  },
+  changePassword: (data) => api.put('/users/me/password', {
+    matKhauHienTai: data.currentPassword,
+    matKhauMoi: data.newPassword,
+  }).then(responseData),
 
-  async getAddress() {
-    const response = await api.get('/users/me/address');
-    return responseData(response);
-  },
+  getAddress: () => api.get('/users/me/address').then(responseData),
 
   async getAddresses() {
     try {
-      const response = await api.get('/users/me/addresses');
-      const data = responseData(response);
+      const { data } = await api.get('/users/me/addresses');
       return data?.items || data?.Items || [];
     } catch (error) {
       if (error?.response?.status !== 404) throw error;
@@ -810,33 +509,12 @@ export const userApi = {
     }
   },
 
-  async updateAddress(data) {
-    const response = await api.put('/users/me/address', {
-      hoTenNhanHang: data.fullName,
-      soDienThoaiNhanHang: data.phoneNumber,
-      diaChiNhanHang: data.addressLine,
-      ward: data.ward,
-      district: data.district,
-      province: data.province,
-      ghiChu: data.note,
-      laMacDinh: true,
-    });
-    return responseData(response);
-  },
+  updateAddress: (data) => api.put('/users/me/address', { ...mapAddressBody(data), laMacDinh: true }).then(responseData),
 
   async createAddress(data) {
     try {
-      const response = await api.post('/users/me/addresses', {
-        hoTenNhanHang: data.fullName,
-        soDienThoaiNhanHang: data.phoneNumber,
-        diaChiNhanHang: data.addressLine,
-        ward: data.ward,
-        district: data.district,
-        province: data.province,
-        ghiChu: data.note,
-        laMacDinh: Boolean(data.isDefault),
-      });
-      return responseData(response);
+      const { data: result } = await api.post('/users/me/addresses', { ...mapAddressBody(data), laMacDinh: Boolean(data.isDefault) });
+      return result;
     } catch (error) {
       if (error?.response?.status !== 404) throw error;
       return userApi.updateAddress(data);
@@ -845,60 +523,37 @@ export const userApi = {
 
   async updateAddressById(id, data) {
     try {
-      const response = await api.put(`/users/me/addresses/${id}`, {
-        hoTenNhanHang: data.fullName,
-        soDienThoaiNhanHang: data.phoneNumber,
-        diaChiNhanHang: data.addressLine,
-        ward: data.ward,
-        district: data.district,
-        province: data.province,
-        ghiChu: data.note,
-        laMacDinh: Boolean(data.isDefault),
-      });
-      return responseData(response);
+      const { data: result } = await api.put(`/users/me/addresses/${id}`, { ...mapAddressBody(data), laMacDinh: Boolean(data.isDefault) });
+      return result;
     } catch (error) {
       if (error?.response?.status !== 404) throw error;
       return userApi.updateAddress(data);
     }
   },
 
-  async setDefaultAddress(id) {
-    const response = await api.put(`/users/me/addresses/${id}/default`);
-    return responseData(response);
-  },
+  setDefaultAddress: (id) => api.put(`/users/me/addresses/${id}/default`).then(responseData),
 
-  async deleteAddress(id) {
-    const response = await api.delete(`/users/me/addresses/${id}`);
-    return responseData(response);
-  },
+  deleteAddress: (id) => api.delete(`/users/me/addresses/${id}`).then(responseData),
 
-  async getAll(params) {
-    const response = await api.get('/users', { params });
-    return responseData(response);
-  },
+  getAll: (params) => api.get('/users', { params }).then(responseData),
 
-  async getById(id) {
-    const response = await api.get(`/users/${id}`);
-    return responseData(response);
-  },
-
+  getById: (id) => api.get(`/users/${id}`).then(responseData),
 };
 
-export const favoriteApi = {
-  async getMine() {
-    const response = await api.get('/favorites');
-    const data = responseData(response);
-    const items = data?.items || data?.Items || data;
-    return Array.isArray(items) ? items.map(normalizeFavorite) : [];
-  },
+// ===== Yêu thích =====
 
-  async add(productId) {
-    const response = await api.post(`/favorites/${productId}`);
-    return normalizeFavorite(responseData(response));
-  },
+export const favoriteApi = {
+  getMine: () => api.get('/favorites').then((res) => {
+    const items = res.data?.items || res.data?.Items || res.data;
+    return Array.isArray(items) ? items.map(mapFavorite) : [];
+  }),
+
+  add: (productId) => api.post(`/favorites/${productId}`).then((res) => mapFavorite(res.data)),
 
   remove: (productId) => api.delete(`/favorites/${productId}`),
 };
+
+// ===== Nội dung (blog, FAQ, liên hệ, voucher công khai) =====
 
 export const contentApi = {
   getBlogPosts: (params) => api.get('/content/blog-posts', { params }),
@@ -915,4 +570,5 @@ export const contentApi = {
   getVoucher: (code) => api.get(`/content/vouchers/${code}`),
 };
 
+export { AUTH_CHANGED_EVENT };
 export default api;

@@ -78,7 +78,7 @@ function OrderDetailPage() {
       setVouchers(res.vouchers?.$values || res.vouchers || []);
 
       try {
-        const payRes = await paymentApi.getPaymentsByOrder(id);
+        const payRes = await paymentApi.getByOrder(id);
         setPayments(Array.isArray(payRes) ? payRes : payRes?.$values || []);
       } catch {
         setPayments([]);
@@ -99,7 +99,7 @@ function OrderDetailPage() {
   async function handleCancel() {
     setCancelling(true);
     try {
-      await orderApi.cancelOrder(id, cancelReason.trim() || null);
+      await orderApi.cancel(id, cancelReason.trim() || null);
       setShowCancelModal(false);
       fetchOrder();
     } catch (err) {

@@ -61,7 +61,7 @@ function Header() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      voucherApi.getMyVoucherCount().then(setVoucherCount).catch(() => setVoucherCount(0));
+      voucherApi.getMineCount().then(setVoucherCount).catch(() => setVoucherCount(0));
     } else {
       setVoucherCount(0);
     }

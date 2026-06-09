@@ -21,7 +21,7 @@ public class AuditLogsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] AuditLogSearchRequest request)
+    public async Task<IActionResult> GetAuditLogs([FromQuery] AuditLogSearchRequest request)
     {
         await _auditLogService.EnsureTableAsync();
 

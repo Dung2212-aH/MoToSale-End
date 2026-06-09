@@ -73,7 +73,7 @@ function HomePage() {
       ];
 
       if (isAuthenticated) {
-        tasks.push(orderApi.getMyOrders().catch(() => []));
+        tasks.push(orderApi.getMine().catch(() => []));
       }
 
       const results = await Promise.all(tasks);

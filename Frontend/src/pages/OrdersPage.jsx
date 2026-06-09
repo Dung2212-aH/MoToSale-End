@@ -61,7 +61,7 @@ function OrdersPage() {
     setError('');
     try {
       const [confirmedData, awaitingData] = await Promise.all([
-        orderApi.getMyOrders(),
+        orderApi.getMine(),
         orderApi.getAll({ trangThaiDonHang: 'AwaitingPayment' }).catch(() => null),
       ]);
       const list = Array.isArray(confirmedData) ? confirmedData : confirmedData?.orders || confirmedData?.$values || [];

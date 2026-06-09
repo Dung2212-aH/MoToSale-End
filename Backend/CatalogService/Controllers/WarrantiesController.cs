@@ -31,7 +31,7 @@ public class WarrantiesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] string? search, [FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<IActionResult> GetWarranties([FromQuery] string? search, [FromQuery] string? status, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
         await EnsureTablesAsync();
         page = Math.Max(1, page);
@@ -89,7 +89,7 @@ public class WarrantiesController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
-    public async Task<IActionResult> GetById(int id)
+    public async Task<IActionResult> GetWarrantyById(int id)
     {
         await EnsureTablesAsync();
         var warranty = (await _db.Database.SqlQueryRaw<WarrantyRow>($"SELECT MaBaoHanh, MaPhieuBaoHanh, MaDonHang, MaNguoiDung, TenKhachHang, SoDienThoai, MaSanPham, MaBienSanPham, SKU, TenSanPham, SoKhung, SoMay, NgayMua, HetHanBaoHanh, LoiKhachBao, TrangThai, ChiPhiDuKien, ChiPhiThucTe, GhiChu, MaNguoiTao, NgayTao, NgayCapNhat FROM dbo.BAOHANH_PHIEU WHERE MaBaoHanh = {id}").ToListAsync()).FirstOrDefault();
@@ -103,7 +103,7 @@ public class WarrantiesController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create(WarrantyRequest request)
+    public async Task<IActionResult> CreateWarranty(WarrantyRequest request)
     {
         await EnsureTablesAsync();
         if (string.IsNullOrWhiteSpace(request.TenKhachHang) || string.IsNullOrWhiteSpace(request.SoDienThoai) || string.IsNullOrWhiteSpace(request.TenSanPham) || string.IsNullOrWhiteSpace(request.LoiKhachBao))
@@ -126,7 +126,7 @@ public class WarrantiesController : ControllerBase
         await InsertHistoryAsync(id, null, "Received", "Tiep nhan bao hanh", userId);
         await _auditLog.WriteAsync(this, "Warranty", id.ToString(), "Create", null, new { code, request.TenKhachHang, request.TenSanPham });
 
-        return CreatedAtAction(nameof(GetById), new { id }, new { id, maPhieuBaoHanh = code, trangThai = "Received" });
+        return CreatedAtAction(nameof(GetWarrantyById), new { id }, new { id, maPhieuBaoHanh = code, trangThai = "Received" });
     }
 
     [HttpPatch("{id:int}/status")]

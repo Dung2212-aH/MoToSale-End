@@ -1115,6 +1115,261 @@ public class ProductsController : ControllerBase
         var value = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
         return int.TryParse(value, out var id) ? id : null;
     }
+
+    // ===== San pham ban kem / lien quan =====
+
+    [HttpGet("{id:int}/related")]
+    public async Task<IActionResult> GetRelatedProducts(int id)
+    {
+        await CatalogSchema.EnsureRelatedTableAsync(_dbContext);
+
+        var rels = await _dbContext.SanPhamLienQuans.AsNoTracking()
+            .Where(r => r.MaSanPham == id)
+            .OrderBy(r => r.ThuTuHienThi).ThenBy(r => r.MaLienQuan)
+            .ToListAsync();
+
+        var relatedIds = rels.Select(r => r.MaSanPhamLienQuan).Distinct().ToList();
+        var products = await _dbContext.Products.AsNoTracking()
+            .Where(p => relatedIds.Contains(p.MaSanPham))
+            .ToDictionaryAsync(p => p.MaSanPham);
+
+        var items = rels.Select(r =>
+        {
+            products.TryGetValue(r.MaSanPhamLienQuan, out var p);
+            return new
+            {
+                id = r.MaLienQuan,
+                relatedProductId = r.MaSanPhamLienQuan,
+                relationType = r.LoaiLienQuan,
+                note = r.GhiChu,
+                sortOrder = r.ThuTuHienThi,
+                relatedProductCode = p?.MaSanPhamKinhDoanh,
+                relatedProductName = p?.TenSanPham,
+                stockTotal = p?.SoLuongTon ?? 0,
+                listPrice = p?.GiaGoc ?? 0,
+                salePrice = p?.GiaKhuyenMai
+            };
+        }).ToList();
+
+        return Ok(new { items });
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPost("{id:int}/related")]
+    public async Task<IActionResult> CreateRelatedItem(int id, [FromBody] SaveRelatedItemRequest request)
+    {
+        await CatalogSchema.EnsureRelatedTableAsync(_dbContext);
+
+        if (request.RelatedProductId == id)
+        {
+            return BadRequest(new { message = "Khong the chon chinh san pham hien tai." });
+        }
+        if (!await _dbContext.Products.AnyAsync(p => p.MaSanPham == request.RelatedProductId))
+        {
+            return BadRequest(new { message = "San pham lien quan khong ton tai." });
+        }
+        if (await _dbContext.SanPhamLienQuans.AnyAsync(r => r.MaSanPham == id && r.MaSanPhamLienQuan == request.RelatedProductId))
+        {
+            return BadRequest(new { message = "San pham nay da duoc cau hinh ban kem." });
+        }
+
+        var entity = new SanPhamLienQuan
+        {
+            MaSanPham = id,
+            MaSanPhamLienQuan = request.RelatedProductId,
+            LoaiLienQuan = NormalizeRelationType(request.RelationType),
+            GhiChu = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim(),
+            ThuTuHienThi = request.SortOrder,
+            DangHoatDong = true,
+            NgayTao = DateTime.UtcNow,
+            NgayCapNhat = DateTime.UtcNow
+        };
+        _dbContext.SanPhamLienQuans.Add(entity);
+        await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "SanPhamLienQuan", entity.MaLienQuan.ToString(), "Create", null, new { entity.MaSanPham, entity.MaSanPhamLienQuan, entity.LoaiLienQuan });
+        return CreatedAtAction(nameof(GetRelatedProducts), new { id }, new { id = entity.MaLienQuan });
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPut("{id:int}/related/{relatedId:int}")]
+    public async Task<IActionResult> UpdateRelatedItem(int id, int relatedId, [FromBody] SaveRelatedItemRequest request)
+    {
+        await CatalogSchema.EnsureRelatedTableAsync(_dbContext);
+
+        var entity = await _dbContext.SanPhamLienQuans.FirstOrDefaultAsync(r => r.MaLienQuan == relatedId && r.MaSanPham == id);
+        if (entity is null) return NotFound();
+
+        entity.LoaiLienQuan = NormalizeRelationType(request.RelationType);
+        entity.GhiChu = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
+        entity.ThuTuHienThi = request.SortOrder;
+        entity.NgayCapNhat = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "SanPhamLienQuan", entity.MaLienQuan.ToString(), "Update", null, new { entity.LoaiLienQuan, entity.GhiChu, entity.ThuTuHienThi });
+        return Ok(new { id = entity.MaLienQuan });
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpDelete("{id:int}/related/{relatedId:int}")]
+    public async Task<IActionResult> DeleteRelatedItem(int id, int relatedId)
+    {
+        await CatalogSchema.EnsureRelatedTableAsync(_dbContext);
+
+        var entity = await _dbContext.SanPhamLienQuans.FirstOrDefaultAsync(r => r.MaLienQuan == relatedId && r.MaSanPham == id);
+        if (entity is null) return NotFound();
+        _dbContext.SanPhamLienQuans.Remove(entity);
+        await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "SanPhamLienQuan", relatedId.ToString(), "Delete", new { entity.MaSanPham, entity.MaSanPhamLienQuan }, null);
+        return NoContent();
+    }
+
+    private static string NormalizeRelationType(string? value)
+    {
+        var v = (value ?? "").Trim();
+        return v is "Accessory" or "Bundle" or "Alternative" ? v : "Accessory";
+    }
+
+    // ===== Khuyen mai dang ap dung (doc tu VOUCHER) =====
+
+    [HttpGet("{id:int}/promotions")]
+    public async Task<IActionResult> GetApplicableVouchers(int id)
+    {
+        if (!await _dbContext.Products.AnyAsync(p => p.MaSanPham == id))
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            var rows = await _dbContext.Database.SqlQueryRaw<PromotionRow>("""
+                SELECT MaVoucher AS Id, MaVoucherCode AS Code, PhamViApDung AS ScopeType,
+                       LoaiGiamGia AS DiscountType, GiaTriGiam AS DiscountValue, GiaTriGiamToiDa AS MaxDiscount,
+                       GiaTriDonToiThieu AS MinOrderValue, NgayBatDau AS StartAt, NgayKetThuc AS EndAt,
+                       SoLanDaDung AS UsedCount, GioiHanSuDung AS UsageLimit
+                FROM dbo.VOUCHER
+                WHERE DangHoatDong = 1
+                  AND (NgayKetThuc IS NULL OR NgayKetThuc >= SYSUTCDATETIME())
+                ORDER BY NgayKetThuc
+                """).ToListAsync();
+
+            var items = rows.Select(r => new
+            {
+                id = r.Id,
+                code = r.Code,
+                scopeType = string.IsNullOrWhiteSpace(r.ScopeType) ? "All" : r.ScopeType,
+                refId = (int?)null,
+                discountType = r.DiscountType,
+                discountValue = r.DiscountValue,
+                maxDiscount = r.MaxDiscount,
+                minOrderValue = r.MinOrderValue,
+                startAt = r.StartAt,
+                endAt = r.EndAt,
+                usedCount = r.UsedCount,
+                usageLimit = r.UsageLimit
+            });
+            return Ok(new { items });
+        }
+        catch
+        {
+            // Bang VOUCHER chua san sang -> tra danh sach rong, khong lam vo trang quan tri.
+            return Ok(new { items = Array.Empty<object>() });
+        }
+    }
+
+    // ===== Tuoi ton kho theo bien the =====
+
+    [HttpGet("{id:int}/inventory-aging")]
+    public async Task<IActionResult> GetInventoryAging(int id)
+    {
+        if (!await _dbContext.Products.AnyAsync(p => p.MaSanPham == id))
+        {
+            return NotFound();
+        }
+
+        var now = DateTime.UtcNow;
+        var variants = await _dbContext.ProductVariants.AsNoTracking()
+            .Where(v => v.MaSanPham == id)
+            .OrderBy(v => v.SKU)
+            .ToListAsync();
+
+        var items = variants.Select(v =>
+        {
+            var onHand = v.SoLuongTon ?? 0;
+            var daysInStock = (int)Math.Max(0, (now - v.NgayTao).TotalDays);
+            string aging = onHand <= 0
+                ? "Hết hàng"
+                : daysInStock >= 180 ? "Tồn chậm"
+                : daysInStock >= 90 ? "Cần theo dõi"
+                : "Bình thường";
+            return new
+            {
+                skuId = v.MaBienSanPham,
+                skuCode = v.SKU,
+                variantName = v.TenBienThe,
+                onHand,
+                reserved = 0,
+                available = onHand,
+                firstStockAt = (DateTime?)v.NgayTao,
+                lastStockInAt = (DateTime?)v.NgayCapNhat,
+                lastSoldAt = (DateTime?)null,
+                daysInStock,
+                daysSinceLastSale = 0,
+                agingStatus = aging
+            };
+        }).ToList();
+
+        return Ok(new { items });
+    }
+
+    // ===== Ma vach (in tem) =====
+
+    [HttpGet("{id:int}/barcodes")]
+    public async Task<IActionResult> GetBarcodes(int id)
+    {
+        var product = await _dbContext.Products.AsNoTracking().FirstOrDefaultAsync(p => p.MaSanPham == id);
+        if (product is null)
+        {
+            return NotFound();
+        }
+
+        var items = await _dbContext.ProductVariants.AsNoTracking()
+            .Where(v => v.MaSanPham == id)
+            .OrderBy(v => v.SKU)
+            .Select(v => new
+            {
+                skuId = v.MaBienSanPham,
+                skuCode = v.SKU,
+                productName = product.TenSanPham,
+                variantName = v.TenBienThe,
+                barcode = v.SKU,
+                price = v.GiaGhiDe ?? product.GiaKhuyenMai ?? product.GiaGoc
+            })
+            .ToListAsync();
+
+        return Ok(new { items });
+    }
+}
+
+public class SaveRelatedItemRequest
+{
+    public int RelatedProductId { get; set; }
+    public string? RelationType { get; set; }
+    public string? Note { get; set; }
+    public int SortOrder { get; set; }
+}
+
+public class PromotionRow
+{
+    public int Id { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string? ScopeType { get; set; }
+    public string? DiscountType { get; set; }
+    public decimal DiscountValue { get; set; }
+    public decimal? MaxDiscount { get; set; }
+    public decimal MinOrderValue { get; set; }
+    public DateTime? StartAt { get; set; }
+    public DateTime? EndAt { get; set; }
+    public int UsedCount { get; set; }
+    public int? UsageLimit { get; set; }
 }
 
 public class VariantRequest

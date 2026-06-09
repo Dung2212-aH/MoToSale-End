@@ -28,9 +28,28 @@ public class OrderDbContext : DbContext
     public DbSet<InstallmentTerm> InstallmentTerms { get; set; }
     public DbSet<RefundRequest> RefundRequests { get; set; }
 
+    // Nghiep vu cua hang & van hanh nang cao
+    public DbSet<CuaHang> CuaHangs { get; set; }
+    public DbSet<NhaCungCap> NhaCungCaps { get; set; }
+    public DbSet<DonNhapHang> DonNhapHangs { get; set; }
+    public DbSet<ChiTietDonNhap> ChiTietDonNhaps { get; set; }
+    public DbSet<PhieuNhapKho> PhieuNhapKhos { get; set; }
+    public DbSet<ChiTietPhieuNhap> ChiTietPhieuNhaps { get; set; }
+    public DbSet<GiaoDichTienMat> GiaoDichTienMats { get; set; }
+    public DbSet<PhieuSuaChua> PhieuSuaChuas { get; set; }
+    public DbSet<ChiTietSuaChua> ChiTietSuaChuas { get; set; }
+    public DbSet<LichSuSuaChua> LichSuSuaChuas { get; set; }
+    public DbSet<TuongTacKhachHang> TuongTacKhachHangs { get; set; }
+    public DbSet<ChamCong> ChamCongs { get; set; }
+    public DbSet<PhieuTraHang> PhieuTraHangs { get; set; }
+    public DbSet<ChiTietTraHang> ChiTietTraHangs { get; set; }
+    public DbSet<PhieuHoanTien> PhieuHoanTiens { get; set; }
+    public DbSet<CaLamViec> CaLamViecs { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        ConfigureOperations(modelBuilder);
 
         ConfigureUsers(modelBuilder);
         ConfigureUserAddresses(modelBuilder);
@@ -466,6 +485,75 @@ public class OrderDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(x => x.MaVoucher);
         });
+    }
+
+    private static void ConfigureOperations(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<CuaHang>(e => { e.ToTable("CUAHANG"); e.HasKey(x => x.MaCuaHang); });
+        modelBuilder.Entity<NhaCungCap>(e => { e.ToTable("NHACUNGCAP"); e.HasKey(x => x.MaNhaCungCap); });
+
+        modelBuilder.Entity<DonNhapHang>(e =>
+        {
+            e.ToTable("DONNHAPHANG"); e.HasKey(x => x.MaDonNhap);
+            e.Property(x => x.TongTien).HasPrecision(18, 2);
+            e.Property(x => x.DaThanhToan).HasPrecision(18, 2);
+            e.HasMany(x => x.ChiTiet).WithOne(x => x.DonNhap).HasForeignKey(x => x.MaDonNhap).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<ChiTietDonNhap>(e =>
+        {
+            e.ToTable("CHITIET_DONNHAP"); e.HasKey(x => x.MaChiTietNhap);
+            e.Property(x => x.DonGiaNhap).HasPrecision(18, 2);
+        });
+        modelBuilder.Entity<PhieuNhapKho>(e =>
+        {
+            e.ToTable("PHIEUNHAPKHO"); e.HasKey(x => x.MaPhieuNhap);
+            e.HasMany(x => x.ChiTiet).WithOne().HasForeignKey(x => x.MaPhieuNhap).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<ChiTietPhieuNhap>(e =>
+        {
+            e.ToTable("CHITIET_PHIEUNHAP"); e.HasKey(x => x.MaChiTietPhieuNhap);
+            e.Property(x => x.DonGiaNhap).HasPrecision(18, 2);
+        });
+        modelBuilder.Entity<GiaoDichTienMat>(e =>
+        {
+            e.ToTable("SOQUY"); e.HasKey(x => x.MaGiaoDich);
+            e.Property(x => x.SoTien).HasPrecision(18, 2);
+        });
+        modelBuilder.Entity<PhieuSuaChua>(e =>
+        {
+            e.ToTable("PHIEUSUACHUA"); e.HasKey(x => x.MaPhieuSua);
+            e.Property(x => x.ChiPhiCong).HasPrecision(18, 2);
+            e.Property(x => x.ChiPhiLinhKien).HasPrecision(18, 2);
+            e.HasMany(x => x.ChiTiet).WithOne().HasForeignKey(x => x.MaPhieuSua).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.LichSu).WithOne().HasForeignKey(x => x.MaPhieuSua).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<ChiTietSuaChua>(e =>
+        {
+            e.ToTable("CHITIET_SUACHUA"); e.HasKey(x => x.MaChiTietSua);
+            e.Property(x => x.DonGia).HasPrecision(18, 2);
+        });
+        modelBuilder.Entity<LichSuSuaChua>(e => { e.ToTable("LICHSU_SUACHUA"); e.HasKey(x => x.MaLichSuSua); });
+        modelBuilder.Entity<TuongTacKhachHang>(e => { e.ToTable("CHAMSOC_KHACHHANG"); e.HasKey(x => x.MaTuongTac); });
+        modelBuilder.Entity<ChamCong>(e => { e.ToTable("CHAMCONG"); e.HasKey(x => x.MaChamCong); });
+
+        modelBuilder.Entity<PhieuTraHang>(e =>
+        {
+            e.ToTable("PHIEUTRAHANG"); e.HasKey(x => x.MaPhieuTra);
+            e.Property(x => x.SoTienHoan).HasPrecision(18, 2);
+            e.HasMany(x => x.ChiTiet).WithOne().HasForeignKey(x => x.MaPhieuTra).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<ChiTietTraHang>(e =>
+        {
+            e.ToTable("CHITIET_TRAHANG"); e.HasKey(x => x.MaChiTietTra);
+            e.Property(x => x.DonGia).HasPrecision(18, 2);
+            e.Property(x => x.ThanhTien).HasPrecision(18, 2);
+        });
+        modelBuilder.Entity<PhieuHoanTien>(e =>
+        {
+            e.ToTable("PHIEUHOANTIEN"); e.HasKey(x => x.MaHoanTien);
+            e.Property(x => x.SoTien).HasPrecision(18, 2);
+        });
+        modelBuilder.Entity<CaLamViec>(e => { e.ToTable("CALAMVIEC"); e.HasKey(x => x.MaCa); });
     }
 
     private static void ConfigureStoredProcedureResults(ModelBuilder modelBuilder)

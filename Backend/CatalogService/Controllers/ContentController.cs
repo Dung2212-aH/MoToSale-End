@@ -496,10 +496,142 @@ public class ContentController : ControllerBase
         return Ok(new { id = contact.MaLienHe, trangThai = contact.TrangThai, daXuLyLuc = contact.DaXuLyLuc });
     }
 
+    // ===== Home banners =====
+
+    [HttpGet("home-banners")]
+    public async Task<IActionResult> GetHomeBanners([FromQuery] bool all = false)
+    {
+        await CatalogSchema.EnsureBannerTableAsync(_dbContext);
+
+        var query = _dbContext.BannerTrangChus.AsNoTracking().AsQueryable();
+        if (!all)
+        {
+            query = query.Where(b => b.DangHoatDong);
+        }
+
+        var items = await query
+            .OrderBy(b => b.ViTri)
+            .ThenBy(b => b.ThuTuHienThi)
+            .ThenBy(b => b.MaBanner)
+            .Select(b => new
+            {
+                maBanner = b.MaBanner,
+                viTri = b.ViTri,
+                tieuDe = b.TieuDe,
+                urlAnh = b.UrlAnh,
+                lienKet = b.LienKet,
+                thuTu = b.ThuTuHienThi,
+                dangHoatDong = b.DangHoatDong
+            })
+            .ToListAsync();
+
+        return Ok(new { items });
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPost("home-banners")]
+    public async Task<IActionResult> CreateHomeBanner([FromBody] SaveBannerRequest request)
+    {
+        await CatalogSchema.EnsureBannerTableAsync(_dbContext);
+
+        if (string.IsNullOrWhiteSpace(request.ImageUrl))
+        {
+            return BadRequest(new { message = "Vui long chon anh banner." });
+        }
+
+        var banner = new BannerTrangChu
+        {
+            ViTri = TrimToNull(request.Position) ?? "Slider",
+            TieuDe = TrimToNull(request.Title),
+            UrlAnh = request.ImageUrl.Trim(),
+            LienKet = TrimToNull(request.Link),
+            ThuTuHienThi = request.SortOrder,
+            DangHoatDong = request.Status != 0,
+            NgayTao = DateTime.UtcNow,
+            NgayCapNhat = DateTime.UtcNow
+        };
+
+        _dbContext.BannerTrangChus.Add(banner);
+        await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "HomeBanner", banner.MaBanner.ToString(), "Create", null, new { banner.ViTri, banner.TieuDe, banner.UrlAnh, banner.DangHoatDong });
+        return CreatedAtAction(nameof(GetHomeBanners), null, new { id = banner.MaBanner });
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPut("home-banners/{id:int}")]
+    public async Task<IActionResult> UpdateHomeBanner(int id, [FromBody] SaveBannerRequest request)
+    {
+        await CatalogSchema.EnsureBannerTableAsync(_dbContext);
+
+        var banner = await _dbContext.BannerTrangChus.FirstOrDefaultAsync(b => b.MaBanner == id);
+        if (banner is null) return NotFound();
+        var oldValue = new { banner.ViTri, banner.TieuDe, banner.UrlAnh, banner.LienKet, banner.ThuTuHienThi, banner.DangHoatDong };
+
+        banner.ViTri = TrimToNull(request.Position) ?? banner.ViTri;
+        banner.TieuDe = TrimToNull(request.Title);
+        if (!string.IsNullOrWhiteSpace(request.ImageUrl)) banner.UrlAnh = request.ImageUrl.Trim();
+        banner.LienKet = TrimToNull(request.Link);
+        banner.ThuTuHienThi = request.SortOrder;
+        banner.DangHoatDong = request.Status != 0;
+        banner.NgayCapNhat = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "HomeBanner", banner.MaBanner.ToString(), "Update", oldValue, new { banner.ViTri, banner.TieuDe, banner.UrlAnh, banner.LienKet, banner.ThuTuHienThi, banner.DangHoatDong });
+        return Ok(new { id = banner.MaBanner });
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpDelete("home-banners/{id:int}")]
+    public async Task<IActionResult> DeleteHomeBanner(int id)
+    {
+        await CatalogSchema.EnsureBannerTableAsync(_dbContext);
+
+        var banner = await _dbContext.BannerTrangChus.FirstOrDefaultAsync(b => b.MaBanner == id);
+        if (banner is null) return NotFound();
+        var oldValue = new { banner.MaBanner, banner.ViTri, banner.UrlAnh };
+
+        _dbContext.BannerTrangChus.Remove(banner);
+        await _dbContext.SaveChangesAsync();
+        await _auditLog.WriteAsync(this, "HomeBanner", id.ToString(), "Delete", oldValue, null);
+        return NoContent();
+    }
+
+    [Authorize(Roles = "Admin,Staff")]
+    [HttpPost("home-banners/image")]
+    public async Task<IActionResult> UploadHomeBannerImage([FromForm] IFormFile? file)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest(new { message = "Vui long chon file anh banner." });
+        }
+
+        string url;
+        try
+        {
+            url = await _imageStorage.SaveImageAsync(file, "banners", HttpContext.RequestAborted);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
+        return Ok(new { url, urlAnh = url });
+    }
+
     private static string? TrimToNull(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
+}
+
+public class SaveBannerRequest
+{
+    public string? Position { get; set; }
+    public string? Title { get; set; }
+    public string ImageUrl { get; set; } = string.Empty;
+    public string? Link { get; set; }
+    public int SortOrder { get; set; }
+    public int Status { get; set; } = 1;
 }
 
 // ===== Request DTOs for admin endpoints =====

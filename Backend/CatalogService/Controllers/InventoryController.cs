@@ -25,7 +25,7 @@ public class InventoryController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] InventorySearchRequest request)
+    public async Task<IActionResult> GetInventory([FromQuery] InventorySearchRequest request)
     {
         await EnsureSupportTablesAsync();
 

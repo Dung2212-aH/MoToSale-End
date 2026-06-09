@@ -650,6 +650,24 @@ small {
   padding: 1.25rem;
 }
 
+@media (max-width: 575.98px) {
+  .card-header {
+    flex-wrap: wrap;
+    padding: 0.75rem;
+  }
+
+  .card-tools {
+    width: 100%;
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+
+  .card-tools .btn {
+    max-width: 100%;
+    white-space: normal;
+  }
+}
+
 .card-img-top {
   width: 100%;
   border-top-left-radius: calc(0.25rem - 1px);
@@ -1754,6 +1772,10 @@ textarea.form-control {
 
 .small-box > .inner {
   padding: 10px;
+}
+
+.small-box.bg-light {
+  color: #1f2933;
 }
 
 .small-box h3 {

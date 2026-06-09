@@ -25,7 +25,7 @@ public class VouchersController : ControllerBase
     /// Get all active vouchers (public, for display/claim purposes)
     /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<IActionResult> GetVouchers([FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
         var query = _dbContext.Vouchers.AsNoTracking().AsQueryable();
 
@@ -65,7 +65,7 @@ public class VouchersController : ControllerBase
 
     [Authorize(Roles = "Admin,Staff")]
     [HttpGet("{id:int}")]
-    public async Task<IActionResult> GetById(int id)
+    public async Task<IActionResult> GetVoucherById(int id)
     {
         var voucher = await _dbContext.Vouchers.AsNoTracking().FirstOrDefaultAsync(v => v.MaVoucher == id);
         return voucher is null ? NotFound(new { message = "Khong tim thay voucher." }) : Ok(await MapVoucherAsync(voucher));
@@ -73,7 +73,7 @@ public class VouchersController : ControllerBase
 
     [Authorize(Roles = "Admin,Staff")]
     [HttpPost]
-    public async Task<IActionResult> Create(VoucherRequest request)
+    public async Task<IActionResult> CreateVoucher(VoucherRequest request)
     {
         var code = request.Code?.Trim().ToUpperInvariant();
         if (string.IsNullOrWhiteSpace(code))
@@ -124,12 +124,12 @@ public class VouchersController : ControllerBase
         await SaveVoucherTargetsAsync(voucher.MaVoucher, voucher.PhamViApDung, request);
         await _auditLog.WriteAsync(this, "Voucher", voucher.MaVoucher.ToString(), "Create", null, new { voucher.MaVoucher, voucher.MaVoucherCode, voucher.LoaiGiamGia, voucher.GiaTriGiam, voucher.PhamViApDung, voucher.DangHoatDong });
 
-        return CreatedAtAction(nameof(GetById), new { id = voucher.MaVoucher }, await MapVoucherAsync(voucher));
+        return CreatedAtAction(nameof(GetVoucherById), new { id = voucher.MaVoucher }, await MapVoucherAsync(voucher));
     }
 
     [Authorize(Roles = "Admin,Staff")]
     [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, VoucherRequest request)
+    public async Task<IActionResult> UpdateVoucher(int id, VoucherRequest request)
     {
         var voucher = await _dbContext.Vouchers.FirstOrDefaultAsync(v => v.MaVoucher == id);
         if (voucher is null)
@@ -185,7 +185,7 @@ public class VouchersController : ControllerBase
 
     [Authorize(Roles = "Admin")]
     [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    public async Task<IActionResult> DeleteVoucher(int id)
     {
         var voucher = await _dbContext.Vouchers.FirstOrDefaultAsync(v => v.MaVoucher == id);
         if (voucher is null)

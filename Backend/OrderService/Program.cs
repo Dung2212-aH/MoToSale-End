@@ -42,6 +42,7 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 
 await EnsureInstallmentAndConfigAsync(app);
+await EnsureOperationsSchemaAsync(app);
 
 if (app.Environment.IsDevelopment())
 {
@@ -213,5 +214,276 @@ WHEN NOT MATCHED THEN
             ELSE NULL
         END,
         s.MoTa, SYSUTCDATETIME());";
+    await db.Database.ExecuteSqlRawAsync(sql);
+}
+
+static async Task EnsureOperationsSchemaAsync(WebApplication app)
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<OrderDbContext>();
+
+    const string sql = @"
+IF OBJECT_ID(N'dbo.CUAHANG', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.CUAHANG(
+        MaCuaHang INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        MaCuaHangKinhDoanh VARCHAR(40) NOT NULL,
+        TenCuaHang NVARCHAR(150) NOT NULL,
+        LoaiCuaHang VARCHAR(20) NOT NULL DEFAULT 'Showroom',
+        DiaChi NVARCHAR(255) NULL,
+        SoDienThoai VARCHAR(20) NULL,
+        DangHoatDong BIT NOT NULL DEFAULT 1,
+        NgayTao DATETIME2(0) NOT NULL,
+        NgayCapNhat DATETIME2(0) NOT NULL
+    );
+    INSERT INTO dbo.CUAHANG (MaCuaHangKinhDoanh, TenCuaHang, LoaiCuaHang, DangHoatDong, NgayTao, NgayCapNhat)
+    VALUES ('KHO_CHINH', N'Cửa hàng chính', 'Showroom', 1, SYSUTCDATETIME(), SYSUTCDATETIME());
+END;
+
+IF OBJECT_ID(N'dbo.NHACUNGCAP', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.NHACUNGCAP(
+        MaNhaCungCap INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        MaNhaCungCapKinhDoanh VARCHAR(40) NOT NULL,
+        TenNhaCungCap NVARCHAR(150) NOT NULL,
+        MaSoThue VARCHAR(30) NULL,
+        NguoiLienHe NVARCHAR(150) NULL,
+        SoDienThoai VARCHAR(20) NULL,
+        Email NVARCHAR(255) NULL,
+        DiaChi NVARCHAR(255) NULL,
+        GhiChu NVARCHAR(500) NULL,
+        TrangThai INT NOT NULL DEFAULT 1,
+        NgayTao DATETIME2(0) NOT NULL,
+        NgayCapNhat DATETIME2(0) NOT NULL
+    );
+END;
+
+IF OBJECT_ID(N'dbo.DONNHAPHANG', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.DONNHAPHANG(
+        MaDonNhap INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        MaDonNhapKinhDoanh VARCHAR(40) NOT NULL,
+        MaNhaCungCap INT NOT NULL,
+        MaCuaHang INT NOT NULL,
+        TrangThai VARCHAR(20) NOT NULL DEFAULT 'Draft',
+        TongTien DECIMAL(18,2) NOT NULL DEFAULT 0,
+        DaThanhToan DECIMAL(18,2) NOT NULL DEFAULT 0,
+        GhiChu NVARCHAR(500) NULL,
+        MaNguoiTao INT NULL,
+        MaNguoiDuyet INT NULL,
+        NgayDuyet DATETIME2(0) NULL,
+        NgayTao DATETIME2(0) NOT NULL,
+        NgayCapNhat DATETIME2(0) NOT NULL
+    );
+END;
+
+IF OBJECT_ID(N'dbo.CHITIET_DONNHAP', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.CHITIET_DONNHAP(
+        MaChiTietNhap INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        MaDonNhap INT NOT NULL,
+        MaBienSanPham INT NOT NULL,
+        SoLuongDat INT NOT NULL,
+        SoLuongNhan INT NOT NULL DEFAULT 0,
+        DonGiaNhap DECIMAL(18,2) NOT NULL DEFAULT 0,
+        NgayTao DATETIME2(0) NOT NULL,
+        CONSTRAINT FK_CHITIET_DONNHAP_DON FOREIGN KEY (MaDonNhap) REFERENCES dbo.DONNHAPHANG(MaDonNhap) ON DELETE CASCADE
+    );
+    CREATE INDEX IX_CHITIET_DONNHAP_Don ON dbo.CHITIET_DONNHAP(MaDonNhap);
+END;
+
+IF OBJECT_ID(N'dbo.PHIEUNHAPKHO', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.PHIEUNHAPKHO(
+        MaPhieuNhap INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        MaPhieuNhapKinhDoanh VARCHAR(40) NOT NULL,
+        MaDonNhap INT NOT NULL,
+        MaCuaHang INT NOT NULL,
+        GhiChu NVARCHAR(500) NULL,
+        MaNguoiNhan INT NULL,
+        NgayNhan DATETIME2(0) NOT NULL,
+        NgayTao DATETIME2(0) NOT NULL
+    );
+END;
+
+IF OBJECT_ID(N'dbo.CHITIET_PHIEUNHAP', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.CHITIET_PHIEUNHAP(
+        MaChiTietPhieuNhap INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        MaPhieuNhap INT NOT NULL,
+        MaChiTietNhap INT NOT NULL,
+        MaBienSanPham INT NOT NULL,
+        SoLuong INT NOT NULL,
+        DonGiaNhap DECIMAL(18,2) NOT NULL DEFAULT 0,
+        CONSTRAINT FK_CHITIET_PHIEUNHAP_PHIEU FOREIGN KEY (MaPhieuNhap) REFERENCES dbo.PHIEUNHAPKHO(MaPhieuNhap) ON DELETE CASCADE
+    );
+END;
+
+IF OBJECT_ID(N'dbo.SOQUY', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.SOQUY(
+        MaGiaoDich INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        MaGiaoDichKinhDoanh VARCHAR(40) NOT NULL,
+        LoaiGiaoDich VARCHAR(20) NOT NULL,
+        DanhMuc VARCHAR(40) NOT NULL DEFAULT 'Other',
+        SoTien DECIMAL(18,2) NOT NULL,
+        PhuongThuc VARCHAR(20) NOT NULL DEFAULT 'Cash',
+        LoaiThamChieu VARCHAR(40) NULL,
+        MaThamChieu INT NULL,
+        GhiChu NVARCHAR(500) NULL,
+        MaNguoiGhi INT NULL,
+        NgayGiaoDich DATETIME2(0) NOT NULL,
+        NgayTao DATETIME2(0) NOT NULL
+    );
+END;
+
+IF OBJECT_ID(N'dbo.PHIEUSUACHUA', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.PHIEUSUACHUA(
+        MaPhieuSua INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        MaPhieuSuaKinhDoanh VARCHAR(40) NOT NULL,
+        MaKhachHang INT NOT NULL,
+        MaCuaHang INT NOT NULL,
+        MaNhanVienPhuTrach INT NULL,
+        MaBaoHanh INT NULL,
+        MoTaXe NVARCHAR(255) NOT NULL,
+        MoTaLoi NVARCHAR(500) NOT NULL,
+        TrangThai VARCHAR(20) NOT NULL DEFAULT 'Received',
+        ChiPhiCong DECIMAL(18,2) NOT NULL DEFAULT 0,
+        ChiPhiLinhKien DECIMAL(18,2) NOT NULL DEFAULT 0,
+        DaXuatLinhKien BIT NOT NULL DEFAULT 0,
+        GhiChu NVARCHAR(500) NULL,
+        NgayTiepNhan DATETIME2(0) NOT NULL,
+        NgayHoanTat DATETIME2(0) NULL,
+        NgayTao DATETIME2(0) NOT NULL,
+        NgayCapNhat DATETIME2(0) NOT NULL
+    );
+END;
+
+IF OBJECT_ID(N'dbo.CHITIET_SUACHUA', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.CHITIET_SUACHUA(
+        MaChiTietSua INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        MaPhieuSua INT NOT NULL,
+        MaBienSanPham INT NULL,
+        MoTa NVARCHAR(255) NOT NULL,
+        SoLuong INT NOT NULL,
+        DonGia DECIMAL(18,2) NOT NULL DEFAULT 0,
+        NgayTao DATETIME2(0) NOT NULL,
+        CONSTRAINT FK_CHITIET_SUACHUA_PHIEU FOREIGN KEY (MaPhieuSua) REFERENCES dbo.PHIEUSUACHUA(MaPhieuSua) ON DELETE CASCADE
+    );
+END;
+
+IF OBJECT_ID(N'dbo.LICHSU_SUACHUA', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.LICHSU_SUACHUA(
+        MaLichSuSua INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        MaPhieuSua INT NOT NULL,
+        TrangThaiCu VARCHAR(20) NULL,
+        TrangThaiMoi VARCHAR(20) NOT NULL,
+        GhiChu NVARCHAR(500) NULL,
+        ThoiGian DATETIME2(0) NOT NULL,
+        CONSTRAINT FK_LICHSU_SUACHUA_PHIEU FOREIGN KEY (MaPhieuSua) REFERENCES dbo.PHIEUSUACHUA(MaPhieuSua) ON DELETE CASCADE
+    );
+END;
+
+IF OBJECT_ID(N'dbo.CHAMSOC_KHACHHANG', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.CHAMSOC_KHACHHANG(
+        MaTuongTac INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        MaKhachHang INT NOT NULL,
+        MaNhanVienPhuTrach INT NULL,
+        LoaiTuongTac VARCHAR(20) NOT NULL DEFAULT 'Call',
+        TrangThai VARCHAR(20) NOT NULL DEFAULT 'Open',
+        TieuDe NVARCHAR(255) NOT NULL,
+        GhiChu NVARCHAR(500) NULL,
+        NgayHenFollowUp DATETIME2(0) NULL,
+        NgayHoanTat DATETIME2(0) NULL,
+        NgayTao DATETIME2(0) NOT NULL,
+        NgayCapNhat DATETIME2(0) NOT NULL
+    );
+END;
+
+IF OBJECT_ID(N'dbo.CHAMCONG', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.CHAMCONG(
+        MaChamCong INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        MaNhanVien INT NOT NULL,
+        MaCuaHang INT NOT NULL,
+        ThoiGianVao DATETIME2(0) NOT NULL,
+        ThoiGianRa DATETIME2(0) NULL,
+        GhiChu NVARCHAR(500) NULL,
+        NgayTao DATETIME2(0) NOT NULL
+    );
+END;
+
+IF OBJECT_ID(N'dbo.PHIEUTRAHANG', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.PHIEUTRAHANG(
+        MaPhieuTra INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        MaPhieuTraKinhDoanh VARCHAR(40) NOT NULL,
+        MaDonHang INT NOT NULL,
+        MaCuaHang INT NOT NULL,
+        TrangThai VARCHAR(20) NOT NULL DEFAULT 'Draft',
+        LyDo NVARCHAR(500) NOT NULL,
+        GhiChu NVARCHAR(500) NULL,
+        SoTienHoan DECIMAL(18,2) NOT NULL DEFAULT 0,
+        MaNguoiTao INT NULL,
+        MaNguoiDuyet INT NULL,
+        NgayDuyet DATETIME2(0) NULL,
+        NgayTao DATETIME2(0) NOT NULL,
+        NgayCapNhat DATETIME2(0) NOT NULL
+    );
+END;
+
+IF OBJECT_ID(N'dbo.CHITIET_TRAHANG', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.CHITIET_TRAHANG(
+        MaChiTietTra INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        MaPhieuTra INT NOT NULL,
+        MaChiTietDonHang INT NOT NULL,
+        MaBienSanPham INT NOT NULL,
+        SoLuong INT NOT NULL,
+        DonGia DECIMAL(18,2) NOT NULL DEFAULT 0,
+        ThanhTien DECIMAL(18,2) NOT NULL DEFAULT 0,
+        TinhTrangHang VARCHAR(20) NOT NULL DEFAULT 'Resellable',
+        NgayTao DATETIME2(0) NOT NULL,
+        CONSTRAINT FK_CHITIET_TRAHANG_PHIEU FOREIGN KEY (MaPhieuTra) REFERENCES dbo.PHIEUTRAHANG(MaPhieuTra) ON DELETE CASCADE
+    );
+END;
+
+IF OBJECT_ID(N'dbo.PHIEUHOANTIEN', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.PHIEUHOANTIEN(
+        MaHoanTien INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        MaHoanTienKinhDoanh VARCHAR(40) NOT NULL,
+        MaDonHang INT NOT NULL,
+        MaPhieuTra INT NULL,
+        SoTien DECIMAL(18,2) NOT NULL,
+        PhuongThuc VARCHAR(20) NOT NULL DEFAULT 'Cash',
+        TrangThai VARCHAR(20) NOT NULL DEFAULT 'Paid',
+        LyDo NVARCHAR(500) NULL,
+        MaGiaoDich NVARCHAR(120) NULL,
+        MaNguoiGhi INT NULL,
+        NgayHoan DATETIME2(0) NOT NULL,
+        NgayTao DATETIME2(0) NOT NULL
+    );
+END;
+
+IF OBJECT_ID(N'dbo.CALAMVIEC', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.CALAMVIEC(
+        MaCa INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        MaNhanVien INT NOT NULL,
+        MaCuaHang INT NOT NULL,
+        BatDau DATETIME2(0) NOT NULL,
+        KetThuc DATETIME2(0) NOT NULL,
+        TrangThai VARCHAR(20) NOT NULL DEFAULT 'Scheduled',
+        GhiChu NVARCHAR(500) NULL,
+        MaNguoiPhanCong INT NULL,
+        NgayTao DATETIME2(0) NOT NULL,
+        NgayCapNhat DATETIME2(0) NOT NULL
+    );
+END;";
     await db.Database.ExecuteSqlRawAsync(sql);
 }
