@@ -579,7 +579,7 @@ public class OrderService : IOrderService
             order.PaymentStatus = PaymentStatus.Paid;
             order.RemainingAmount = 0;
             if (payFrom != PaymentStatus.Paid)
-                _orders.AddStatusHistory(new OrderStatusHistory { OrderId = orderId, FromStatus = payFrom, ToStatus = PaymentStatus.Paid, Note = "PaymentStatus: Thu tiền khi giao", ChangedBy = userId, CreatedDate = now });
+                _orders.AddStatusHistory(new OrderStatusHistory { OrderId = orderId, FromStatus = payFrom, ToStatus = PaymentStatus.Paid, Note = "Thu tiền khi giao", ChangedBy = userId, CreatedDate = now });
         }
 
         var from = order.OrderStatus;
@@ -751,7 +751,7 @@ public class OrderService : IOrderService
             _orders.AddStatusHistory(new OrderStatusHistory
             {
                 OrderId = orderId, FromStatus = payBefore, ToStatus = PaymentStatus.Refunded,
-                Note = $"PaymentStatus: Hoàn tiền {totalPaid:n0}đ khi hủy đơn", ChangedBy = userId, CreatedDate = now,
+                Note = $"Hoàn tiền {totalPaid:n0}đ khi hủy đơn", ChangedBy = userId, CreatedDate = now,
             });
         }
         else if (payBefore == PaymentStatus.PendingConfirmation)
@@ -761,7 +761,7 @@ public class OrderService : IOrderService
             _orders.AddStatusHistory(new OrderStatusHistory
             {
                 OrderId = orderId, FromStatus = payBefore, ToStatus = PaymentStatus.Failed,
-                Note = "PaymentStatus: Chuyển khoản không hoàn tất khi hủy đơn", ChangedBy = userId, CreatedDate = now,
+                Note = "Chuyển khoản không hoàn tất khi hủy đơn", ChangedBy = userId, CreatedDate = now,
             });
         }
 

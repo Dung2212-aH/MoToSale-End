@@ -790,6 +790,13 @@ const getHistoryValueLabel = (eventType, value) => {
   return value;
 };
 
+const cleanHistoryNote = (note) => {
+  if (!note) return '';
+  return String(note)
+    .replace(/^\s*(PaymentStatus|OrderStatus|ShippingStatus)\s*:\s*/i, '')
+    .trim();
+};
+
 const EVENT_META = {
   Created: { color: 'secondary', icon: 'fa-plus' },
   OrderStatus: { color: 'info', icon: 'fa-clipboard-check' },
@@ -826,7 +833,7 @@ const OrderTimeline = ({ order, histories }) => {
       loaiSuKien: item.loaiSuKien || item.eventType,
       giaTriCu: item.giaTriCu ?? item.oldValue,
       giaTriMoi: item.giaTriMoi ?? item.newValue,
-      ghiChu: item.ghiChu || item.note,
+      ghiChu: cleanHistoryNote(item.ghiChu || item.note),
       maNguoiThucHien: item.maNguoiThucHien || item.actorUserId,
       thoiGian: item.thoiGian || item.createdAt,
     })),

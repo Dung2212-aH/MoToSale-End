@@ -79,7 +79,7 @@ public class PaymentService : IPaymentService
             _orders.AddStatusHistory(new OrderStatusHistory
             {
                 OrderId = order.Id, FromStatus = paymentStatusBefore, ToStatus = order.PaymentStatus,
-                Note = "PaymentStatus: Ghi nhận thanh toán", ChangedBy = userId, CreatedDate = now,
+                Note = "Ghi nhận thanh toán", ChangedBy = userId, CreatedDate = now,
             });
         }
 
@@ -141,7 +141,7 @@ public class PaymentService : IPaymentService
                 _orders.AddStatusHistory(new OrderStatusHistory
                 {
                     OrderId = order.Id, FromStatus = paymentStatusBefore, ToStatus = order.PaymentStatus,
-                    Note = "PaymentStatus: Cancelled manual payment", CreatedDate = DateTime.UtcNow,
+                    Note = "Hủy ghi nhận thanh toán", CreatedDate = DateTime.UtcNow,
                 });
             }
         }
@@ -198,7 +198,7 @@ public class PaymentService : IPaymentService
             _orders.AddStatusHistory(new OrderStatusHistory
             {
                 OrderId = order.Id, FromStatus = payBefore, ToStatus = Common.PaymentStatus.PendingConfirmation,
-                Note = "PaymentStatus: Khách báo đã chuyển khoản", ChangedBy = userId, CreatedDate = now,
+                Note = "Khách báo đã chuyển khoản", ChangedBy = userId, CreatedDate = now,
             });
         }
 
@@ -245,7 +245,7 @@ public class PaymentService : IPaymentService
             _orders.AddStatusHistory(new OrderStatusHistory
             {
                 OrderId = order.Id, FromStatus = paymentStatusBefore, ToStatus = order.PaymentStatus,
-                Note = "PaymentStatus: Xác nhận chuyển khoản", ChangedBy = userId, CreatedDate = now,
+                Note = "Xác nhận chuyển khoản", ChangedBy = userId, CreatedDate = now,
             });
         }
 
