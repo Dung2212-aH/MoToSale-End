@@ -51,91 +51,16 @@ public class OperationsConfigController : ControllerBase
     }
 
     [HttpGet("warehouses")]
-    public async Task<IActionResult> GetWarehouses()
+    public IActionResult GetWarehouses()
     {
-        await EnsureStoreTableAsync();
-        var rows = await _db.Database.SqlQueryRaw<StoreRow>(
-            "SELECT MaCuaHang, MaCuaHangKinhDoanh, TenCuaHang, LoaiCuaHang, DiaChi, SoDienThoai, DangHoatDong FROM dbo.CUAHANG ORDER BY MaCuaHang"
-        ).ToListAsync();
-
-        var items = rows.Select(r => new
-        {
-            id = r.MaCuaHang,
-            maKho = r.MaCuaHang,
-            code = r.MaCuaHangKinhDoanh,
-            name = r.TenCuaHang,
-            tenKho = r.TenCuaHang,
-            type = r.LoaiCuaHang,
-            loaiKho = r.LoaiCuaHang,
-            addressLine = r.DiaChi,
-            diaChi = r.DiaChi,
-            phone = r.SoDienThoai,
-            hotline = r.SoDienThoai,
-            isActive = r.DangHoatDong,
-            dangHoatDong = r.DangHoatDong
-        });
-        return Ok(new { items });
+        return Ok(new { items = Array.Empty<object>() });
     }
 
     [Authorize(Roles = "Admin")]
     [HttpPost("warehouses")]
-    public async Task<IActionResult> SaveWarehouse(WarehouseRequest request)
+    public IActionResult SaveWarehouse(WarehouseRequest request)
     {
-        await EnsureStoreTableAsync();
-
-        var name = request.Name ?? request.TenKho;
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            return BadRequest(new { message = "Ten cua hang/kho la bat buoc." });
-        }
-        var type = request.Type ?? request.LoaiKho ?? "Showroom";
-        var address = request.AddressLine ?? request.DiaChi;
-        var phone = request.Phone ?? request.Hotline;
-        var isActive = request.IsActive ?? request.DangHoatDong ?? true;
-        var id = request.Id ?? request.MaKho ?? 0;
-
-        if (id > 0)
-        {
-            await _db.Database.ExecuteSqlInterpolatedAsync($"""
-                UPDATE dbo.CUAHANG
-                SET TenCuaHang = {name.Trim()}, LoaiCuaHang = {type}, DiaChi = {address}, SoDienThoai = {phone},
-                    DangHoatDong = {isActive}, NgayCapNhat = SYSDATETIME()
-                WHERE MaCuaHang = {id}
-                """);
-            await _auditLog.WriteAsync(this, "Store", id.ToString(), "Update", null, new { name, type });
-            return Ok(new { id });
-        }
-
-        var code = $"KHO{DateTime.UtcNow:yyyyMMddHHmmss}";
-        var newId = await _db.Database.SqlQueryRaw<int>($"""
-            INSERT INTO dbo.CUAHANG (MaCuaHangKinhDoanh, TenCuaHang, LoaiCuaHang, DiaChi, SoDienThoai, DangHoatDong, NgayTao, NgayCapNhat)
-            OUTPUT INSERTED.MaCuaHang AS Value
-            VALUES ({code}, {name.Trim()}, {type}, {address}, {phone}, {isActive}, SYSDATETIME(), SYSDATETIME())
-            """).FirstAsync();
-        await _auditLog.WriteAsync(this, "Store", newId.ToString(), "Create", null, new { name, type });
-        return Ok(new { id = newId });
-    }
-
-    private async Task EnsureStoreTableAsync()
-    {
-        await _db.Database.ExecuteSqlRawAsync("""
-            IF OBJECT_ID(N'dbo.CUAHANG', N'U') IS NULL
-            BEGIN
-                CREATE TABLE dbo.CUAHANG (
-                    MaCuaHang INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-                    MaCuaHangKinhDoanh VARCHAR(40) NOT NULL,
-                    TenCuaHang NVARCHAR(150) NOT NULL,
-                    LoaiCuaHang VARCHAR(20) NOT NULL DEFAULT 'Showroom',
-                    DiaChi NVARCHAR(255) NULL,
-                    SoDienThoai VARCHAR(20) NULL,
-                    DangHoatDong BIT NOT NULL DEFAULT 1,
-                    NgayTao DATETIME2(0) NOT NULL,
-                    NgayCapNhat DATETIME2(0) NOT NULL
-                );
-                INSERT INTO dbo.CUAHANG (MaCuaHangKinhDoanh, TenCuaHang, LoaiCuaHang, DiaChi, SoDienThoai, DangHoatDong, NgayTao, NgayCapNhat)
-                VALUES ('KHO_CHINH', N'Cửa hàng chính', 'Showroom', NULL, NULL, 1, SYSDATETIME(), SYSDATETIME());
-            END;
-            """);
+        return BadRequest(new { message = "He thong chi quan ly 1 cua hang, khong cau hinh kho/chi nhanh trong database." });
     }
 
     private async Task UpsertSettingAsync(string key, string? value, string? description)
@@ -170,15 +95,14 @@ public class OperationsConfigController : ControllerBase
             BEGIN
                 INSERT INTO dbo.HETHONG_CAUHINH ([Key], [Value], MoTa, NgayCapNhat)
                 VALUES
-                    (N'DefaultLowStockThreshold', N'5', N'Ngưỡng tồn thấp mặc định', SYSDATETIME()),
-                    (N'DepositPolicy', NULL, N'Chính sách đặt cọc', SYSDATETIME()),
-                    (N'CancelPolicy', NULL, N'Chính sách hủy đơn', SYSDATETIME()),
-                    (N'WarrantyPolicy', NULL, N'Chính sách bảo hành', SYSDATETIME()),
-                    (N'DefaultShippingFee', N'0', N'Phí vận chuyển mặc định', SYSDATETIME());
+                    (N'DefaultLowStockThreshold', N'5', N'Nguong ton thap mac dinh', SYSDATETIME()),
+                    (N'DepositPolicy', NULL, N'Chinh sach dat coc', SYSDATETIME()),
+                    (N'CancelPolicy', NULL, N'Chinh sach huy don', SYSDATETIME()),
+                    (N'WarrantyPolicy', NULL, N'Chinh sach bao hanh', SYSDATETIME()),
+                    (N'DefaultShippingFee', N'0', N'Phi van chuyen mac dinh', SYSDATETIME());
             END;
             """);
     }
-
 }
 
 public class SettingsRequest
@@ -209,22 +133,10 @@ public class WarehouseRequest
     public string? AddressLine { get; set; }
     public string? Phone { get; set; }
     public bool? IsActive { get; set; }
-    // Bi danh tieng Viet
     public int? MaKho { get; set; }
     public string? TenKho { get; set; }
     public string? LoaiKho { get; set; }
     public string? DiaChi { get; set; }
     public string? Hotline { get; set; }
     public bool? DangHoatDong { get; set; }
-}
-
-public class StoreRow
-{
-    public int MaCuaHang { get; set; }
-    public string MaCuaHangKinhDoanh { get; set; } = "";
-    public string TenCuaHang { get; set; } = "";
-    public string LoaiCuaHang { get; set; } = "";
-    public string? DiaChi { get; set; }
-    public string? SoDienThoai { get; set; }
-    public bool DangHoatDong { get; set; }
 }

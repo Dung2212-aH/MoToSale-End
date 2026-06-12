@@ -24,19 +24,6 @@ public class InstallmentPlanDto
     public string? TenCongTy { get; set; }
     public int? ThoiGianLamViecThang { get; set; }
     public decimal? ThuNhapHangThang { get; set; }
-    public List<InstallmentTermDto> Terms { get; set; } = new();
-}
-
-public class InstallmentTermDto
-{
-    public int MaKyTraGop { get; set; }
-    public int KyThu { get; set; }
-    public DateTime NgayDenHan { get; set; }
-    public decimal SoTienGoc { get; set; }
-    public decimal SoTienLai { get; set; }
-    public decimal TongTien { get; set; }
-    public string TrangThai { get; set; } = string.Empty;
-    public DateTime? NgayThanhToan { get; set; }
 }
 
 public class InstallmentApplicationDto

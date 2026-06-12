@@ -30,5 +30,4 @@ public class InstallmentPlan
     public decimal? ThuNhapHangThang { get; set; }
 
     public Order? Order { get; set; }
-    public ICollection<InstallmentTerm> Terms { get; set; } = new List<InstallmentTerm>();
 }

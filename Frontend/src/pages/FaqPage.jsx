@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FiChevronDown, FiSend } from 'react-icons/fi';
 import Breadcrumb from '../components/Breadcrumb.jsx';
 import { useNotification } from '../contexts/NotificationContext.jsx';
+import { contentApi } from '../services/api.js';
 
 const faqCategories = [
   {
@@ -91,11 +92,62 @@ const faqCategories = [
   },
 ];
 
+// Gom FAQ từ API (đã sort theo thuTuHienThi) thành các nhóm theo danh mục,
+// giữ nguyên shape { title, items: [{ question, answer }] } của dữ liệu cứng.
+function groupFaqs(items) {
+  const grouped = [];
+  for (const item of items) {
+    const title = item.category;
+    let group = grouped.find((g) => g.title === title);
+    if (!group) {
+      group = { title, items: [] };
+      grouped.push(group);
+    }
+    group.items.push({ question: item.question, answer: item.answer });
+  }
+  return grouped;
+}
+
 function FaqPage() {
   const { notify } = useNotification();
   const [openIndex, setOpenIndex] = useState(null);
   const [contactForm, setContactForm] = useState({ name: '', phone: '', question: '' });
   const [sending, setSending] = useState(false);
+  const [apiCategories, setApiCategories] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadFaqs() {
+      try {
+        const response = await contentApi.getFaqs();
+        const data = response?.data;
+        const rawItems = Array.isArray(data) ? data : data?.items || data?.Items || [];
+        const mapped = rawItems
+          .map((item) => ({
+            question: item.cauHoi ?? item.CauHoi ?? '',
+            answer: item.cauTraLoi ?? item.CauTraLoi ?? '',
+            category: item.danhMuc ?? item.DanhMuc ?? 'Câu hỏi thường gặp',
+            sortOrder: Number(item.thuTuHienThi ?? item.ThuTuHienThi ?? 0),
+          }))
+          .filter((item) => item.question && item.answer)
+          .sort((a, b) => a.sortOrder - b.sortOrder);
+
+        if (!cancelled && mapped.length > 0) {
+          setApiCategories(groupFaqs(mapped));
+        }
+      } catch {
+        // Lỗi hoặc API trống -> giữ danh sách FAQ cứng làm fallback.
+      }
+    }
+
+    loadFaqs();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const categories = apiCategories ?? faqCategories;
 
   function toggleItem(index) {
     setOpenIndex(openIndex === index ? null : index);
@@ -134,7 +186,7 @@ function FaqPage() {
 
           {/* FAQ Accordion */}
           <div className="space-y-8">
-            {faqCategories.map((category) => (
+            {categories.map((category) => (
               <div key={category.title}>
                 <h2 className="mb-4 text-lg font-extrabold text-[#d71920]">{category.title}</h2>
                 <div className="space-y-2">

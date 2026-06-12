@@ -17,6 +17,7 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 import { useCart } from '../contexts/CartContext.jsx';
 import { useFavorite } from '../contexts/FavoriteContext.jsx';
 import { productApi, voucherApi } from '../services/api.js';
+import { formatCurrency, getProductImage } from '../utils/formatters.js';
 
 function getDisplayName(user) {
   return user?.name || user?.username || user?.email || 'Tài khoản';
@@ -46,6 +47,72 @@ function valueOf(source, ...keys) {
   return undefined;
 }
 
+function MiniCartPopover({ cart, count, onClose }) {
+  const items = cart?.items || [];
+  const visibleItems = items.slice(0, 4);
+  const subtotal = Number(cart?.subtotal ?? items.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0));
+
+  return (
+    <div className="absolute right-0 top-[calc(100%+12px)] z-50 w-[340px] max-w-[calc(100vw-24px)] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-[0_24px_60px_rgba(0,0,0,0.18)]">
+      <div className="border-b border-zinc-100 px-4 py-3">
+        <div className="text-sm font-black text-zinc-950">Giỏ hàng</div>
+        <div className="text-xs font-medium text-zinc-500">{count || 0} sản phẩm</div>
+      </div>
+
+      <div className="max-h-[320px] overflow-y-auto p-3">
+        {visibleItems.length ? (
+          <div className="grid gap-3">
+            {visibleItems.map((item) => {
+              const product = item.product || {};
+              const variant = item.productVariant || {};
+              const imageUrl = getProductImage(product);
+              const productName = product.name || 'Sản phẩm đang cập nhật';
+              const variantText = [variant.variantName, variant.version, variant.color].filter(Boolean).join(' / ');
+              const unitPrice = Number(item.unitPrice || product.salePrice || product.basePrice || 0);
+
+              return (
+                <div key={item.id || `${item.productId}-${item.productVariantId || 'base'}`} className="grid grid-cols-[58px_minmax(0,1fr)] gap-3">
+                  <div className="overflow-hidden rounded-xl bg-zinc-50">
+                    {imageUrl ? (
+                      <img src={imageUrl} alt={productName} className="aspect-square w-full object-contain p-1.5" />
+                    ) : (
+                      <span className="grid aspect-square place-items-center text-[10px] font-black text-zinc-400">EURO</span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-bold text-zinc-950">{productName}</div>
+                    {variantText && <div className="truncate text-xs text-zinc-500">{variantText}</div>}
+                    <div className="mt-1 flex items-center justify-between gap-2 text-xs">
+                      <span className="font-semibold text-zinc-500">x{item.quantity || 1}</span>
+                      <span className="font-black text-[#d71920]">{formatCurrency(unitPrice)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="py-8 text-center text-sm font-semibold text-zinc-500">Giỏ hàng đang trống</div>
+        )}
+      </div>
+
+      <div className="border-t border-zinc-100 p-4">
+        <div className="mb-3 flex items-center justify-between text-sm">
+          <span className="font-semibold text-zinc-500">Tạm tính</span>
+          <span className="font-black text-zinc-950">{formatCurrency(subtotal)}</span>
+        </div>
+        <Link
+          to="/cart"
+          onClick={onClose}
+          className="flex min-h-11 items-center justify-center rounded-xl bg-[#d71920] px-4 text-sm font-black text-white transition hover:bg-[#b9161c]"
+        >
+          Xem giỏ hàng
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [productMenuOpen, setProductMenuOpen] = useState(false);
@@ -53,11 +120,12 @@ function Header() {
   const [productFilters, setProductFilters] = useState({ brands: [], carModels: [] });
   const [voucherCount, setVoucherCount] = useState(0);
   const { user: currentUser, isAuthenticated, logout } = useAuth();
-  const { count: cartCount } = useCart();
+  const { cart, count: cartCount, miniCartOpen, closeMiniCart } = useCart();
   const { count: favoriteCount } = useFavorite();
   const navigate = useNavigate();
   const location = useLocation();
   const profileMenuRef = useRef(null);
+  const cartMenuRef = useRef(null);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -70,18 +138,23 @@ function Header() {
   useEffect(() => {
     setProductMenuOpen(false);
     setProfileMenuOpen(false);
-  }, [location.pathname, location.search, location.hash]);
+    closeMiniCart();
+  }, [location.pathname, location.search, location.hash, closeMiniCart]);
 
   useEffect(() => {
     function handleDocumentClick(event) {
       if (!profileMenuRef.current?.contains(event.target)) {
         setProfileMenuOpen(false);
       }
+
+      if (!cartMenuRef.current?.contains(event.target)) {
+        closeMiniCart();
+      }
     }
 
     document.addEventListener('mousedown', handleDocumentClick);
     return () => document.removeEventListener('mousedown', handleDocumentClick);
-  }, []);
+  }, [closeMiniCart]);
 
   useEffect(() => {
     let mounted = true;
@@ -300,12 +373,15 @@ function Header() {
                   <FiFileText className="h-7 w-7" />
                 </Link>
               )}
-              <Link className="group relative inline-grid h-11 w-11 place-items-center rounded-full text-[#111] transition duration-300 hover:bg-zinc-100 hover:text-[#d71920]" to="/cart" aria-label="Giỏ hàng">
-                <FiShoppingCart className="h-7 w-7" />
-                <span className="absolute right-0 top-1 grid h-[18px] w-[18px] place-items-center rounded-full bg-[#d71920] text-[11px] font-extrabold text-white">
-                  {cartCount}
-                </span>
-              </Link>
+              <div ref={cartMenuRef} className="relative">
+                <Link className="group relative inline-grid h-11 w-11 place-items-center rounded-full text-[#111] transition duration-300 hover:bg-zinc-100 hover:text-[#d71920]" to="/cart" aria-label="Giỏ hàng">
+                  <FiShoppingCart className="h-7 w-7" />
+                  <span className="absolute right-0 top-1 grid h-[18px] w-[18px] place-items-center rounded-full bg-[#d71920] text-[11px] font-extrabold text-white">
+                    {cartCount}
+                  </span>
+                </Link>
+                {miniCartOpen && <MiniCartPopover cart={cart} count={cartCount} onClose={closeMiniCart} />}
+              </div>
               {isAuthenticated && (
                 <div ref={profileMenuRef} className="relative">
                   <button

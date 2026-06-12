@@ -137,3 +137,68 @@ export function getShippingStatusColor(status) {
 export function getPaymentStatusColor(status) {
   return PAYMENT_STATUS_COLOR_MAP[status] || 'bg-zinc-100 text-zinc-700';
 }
+
+// ===== Predicate trạng thái dùng chung =====
+// Gom về một nơi để Payment/OrderDetail không tự định nghĩa tập trạng thái lệch nhau.
+const PAID_PAYMENT_STATUSES = ['Paid', 'PartiallyPaid'];
+const REFUND_BLOCKED_ORDER_STATUSES = ['Shipping', 'Delivered', 'Completed', 'Cancelled'];
+
+// Đã thu tiền (đủ hoặc một phần) — dùng cho điều kiện hoàn tiền và rời màn chờ thanh toán.
+export function isOrderPaid(paymentStatus) {
+  return PAID_PAYMENT_STATUSES.includes(paymentStatus);
+}
+
+// Đơn còn được phép hủy (chưa thanh toán).
+export function canCancelOrder(order) {
+  return order?.orderStatus === 'AwaitingPayment';
+}
+
+// Đơn còn được phép yêu cầu hoàn tiền: đã thu tiền, chưa sang giao/hoàn tất/hủy, và chưa có yêu cầu đang xử lý / đã hoàn.
+export function canRequestRefund(order, { hasPendingRefund = false, hasCompletedRefund = false } = {}) {
+  return isOrderPaid(order?.paymentStatus)
+    && !REFUND_BLOCKED_ORDER_STATUSES.includes(order?.orderStatus)
+    && !hasPendingRefund
+    && !hasCompletedRefund;
+}
+
+// ===== Yêu cầu hoàn tiền =====
+export const REFUND_STATUS_MAP = {
+  Pending: 'Đang xử lý',
+  Completed: 'Đã hoàn tiền',
+  Rejected: 'Từ chối',
+};
+
+const REFUND_STATUS_COLOR_MAP = {
+  Pending: 'bg-amber-100 text-amber-700',
+  Completed: 'bg-green-100 text-green-700',
+  Rejected: 'bg-zinc-200 text-zinc-600',
+};
+
+export function getRefundStatusLabel(status) {
+  return REFUND_STATUS_MAP[status] || status || 'Đang xử lý';
+}
+
+export function getRefundStatusColor(status) {
+  return REFUND_STATUS_COLOR_MAP[status] || 'bg-amber-100 text-amber-700';
+}
+
+// ===== Kỳ trả góp =====
+export const INSTALLMENT_TERM_STATUS_MAP = {
+  Paid: 'Đã trả',
+  Pending: 'Chờ trả',
+  Cancelled: 'Đã hủy',
+};
+
+const INSTALLMENT_TERM_STATUS_COLOR_MAP = {
+  Paid: 'bg-green-100 text-green-700',
+  Pending: 'bg-amber-100 text-amber-700',
+  Cancelled: 'bg-zinc-100 text-zinc-500',
+};
+
+export function getInstallmentTermStatusLabel(status) {
+  return INSTALLMENT_TERM_STATUS_MAP[status] || status || 'Chưa cập nhật';
+}
+
+export function getInstallmentTermStatusColor(status) {
+  return INSTALLMENT_TERM_STATUS_COLOR_MAP[status] || 'bg-zinc-100 text-zinc-600';
+}

@@ -85,14 +85,6 @@ export const homeCategoryReferences = [
     to: '/products?categorySlug=xe-con-tay',
     match: ['xe con tay', 'xe côn tay', 'con tay', 'sport'],
   },
-  {
-    id: 'featured-pkl',
-    name: 'Xe phân khối lớn',
-    slug: 'xe-phan-khoi-lon',
-    image: banner5,
-    to: '/products?categorySlug=xe-phan-khoi-lon',
-    match: ['xe phan khoi lon', 'xe phân khối lớn', 'phan khoi lon', 'pkl'],
-  },
 ];
 
 export const serviceHighlights = [

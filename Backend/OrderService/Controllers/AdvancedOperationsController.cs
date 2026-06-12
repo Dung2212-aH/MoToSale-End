@@ -42,7 +42,6 @@ public class AdvancedOperationsController : ControllerBase
             code = r.MaPhieuTraKinhDoanh,
             orderId = r.MaDonHang,
             orderCode = orderCodes.GetValueOrDefault(r.MaDonHang),
-            storeId = r.MaCuaHang,
             returnStatus = r.TrangThai,
             reason = r.LyDo,
             note = r.GhiChu,
@@ -94,7 +93,6 @@ public class AdvancedOperationsController : ControllerBase
         if (req.Lines is null || req.Lines.Count == 0) return BadRequest(new { message = "Vui long chon san pham tra." });
 
         var orderLines = await _db.OrderItems.Where(i => i.MaDonHang == req.OrderId).ToListAsync();
-        var storeId = req.StoreId > 0 ? req.StoreId : await DefaultStoreIdAsync();
         var lines = new List<ChiTietTraHang>();
         foreach (var l in req.Lines)
         {
@@ -118,7 +116,6 @@ public class AdvancedOperationsController : ControllerBase
         {
             MaPhieuTraKinhDoanh = GenerateCode("RT"),
             MaDonHang = req.OrderId,
-            MaCuaHang = storeId,
             TrangThai = "Draft",
             LyDo = TrimToNull(req.Reason) ?? "",
             GhiChu = TrimToNull(req.Note),
@@ -281,7 +278,6 @@ public class AdvancedOperationsController : ControllerBase
     public async Task<IActionResult> GetShifts([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] int? staffUserId)
     {
         var names = await _db.Users.AsNoTracking().ToDictionaryAsync(x => x.MaNguoiDung, x => x.HoTen);
-        var storeNames = await _db.CuaHangs.AsNoTracking().ToDictionaryAsync(x => x.MaCuaHang, x => x.TenCuaHang);
         var query = _db.CaLamViecs.AsNoTracking().AsQueryable();
         if (from.HasValue) query = query.Where(x => x.BatDau >= from.Value);
         if (to.HasValue) query = query.Where(x => x.BatDau <= to.Value);
@@ -292,8 +288,6 @@ public class AdvancedOperationsController : ControllerBase
             id = x.MaCa,
             staffUserId = x.MaNhanVien,
             staffName = names.GetValueOrDefault(x.MaNhanVien),
-            storeId = x.MaCuaHang,
-            storeName = storeNames.GetValueOrDefault(x.MaCuaHang),
             startsAt = x.BatDau,
             endsAt = x.KetThuc,
             shiftStatus = x.TrangThai,
@@ -309,11 +303,9 @@ public class AdvancedOperationsController : ControllerBase
         if (req.StartsAt >= req.EndsAt) return BadRequest(new { message = "Thoi gian bat dau phai truoc ket thuc." });
         if (await HasOverlapAsync(req.StaffUserId, req.StartsAt, req.EndsAt, null))
             return BadRequest(new { message = "Ca lam viec bi trung lich voi ca khac." });
-        var storeId = req.StoreId > 0 ? req.StoreId : await DefaultStoreIdAsync();
         var entity = new CaLamViec
         {
             MaNhanVien = req.StaffUserId,
-            MaCuaHang = storeId,
             BatDau = req.StartsAt,
             KetThuc = req.EndsAt,
             TrangThai = "Scheduled",
@@ -337,7 +329,6 @@ public class AdvancedOperationsController : ControllerBase
         if (req.StartsAt >= req.EndsAt) return BadRequest(new { message = "Thoi gian bat dau phai truoc ket thuc." });
         if (await HasOverlapAsync(entity.MaNhanVien, req.StartsAt, req.EndsAt, id))
             return BadRequest(new { message = "Ca lam viec bi trung lich voi ca khac." });
-        if (req.StoreId > 0) entity.MaCuaHang = req.StoreId;
         entity.BatDau = req.StartsAt;
         entity.KetThuc = req.EndsAt;
         entity.TrangThai = req.ShiftStatus is "Completed" or "Cancelled" ? req.ShiftStatus : "Scheduled";
@@ -370,16 +361,22 @@ public class AdvancedOperationsController : ControllerBase
             && start < x.KetThuc && end > x.BatDau);
     }
 
-    private async Task<int> DefaultStoreIdAsync()
-    {
-        var id = await _db.CuaHangs.OrderBy(x => x.MaCuaHang).Select(x => x.MaCuaHang).FirstOrDefaultAsync();
-        return id == 0 ? 1 : id;
-    }
-
     private async Task IncreaseStockAsync(int maBienSanPham, int delta)
     {
-        await _db.Database.ExecuteSqlInterpolatedAsync(
-            $"UPDATE dbo.BIENSANPHAM SET SoLuongTon = CASE WHEN ISNULL(SoLuongTon,0) + {delta} < 0 THEN 0 ELSE ISNULL(SoLuongTon,0) + {delta} END WHERE MaBienSanPham = {maBienSanPham}");
+        var variant = await _db.ProductVariants.AsNoTracking().FirstAsync(x => x.MaBienSanPham == maBienSanPham);
+        int? userId = null;
+        int? refId = null;
+        await _db.Database.ExecuteSqlInterpolatedAsync($"""
+            EXEC dbo.sp_TONKHO_ApDungBienDong
+                @MaSanPham = {variant.MaSanPham},
+                @MaBienSanPham = {maBienSanPham},
+                @LoaiBienDong = {"NghiepVu"},
+                @SoLuongThayDoi = {delta},
+                @LyDo = {"Dieu chinh ton kho tu nghiep vu mo rong"},
+                @LoaiThamChieu = {"AdvancedOperations"},
+                @MaThamChieu = {refId},
+                @MaNguoiThucHien = {userId}
+            """);
     }
 }
 
@@ -387,7 +384,6 @@ public class AdvancedOperationsController : ControllerBase
 public class CreateReturnRequest
 {
     public int OrderId { get; set; }
-    public int StoreId { get; set; }
     public string? Reason { get; set; }
     public string? Note { get; set; }
     public List<ReturnLineRequest> Lines { get; set; } = new();
@@ -395,4 +391,4 @@ public class CreateReturnRequest
 public class ReturnLineRequest { public int OrderLineId { get; set; } public int Qty { get; set; } public string? ItemCondition { get; set; } }
 public class ApproveReturnRequest { public decimal RefundAmount { get; set; } public string? RefundMethod { get; set; } public string? TransactionRef { get; set; } public string? Note { get; set; } }
 public class RejectReturnRequest { public string? Note { get; set; } }
-public class ShiftRequest { public int StaffUserId { get; set; } public int StoreId { get; set; } public DateTime StartsAt { get; set; } public DateTime EndsAt { get; set; } public string? ShiftStatus { get; set; } public string? Note { get; set; } }
+public class ShiftRequest { public int StaffUserId { get; set; } public DateTime StartsAt { get; set; } public DateTime EndsAt { get; set; } public string? ShiftStatus { get; set; } public string? Note { get; set; } }

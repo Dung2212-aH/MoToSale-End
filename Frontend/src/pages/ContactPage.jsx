@@ -105,10 +105,10 @@ function ContactPage() {
       await contentApi.createContactRequest({
         fullName: form.fullName.trim(),
         phone: form.phone.trim(),
-        email: form.email.trim(),
+        email: form.email.trim() || undefined,
         subject: form.subject.trim() || 'Yêu cầu liên hệ từ trang khách hàng',
         message: form.message.trim(),
-        inquiryType: 'CustomerContact',
+        inquiryType: 'General',
       });
       notify('Đã gửi thông tin liên hệ. Chúng tôi sẽ phản hồi sớm nhất.', 'success');
       setForm(initialForm);

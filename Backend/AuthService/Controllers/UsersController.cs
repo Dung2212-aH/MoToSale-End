@@ -451,25 +451,6 @@ public class UsersController : ControllerBase
         return Ok(new { message = "Da doi mat khau." });
     }
 
-    [HttpGet("me/address")]
-    public async Task<IActionResult> GetDefaultAddress()
-    {
-        var userId = GetCurrentUserId();
-        if (!userId.HasValue)
-        {
-            return Unauthorized();
-        }
-
-        var address = await _dbContext.UserAddresses
-            .AsNoTracking()
-            .Where(a => a.MaNguoiDung == userId.Value)
-            .OrderByDescending(a => a.LaMacDinh)
-            .ThenByDescending(a => a.NgayCapNhat)
-            .FirstOrDefaultAsync();
-
-        return Ok(address is null ? new { } : ToAddress(address));
-    }
-
     [HttpGet("me/addresses")]
     public async Task<IActionResult> GetMyAddresses()
     {
@@ -487,53 +468,6 @@ public class UsersController : ControllerBase
             .ToListAsync();
 
         return Ok(new { items = addresses.Select(ToAddress).ToList() });
-    }
-
-    [HttpPut("me/address")]
-    public async Task<IActionResult> UpsertDefaultAddress(UpdateAddressRequest request)
-    {
-        var userId = GetCurrentUserId();
-        if (!userId.HasValue)
-        {
-            return Unauthorized();
-        }
-
-        var now = DateTime.UtcNow;
-        var address = await _dbContext.UserAddresses
-            .Where(a => a.MaNguoiDung == userId.Value)
-            .OrderByDescending(a => a.LaMacDinh)
-            .ThenByDescending(a => a.NgayCapNhat)
-            .FirstOrDefaultAsync();
-
-        if (address is null)
-        {
-            await ClearDefaultAddressAsync(userId.Value);
-            await _dbContext.SaveChangesAsync();
-
-            address = new UserAddress
-            {
-                MaNguoiDung = userId.Value,
-                NgayTao = now
-            };
-            _dbContext.UserAddresses.Add(address);
-        }
-
-        address.HoTenNhanHang = request.HoTenNhanHang.Trim();
-        address.SoDienThoaiNhanHang = request.SoDienThoaiNhanHang.Trim();
-        address.DiaChiNhanHang = request.DiaChiNhanHang.Trim();
-        address.PhuongXa = TrimToNull(request.Ward);
-        address.QuanHuyen = TrimToNull(request.District);
-        address.TinhThanh = request.Province.Trim();
-        address.GhiChu = TrimToNull(request.GhiChu);
-        address.LaMacDinh = true;
-        address.NgayCapNhat = now;
-
-        if (address.MaDiaChi > 0)
-        {
-            await ClearDefaultAddressAsync(userId.Value, address.MaDiaChi);
-        }
-        await _dbContext.SaveChangesAsync();
-        return Ok(ToAddress(address));
     }
 
     [HttpPost("me/addresses")]

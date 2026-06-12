@@ -8,6 +8,4 @@ public class ConfirmOrderPaymentRequest
     /// <summary>Optional note recorded on the order.</summary>
     public string? GhiChu { get; set; }
 
-    /// <summary>When confirming a specific installment term, its id; null confirms the initial/outstanding payment.</summary>
-    public int? MaKyTraGop { get; set; }
 }

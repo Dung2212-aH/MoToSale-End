@@ -83,6 +83,9 @@ public class CatalogService : ICatalogService
 
         var productIds = products.Select(p => p.MaSanPham).ToList();
         var imageMap = await _productImageRepository.GetPrimaryImageUrlsAsync(productIds);
+        var brandNameMap = await GetBrandNameMapAsync(products.Where(p => p.MaHangXe.HasValue).Select(p => p.MaHangXe!.Value));
+        var categoryNameMap = await GetCategoryNameMapAsync(products.Select(p => p.MaDanhMuc));
+        var variantSummaryMap = await GetVariantPriceSummaryMapAsync(productIds);
         var reviewSummaryMap = await _dbContext.ProductReviews
             .AsNoTracking()
             .Where(r => productIds.Contains(r.MaSanPham) && r.TrangThai == "Approved")
@@ -99,7 +102,7 @@ public class CatalogService : ICatalogService
 
         return new PagedResultDto<ProductListItemDto>
         {
-            Items = products.Select(p => MapProductListItem(p, imageMap, reviewSummaryMap)).ToList(),
+            Items = products.Select(p => MapProductListItem(p, imageMap, reviewSummaryMap, brandNameMap, categoryNameMap, variantSummaryMap)).ToList(),
             Page = page,
             PageSize = pageSize,
             TotalItems = totalItems
@@ -116,6 +119,9 @@ public class CatalogService : ICatalogService
     {
         var variants = await _productVariantRepository.GetByProductIdAsync(product.MaSanPham);
         var images = await _productImageRepository.GetByProductIdAsync(product.MaSanPham);
+        var brandNameMap = await GetBrandNameMapAsync(product.MaHangXe.HasValue ? new[] { product.MaHangXe.Value } : Array.Empty<int>());
+        var categoryNameMap = await GetCategoryNameMapAsync(new[] { product.MaDanhMuc });
+        var priceSummary = SummarizeVariants(variants.Select(ToVariantPriceRow));
 
         return new ProductDetailDto
         {
@@ -123,25 +129,34 @@ public class CatalogService : ICatalogService
             TenSanPham = product.TenSanPham,
             Slug = product.Slug,
             MaDanhMuc = product.MaDanhMuc,
+            TenDanhMuc = categoryNameMap.TryGetValue(product.MaDanhMuc, out var tenDanhMuc) ? tenDanhMuc : null,
             MaHangXe = product.MaHangXe,
+            TenHangXe = product.MaHangXe.HasValue && brandNameMap.TryGetValue(product.MaHangXe.Value, out var tenHangXe) ? tenHangXe : null,
             MaDongXe = product.MaDongXe,
             MoTaNgan = product.MoTaNgan,
             MoTa = product.MoTa,
-            GiaGoc = product.GiaGoc,
-            GiaKhuyenMai = product.GiaKhuyenMai,
-            GiaBan = GetSalePrice(product),
-            TyLeGiam = GetDiscountPercent(product),
-            SoLuongTon = product.SoLuongTon,
+            GiaThapNhat = priceSummary.GiaThapNhat,
+            GiaCaoNhat = priceSummary.GiaCaoNhat,
+            GiaBan = priceSummary.GiaThapNhat,
+            TyLeGiam = priceSummary.TyLeGiam,
+            TongTon = priceSummary.TongTon,
             DangHoatDong = product.DangHoatDong,
             BienThe = variants.Select(MapProductVariant).ToList(),
             Anh = images.Select(MapProductImage).ToList()
         };
     }
 
-    private static ProductListItemDto MapProductListItem(Product product, Dictionary<int, string> imageMap, IReadOnlyDictionary<int, ReviewSummary> reviewSummaryMap)
+    private static ProductListItemDto MapProductListItem(
+        Product product,
+        Dictionary<int, string> imageMap,
+        IReadOnlyDictionary<int, ReviewSummary> reviewSummaryMap,
+        IReadOnlyDictionary<int, string> brandNameMap,
+        IReadOnlyDictionary<int, string> categoryNameMap,
+        IReadOnlyDictionary<int, VariantPriceSummary> variantSummaryMap)
     {
         imageMap.TryGetValue(product.MaSanPham, out var anhChinhUrl);
         reviewSummaryMap.TryGetValue(product.MaSanPham, out var reviewSummary);
+        variantSummaryMap.TryGetValue(product.MaSanPham, out var priceSummary);
 
         return new ProductListItemDto
         {
@@ -150,14 +165,17 @@ public class CatalogService : ICatalogService
             TenSanPham = product.TenSanPham,
             Slug = product.Slug,
             MaDanhMuc = product.MaDanhMuc,
+            TenDanhMuc = categoryNameMap.TryGetValue(product.MaDanhMuc, out var tenDanhMuc) ? tenDanhMuc : null,
             MaHangXe = product.MaHangXe,
+            TenHangXe = product.MaHangXe.HasValue && brandNameMap.TryGetValue(product.MaHangXe.Value, out var tenHangXe) ? tenHangXe : null,
             MaDongXe = product.MaDongXe,
             LoaiSanPham = product.LoaiSanPham,
-            GiaGoc = product.GiaGoc,
-            GiaKhuyenMai = product.GiaKhuyenMai,
-            GiaBan = GetSalePrice(product),
-            TyLeGiam = GetDiscountPercent(product),
-            SoLuongTon = product.SoLuongTon,
+            GiaThapNhat = priceSummary.GiaThapNhat,
+            GiaGocThapNhat = priceSummary.GiaGocThapNhat,
+            GiaBan = priceSummary.GiaThapNhat,
+            TyLeGiam = priceSummary.TyLeGiam,
+            TongTon = priceSummary.TongTon,
+            SoBienThe = priceSummary.SoBienThe,
             TrangThaiSanPham = product.TrangThaiSanPham,
             AnhChinhUrl = anhChinhUrl ?? product.AnhChinhUrl,
             DiemTrungBinh = reviewSummary.AverageRating,
@@ -213,7 +231,10 @@ public class CatalogService : ICatalogService
             MaSanPham = variant.MaSanPham,
             TenBienThe = variant.TenBienThe,
             SKU = variant.SKU,
-            GiaGhiDe = variant.GiaGhiDe,
+            GiaGoc = variant.GiaGoc,
+            GiaKhuyenMai = variant.GiaKhuyenMai,
+            GiaBan = VariantSellPrice(variant.GiaGoc, variant.GiaKhuyenMai),
+            TyLeGiam = VariantDiscount(variant.GiaGoc, variant.GiaKhuyenMai),
             SoLuongTon = variant.SoLuongTon,
             TrangThai = variant.TrangThai,
             PhienBan = variant.PhienBan,
@@ -235,20 +256,109 @@ public class CatalogService : ICatalogService
         };
     }
 
-    private static decimal GetSalePrice(Product product)
+    private async Task<Dictionary<int, string>> GetBrandNameMapAsync(IEnumerable<int> brandIds)
     {
-        return product.GiaKhuyenMai ?? product.GiaGoc;
+        var ids = brandIds.Distinct().ToList();
+        if (ids.Count == 0) return new Dictionary<int, string>();
+
+        return await _dbContext.Brands
+            .AsNoTracking()
+            .Where(b => ids.Contains(b.MaHangXe))
+            .ToDictionaryAsync(b => b.MaHangXe, b => b.TenHang);
     }
 
-    private static int? GetDiscountPercent(Product product)
+    private async Task<Dictionary<int, string>> GetCategoryNameMapAsync(IEnumerable<int> categoryIds)
     {
-        if (!product.GiaKhuyenMai.HasValue || product.GiaGoc <= 0 || product.GiaKhuyenMai.Value >= product.GiaGoc)
+        var ids = categoryIds.Distinct().ToList();
+        if (ids.Count == 0) return new Dictionary<int, string>();
+
+        return await _dbContext.Categories
+            .AsNoTracking()
+            .Where(c => ids.Contains(c.MaDanhMuc))
+            .ToDictionaryAsync(c => c.MaDanhMuc, c => c.TenDanhMuc);
+    }
+
+    // Giá hiệu lực của biến thể = GiaKhuyenMai ?? GiaGoc.
+    private static decimal VariantSellPrice(decimal giaGoc, decimal? giaKhuyenMai)
+        => giaKhuyenMai ?? giaGoc;
+
+    private static decimal? VariantDiscount(decimal giaGoc, decimal? giaKhuyenMai)
+    {
+        if (!giaKhuyenMai.HasValue || giaGoc <= 0 || giaKhuyenMai.Value >= giaGoc)
         {
             return null;
         }
 
-        return (int)Math.Round((product.GiaGoc - product.GiaKhuyenMai.Value) * 100 / product.GiaGoc);
+        return Math.Round((giaGoc - giaKhuyenMai.Value) * 100m / giaGoc, 1, MidpointRounding.AwayFromZero);
+    }
+
+    private static readonly HashSet<string> InactiveVariantStatuses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "inactive", "hidden", "discontinued", "stopped", "off", "ngung ban", "ngừng bán"
+    };
+
+    private static bool IsSelling(string? trangThai)
+        => string.IsNullOrWhiteSpace(trangThai) || !InactiveVariantStatuses.Contains(trangThai.Trim());
+
+    private static VariantPriceRow ToVariantPriceRow(ProductVariant variant)
+        => new(variant.GiaGoc, variant.GiaKhuyenMai, variant.SoLuongTon, variant.TrangThai);
+
+    // Tổng hợp giá "Từ {thấp nhất}" từ các biến thể đang bán (fallback toàn bộ nếu không có biến thể nào đang bán).
+    private static VariantPriceSummary SummarizeVariants(IEnumerable<VariantPriceRow> rows)
+    {
+        var all = rows.ToList();
+        if (all.Count == 0)
+        {
+            return new VariantPriceSummary(0m, 0m, 0m, null, 0, 0);
+        }
+
+        var selling = all.Where(r => IsSelling(r.TrangThai)).ToList();
+        var pool = selling.Count > 0 ? selling : all;
+
+        var cheapest = pool
+            .OrderBy(r => VariantSellPrice(r.GiaGoc, r.GiaKhuyenMai))
+            .First();
+        var minSell = VariantSellPrice(cheapest.GiaGoc, cheapest.GiaKhuyenMai);
+        var maxSell = pool.Max(r => VariantSellPrice(r.GiaGoc, r.GiaKhuyenMai));
+
+        return new VariantPriceSummary(
+            GiaThapNhat: minSell,
+            GiaGocThapNhat: cheapest.GiaGoc,
+            GiaCaoNhat: maxSell,
+            TyLeGiam: VariantDiscount(cheapest.GiaGoc, cheapest.GiaKhuyenMai),
+            TongTon: all.Sum(r => r.SoLuongTon ?? 0),
+            SoBienThe: all.Count);
+    }
+
+    private async Task<Dictionary<int, VariantPriceSummary>> GetVariantPriceSummaryMapAsync(IReadOnlyCollection<int> productIds)
+    {
+        if (productIds.Count == 0)
+        {
+            return new Dictionary<int, VariantPriceSummary>();
+        }
+
+        var rows = await _dbContext.ProductVariants
+            .AsNoTracking()
+            .Where(v => productIds.Contains(v.MaSanPham))
+            .Select(v => new { v.MaSanPham, v.GiaGoc, v.GiaKhuyenMai, v.SoLuongTon, v.TrangThai })
+            .ToListAsync();
+
+        return rows
+            .GroupBy(r => r.MaSanPham)
+            .ToDictionary(
+                g => g.Key,
+                g => SummarizeVariants(g.Select(r => new VariantPriceRow(r.GiaGoc, r.GiaKhuyenMai, r.SoLuongTon, r.TrangThai))));
     }
 
     private readonly record struct ReviewSummary(int TotalReviews, double AverageRating);
+
+    private readonly record struct VariantPriceRow(decimal GiaGoc, decimal? GiaKhuyenMai, int? SoLuongTon, string? TrangThai);
+
+    private readonly record struct VariantPriceSummary(
+        decimal GiaThapNhat,
+        decimal GiaGocThapNhat,
+        decimal GiaCaoNhat,
+        decimal? TyLeGiam,
+        int TongTon,
+        int SoBienThe);
 }

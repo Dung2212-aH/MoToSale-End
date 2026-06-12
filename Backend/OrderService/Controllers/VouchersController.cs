@@ -22,8 +22,9 @@ public class VouchersController : ControllerBase
     }
 
     /// <summary>
-    /// Get all active vouchers (public, for display/claim purposes)
+    /// Get all vouchers (admin/staff listing — includes usage counters and inactive vouchers)
     /// </summary>
+    [Authorize(Roles = "Admin,Staff")]
     [HttpGet]
     public async Task<IActionResult> GetVouchers([FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {

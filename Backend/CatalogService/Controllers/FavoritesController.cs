@@ -1,5 +1,6 @@
 using CatalogService.Data;
 using CatalogService.Entities;
+using CatalogService.Repositories.ProductImages;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,10 +13,12 @@ namespace CatalogService.Controllers;
 public class FavoritesController : ControllerBase
 {
     private readonly CatalogDbContext _dbContext;
+    private readonly IProductImageRepository _productImageRepository;
 
-    public FavoritesController(CatalogDbContext dbContext)
+    public FavoritesController(CatalogDbContext dbContext, IProductImageRepository productImageRepository)
     {
         _dbContext = dbContext;
+        _productImageRepository = productImageRepository;
     }
 
     [HttpGet]
@@ -38,7 +41,11 @@ public class FavoritesController : ControllerBase
             .OrderByDescending(row => row.favorite.NgayTao)
             .ToListAsync();
 
-        return Ok(rows.Select(row => ToFavorite(row.favorite, row.product)));
+        var productIds = rows.Select(row => row.product.MaSanPham).ToList();
+        var imageMap = await _productImageRepository.GetPrimaryImageUrlsAsync(productIds);
+        var priceMap = await GetVariantPriceMapAsync(productIds);
+
+        return Ok(rows.Select(row => ToFavorite(row.favorite, row.product, imageMap, priceMap)));
     }
 
     [HttpPost("{productId:int}")]
@@ -75,13 +82,10 @@ public class FavoritesController : ControllerBase
             await _dbContext.SaveChangesAsync();
         }
 
-        return Ok(ToFavorite(favorite, product));
-    }
+        var imageMap = await _productImageRepository.GetPrimaryImageUrlsAsync(new[] { product.MaSanPham });
+        var priceMap = await GetVariantPriceMapAsync(new[] { product.MaSanPham });
 
-    [HttpPost]
-    public async Task<IActionResult> AddFromBody(FavoriteRequest request)
-    {
-        return await Add(request.MaSanPham);
+        return Ok(ToFavorite(favorite, product, imageMap, priceMap));
     }
 
     [HttpDelete("{productId:int}")]
@@ -105,51 +109,78 @@ public class FavoritesController : ControllerBase
         return NoContent();
     }
 
-    private static object ToFavorite(Favorite favorite, Product product)
+    private static object ToFavorite(Favorite favorite, Product product, IReadOnlyDictionary<int, string> imageMap, IReadOnlyDictionary<int, FavoritePrice> priceMap)
     {
         return new
         {
             maNguoiDung = favorite.MaNguoiDung,
             maSanPham = favorite.MaSanPham,
             ngayTao = favorite.NgayTao,
-            product = ToProduct(product)
+            product = ToProduct(product, imageMap, priceMap)
         };
     }
 
-    private static object ToProduct(Product product)
+    private static object ToProduct(Product product, IReadOnlyDictionary<int, string> imageMap, IReadOnlyDictionary<int, FavoritePrice> priceMap)
     {
+        imageMap.TryGetValue(product.MaSanPham, out var anhChinhUrl);
+        priceMap.TryGetValue(product.MaSanPham, out var price);
+        var giaKhuyenMai = price.GiaBan > 0 && price.GiaBan < price.GiaGoc ? price.GiaBan : (decimal?)null;
+
         return new
         {
             maSanPham = product.MaSanPham,
             maSanPhamKinhDoanh = product.MaSanPhamKinhDoanh,
             tenSanPham = product.TenSanPham,
             slug = product.Slug,
+            anhChinhUrl = anhChinhUrl ?? product.AnhChinhUrl,
             maDanhMuc = product.MaDanhMuc,
             maHangXe = product.MaHangXe,
             maDongXe = product.MaDongXe,
             loaiSanPham = product.LoaiSanPham,
-            giaGoc = product.GiaGoc,
-            giaKhuyenMai = product.GiaKhuyenMai,
-            giaBan = product.GiaKhuyenMai ?? product.GiaGoc,
-            tyLeGiam = GetDiscountPercent(product),
-            soLuongTon = product.SoLuongTon,
+            // Giá tổng hợp từ biến thể (giá thật nằm ở BIENSANPHAM).
+            giaThapNhat = price.GiaBan,
+            giaGocThapNhat = price.GiaGoc,
+            giaKhuyenMai,
+            giaBan = price.GiaBan,
+            tyLeGiam = GetDiscountPercent(price.GiaGoc, price.GiaBan),
+            soLuongTon = price.TongTon,
             dangHoatDong = product.DangHoatDong,
             trangThaiSanPham = product.TrangThaiSanPham
         };
     }
 
-    private static int? GetDiscountPercent(Product product)
+    private static decimal? GetDiscountPercent(decimal giaGoc, decimal giaBan)
     {
-        if (!product.GiaKhuyenMai.HasValue || product.GiaGoc <= 0 || product.GiaKhuyenMai.Value >= product.GiaGoc)
+        if (giaGoc <= 0 || giaBan <= 0 || giaBan >= giaGoc)
         {
             return null;
         }
 
-        return (int)Math.Round((product.GiaGoc - product.GiaKhuyenMai.Value) * 100 / product.GiaGoc);
+        return Math.Round((giaGoc - giaBan) * 100m / giaGoc, 1, MidpointRounding.AwayFromZero);
     }
-}
 
-public class FavoriteRequest
-{
-    public int MaSanPham { get; set; }
+    private async Task<Dictionary<int, FavoritePrice>> GetVariantPriceMapAsync(IReadOnlyCollection<int> productIds)
+    {
+        if (productIds.Count == 0)
+        {
+            return new Dictionary<int, FavoritePrice>();
+        }
+
+        var rows = await _dbContext.ProductVariants
+            .AsNoTracking()
+            .Where(v => productIds.Contains(v.MaSanPham))
+            .GroupBy(v => v.MaSanPham)
+            .Select(g => new
+            {
+                MaSanPham = g.Key,
+                GiaGocMin = g.Min(x => (decimal?)x.GiaGoc) ?? 0m,
+                GiaBanMin = g.Min(x => (decimal?)(x.GiaKhuyenMai ?? x.GiaGoc)) ?? 0m,
+                TongTon = g.Sum(x => x.SoLuongTon ?? 0)
+            })
+            .ToListAsync();
+
+        return rows.ToDictionary(r => r.MaSanPham, r => new FavoritePrice(r.GiaGocMin, r.GiaBanMin, r.TongTon));
+    }
+
+    private readonly record struct FavoritePrice(decimal GiaGoc, decimal GiaBan, int TongTon);
 }

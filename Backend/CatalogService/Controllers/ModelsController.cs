@@ -28,11 +28,16 @@ public class ModelsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetVehicleModels([FromQuery] int? brandId, [FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<IActionResult> GetVehicleModels([FromQuery] int? brandId, [FromQuery] string? search, [FromQuery] bool activeOnly = false, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
         var query = _db.VehicleModels.AsNoTracking().AsQueryable();
         if (brandId.HasValue)
             query = query.Where(m => m.MaHangXe == brandId.Value);
+        // activeOnly=true cho phep caller cong khai chi lay dong xe dang hoat dong,
+        // dong bo voi /products/filters (repo mac dinh activeOnly=true).
+        // Mac dinh false de admin van thay het ca dong xe inactive khi quan ly.
+        if (activeOnly)
+            query = query.Where(m => m.DangHoatDong);
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim().ToLowerInvariant();

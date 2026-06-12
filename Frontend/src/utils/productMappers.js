@@ -22,7 +22,11 @@ function normalizeVariant(raw) {
     productId: valueOf(raw, 'productId', 'ProductId', 'maSanPham', 'MaSanPham'),
     variantName: valueOf(raw, 'variantName', 'VariantName', 'tenBienThe', 'TenBienThe') || '',
     sku: valueOf(raw, 'sku', 'SKU') || '',
-    priceOverride: valueOf(raw, 'priceOverride', 'PriceOverride', 'giaGhiDe', 'GiaGhiDe') == null ? null : Number(valueOf(raw, 'priceOverride', 'PriceOverride', 'giaGhiDe', 'GiaGhiDe')),
+    // Giá thật nằm ở biến thể: basePrice = GiaGoc, salePrice = GiaKhuyenMai, sellPrice = GiaBan (hiệu lực).
+    basePrice: Number(valueOf(raw, 'basePrice', 'BasePrice', 'giaGoc', 'GiaGoc') || 0),
+    salePrice: valueOf(raw, 'salePrice', 'SalePrice', 'giaKhuyenMai', 'GiaKhuyenMai') == null ? null : Number(valueOf(raw, 'salePrice', 'SalePrice', 'giaKhuyenMai', 'GiaKhuyenMai')),
+    sellPrice: Number(valueOf(raw, 'sellPrice', 'giaBan', 'GiaBan') || 0),
+    discountPercent: valueOf(raw, 'discountPercent', 'DiscountPercent', 'tyLeGiam', 'TyLeGiam') == null ? null : Number(valueOf(raw, 'discountPercent', 'DiscountPercent', 'tyLeGiam', 'TyLeGiam')),
     stockQuantity: valueOf(raw, 'stockQuantity', 'StockQuantity', 'soLuongTon', 'SoLuongTon'),
     status: valueOf(raw, 'status', 'Status', 'trangThai', 'TrangThai'),
     version: valueOf(raw, 'version', 'Version', 'phienBan', 'PhienBan'),
@@ -68,10 +72,14 @@ export function normalizeProduct(raw) {
     productType: valueOf(raw, 'productType', 'ProductType', 'loaiSanPham', 'LoaiSanPham'),
     shortDescription: valueOf(raw, 'shortDescription', 'ShortDescription', 'moTaNgan', 'MoTaNgan'),
     description: valueOf(raw, 'description', 'Description', 'moTa', 'MoTa'),
-    basePrice: Number(valueOf(raw, 'basePrice', 'BasePrice', 'giaGoc', 'GiaGoc') || 0),
-    salePrice: valueOf(raw, 'salePrice', 'SalePrice', 'giaKhuyenMai', 'GiaKhuyenMai', 'giaBan', 'GiaBan') == null ? null : Number(valueOf(raw, 'salePrice', 'SalePrice', 'giaKhuyenMai', 'GiaKhuyenMai', 'giaBan', 'GiaBan')),
+    // Giá tổng hợp từ biến thể: minPrice = giá bán thấp nhất ("Từ {minPrice}"); basePrice = giá gốc tương ứng (gạch ngang).
+    minPrice: Number(valueOf(raw, 'minPrice', 'giaThapNhat', 'GiaThapNhat', 'giaBan', 'GiaBan') || 0),
+    maxPrice: Number(valueOf(raw, 'maxPrice', 'giaCaoNhat', 'GiaCaoNhat') || 0),
+    basePrice: Number(valueOf(raw, 'giaGocThapNhat', 'GiaGocThapNhat', 'minBasePrice', 'basePrice', 'BasePrice', 'giaGoc', 'GiaGoc') || 0),
+    salePrice: valueOf(raw, 'giaThapNhat', 'GiaThapNhat', 'salePrice', 'SalePrice', 'giaKhuyenMai', 'GiaKhuyenMai', 'giaBan', 'GiaBan') == null ? null : Number(valueOf(raw, 'giaThapNhat', 'GiaThapNhat', 'salePrice', 'SalePrice', 'giaKhuyenMai', 'GiaKhuyenMai', 'giaBan', 'GiaBan')),
     discountPercent: valueOf(raw, 'discountPercent', 'DiscountPercent', 'tyLeGiam', 'TyLeGiam') == null ? null : Number(valueOf(raw, 'discountPercent', 'DiscountPercent', 'tyLeGiam', 'TyLeGiam')),
-    stockQuantity: valueOf(raw, 'stockQuantity', 'StockQuantity', 'soLuongTon', 'SoLuongTon'),
+    variantCount: Number(valueOf(raw, 'variantCount', 'soBienThe', 'SoBienThe') || 0),
+    stockQuantity: valueOf(raw, 'stockQuantity', 'StockQuantity', 'tongTon', 'TongTon', 'soLuongTon', 'SoLuongTon'),
     mainImageUrl: normalizeImageUrl(valueOf(raw, 'mainImageUrl', 'MainImageUrl', 'anhChinhUrl', 'AnhChinhUrl')),
     status: valueOf(raw, 'status', 'Status', 'trangThaiSanPham', 'TrangThaiSanPham'),
     isActive: valueOf(raw, 'isActive', 'IsActive', 'dangHoatDong', 'DangHoatDong') !== false,
@@ -168,6 +176,36 @@ export function normalizeCart(response) {
     const quantity = Number(valueOf(item, 'quantity', 'Quantity', 'soLuong', 'SoLuong') || 1);
     const unitPrice = Number(valueOf(item, 'unitPrice', 'UnitPrice', 'donGia', 'DonGia') || 0);
     const lineTotal = Number(valueOf(item, 'lineTotal', 'LineTotal', 'thanhTien', 'ThanhTien') || unitPrice * quantity);
+    // Backend CartItemDto trả biến thể dạng phẳng (tenBienThe/SKU), không có object lồng.
+    const variantName = valueOf(item, 'variantName', 'VariantName', 'tenBienThe', 'TenBienThe') || '';
+    const sku = valueOf(item, 'sku', 'SKU') || '';
+    const itemImageUrl = normalizeImageUrl(valueOf(
+      item,
+      'mainImageUrl',
+      'MainImageUrl',
+      'anhChinhUrl',
+      'AnhChinhUrl',
+      'imageUrl',
+      'ImageUrl',
+      'urlAnh',
+      'UrlAnh',
+    ));
+    const normalizedProduct = normalizeProduct(valueOf(item, 'product'));
+    const fallbackProduct = {
+      id: valueOf(item, 'productId', 'ProductId', 'maSanPham', 'MaSanPham'),
+      name: valueOf(item, 'productName', 'ProductName', 'tenSanPham', 'TenSanPham') || '',
+      mainImageUrl: itemImageUrl,
+      images: itemImageUrl ? [{ imageUrl: itemImageUrl, isPrimary: true }] : [],
+    };
+    const product = normalizedProduct
+      ? {
+        ...normalizedProduct,
+        mainImageUrl: normalizedProduct.mainImageUrl || itemImageUrl,
+        images: normalizedProduct.images?.length
+          ? normalizedProduct.images
+          : (itemImageUrl ? [{ imageUrl: itemImageUrl, isPrimary: true }] : []),
+      }
+      : fallbackProduct;
 
     return {
       id: valueOf(item, 'id', 'Id', 'maChiTietGioHang', 'MaChiTietGioHang'),
@@ -177,12 +215,16 @@ export function normalizeCart(response) {
       quantity,
       unitPrice,
       lineTotal,
-      product: normalizeProduct(valueOf(item, 'product')) || {
-        id: valueOf(item, 'productId', 'ProductId', 'maSanPham', 'MaSanPham'),
-        name: valueOf(item, 'productName', 'ProductName', 'tenSanPham', 'TenSanPham') || '',
-        mainImageUrl: normalizeImageUrl(valueOf(item, 'mainImageUrl', 'MainImageUrl', 'anhChinhUrl', 'AnhChinhUrl')),
-      },
-      productVariant: normalizeVariant(valueOf(item, 'productVariant')) || valueOf(item, 'productVariant'),
+      product,
+      variantName,
+      sku,
+      productVariant: normalizeVariant(valueOf(item, 'productVariant')) || (variantName || sku
+        ? {
+          id: valueOf(item, 'productVariantId', 'ProductVariantId', 'maBienSanPham', 'MaBienSanPham'),
+          variantName,
+          sku,
+        }
+        : null),
     };
   });
 

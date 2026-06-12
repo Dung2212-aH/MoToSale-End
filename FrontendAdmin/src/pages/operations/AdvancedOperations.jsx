@@ -6,8 +6,8 @@ import { formatDate } from '../../utils/formatDate';
 import { useAuth } from '../../contexts/AuthContext';
 
 const emptyReturnLine = { orderLineId: '', qty: 1, itemCondition: 'Resellable' };
-const emptyReturn = { orderId: '', storeId: '', reason: '', note: '', lines: [{ ...emptyReturnLine }] };
-const emptyShift = { id: null, staffUserId: '', storeId: '', startsAt: '', endsAt: '', shiftStatus: 'Scheduled', note: '' };
+const emptyReturn = { orderId: '', reason: '', note: '', lines: [{ ...emptyReturnLine }] };
+const emptyShift = { id: null, staffUserId: '', startsAt: '', endsAt: '', shiftStatus: 'Scheduled', note: '' };
 const emptyApproval = { refundAmount: 0, refundMethod: 'Cash', transactionRef: '', note: '' };
 const labels = {
   Draft: 'Chờ duyệt', Approved: 'Đã duyệt', Rejected: 'Từ chối',
@@ -26,7 +26,7 @@ const AdvancedOperations = () => {
   const [receivables, setReceivables] = useState([]);
   const [refunds, setRefunds] = useState([]);
   const [shifts, setShifts] = useState([]);
-  const [lookups, setLookups] = useState({ orders: [], stores: [], staff: [] });
+  const [lookups, setLookups] = useState({ orders: [], staff: [] });
   const [error, setError] = useState('');
   const [returnStatus, setReturnStatus] = useState('');
   const [keyword, setKeyword] = useState('');
@@ -66,10 +66,10 @@ const AdvancedOperations = () => {
   const createReturn = async () => {
     const lines = returnForm.lines.filter((line) => line.orderLineId && Number(line.qty) > 0)
       .map((line) => ({ orderLineId: Number(line.orderLineId), qty: Number(line.qty), itemCondition: line.itemCondition }));
-    if (!returnForm.orderId || !returnForm.storeId || !returnForm.reason.trim() || !lines.length) return alert('Vui lòng chọn đơn hàng, kho nhận, sản phẩm và nhập lý do.');
+    if (!returnForm.orderId || !returnForm.reason.trim() || !lines.length) return alert('Vui lòng chọn đơn hàng, sản phẩm và nhập lý do.');
     if (new Set(lines.map((line) => line.orderLineId)).size !== lines.length) return alert('Một sản phẩm chỉ được thêm một lần trong phiếu trả hàng.');
     try {
-      await advancedOperationsService.createReturn({ orderId: Number(returnForm.orderId), storeId: Number(returnForm.storeId), reason: returnForm.reason, note: returnForm.note || null, lines });
+      await advancedOperationsService.createReturn({ orderId: Number(returnForm.orderId), reason: returnForm.reason, note: returnForm.note || null, lines });
       setShowReturn(false); setReturnForm(emptyReturn); await load();
     } catch (err) { alert(message(err, 'Tạo phiếu trả hàng thất bại.')); }
   };
@@ -88,9 +88,9 @@ const AdvancedOperations = () => {
     try { await advancedOperationsService.rejectReturn(row.id, { note }); await load(); } catch (err) { alert(message(err, 'Từ chối trả hàng thất bại.')); }
   };
   const saveShift = async () => {
-    if (!shiftForm.staffUserId || !shiftForm.storeId || !shiftForm.startsAt || !shiftForm.endsAt) return alert('Vui lòng chọn đủ nhân viên, cửa hàng và thời gian ca.');
+    if (!shiftForm.staffUserId || !shiftForm.startsAt || !shiftForm.endsAt) return alert('Vui lòng chọn đủ nhân viên và thời gian ca.');
     try {
-      const payload = { ...shiftForm, staffUserId: Number(shiftForm.staffUserId), storeId: Number(shiftForm.storeId) };
+      const payload = { ...shiftForm, staffUserId: Number(shiftForm.staffUserId) };
       if (shiftForm.id) await advancedOperationsService.updateShift(shiftForm.id, payload); else await advancedOperationsService.createShift(payload);
       setShowShift(false); setShiftForm(emptyShift); await load();
     } catch (err) { alert(message(err, 'Lưu ca làm việc thất bại.')); }
@@ -110,12 +110,11 @@ const AdvancedOperations = () => {
         {tab === 'returns' && <><button className="btn btn-primary mb-3" onClick={() => { setReturnForm(emptyReturn); setShowReturn(true); }}><i className="fas fa-undo mr-1" />Tạo phiếu trả hàng</button><Table headers={['Mã phiếu', 'Đơn hàng', 'Lý do', 'Hoàn tiền', 'Trạng thái', 'Ngày tạo', 'Thao tác']} empty="Chưa có phiếu trả hàng.">{filteredReturns.map((row) => <tr key={row.id}><td>{row.code}</td><td>{row.orderCode}</td><td>{row.reason}</td><td className="text-right">{formatCurrency(row.refundAmount)}</td><td>{badge(row.returnStatus)}</td><td>{formatDate(row.createdDate)}</td><td className="text-nowrap"><button className="btn btn-info btn-xs mr-1" onClick={() => setDetailReturn(row)}><i className="fas fa-eye" /></button>{row.returnStatus === 'Draft' && <><button className="btn btn-success btn-xs mr-1" onClick={() => openApproval(row)}>Duyệt</button><button className="btn btn-danger btn-xs" onClick={() => reject(row)}>Từ chối</button></>}</td></tr>)}</Table></>}
         {tab === 'refunds' && <Table headers={['Mã hoàn tiền', 'Đơn hàng', 'Số tiền', 'Hình thức', 'Trạng thái', 'Ngày hoàn']} empty="Chưa có khoản hoàn tiền.">{filteredRefunds.map((row) => <tr key={row.id}><td>{row.code}</td><td>{row.orderCode}</td><td className="text-right">{formatCurrency(row.amount)}</td><td>{labels[row.method] || row.method}</td><td>{badge(row.refundStatus)}</td><td>{formatDate(row.refundedAt)}</td></tr>)}</Table>}
         {tab === 'receivables' && <><label className="mb-3"><input type="checkbox" className="mr-2" checked={onlyOutstanding} onChange={(e) => setOnlyOutstanding(e.target.checked)} />Chỉ hiển thị khoản còn phải thu</label><Table headers={['Đơn hàng', 'Khách hàng', 'Tổng đơn ban đầu', 'Sau đổi trả', 'Cọc yêu cầu', 'Đã thu', 'Đã hoàn', 'Còn phải thu']} empty="Không có khoản còn phải thu.">{filteredReceivables.map((row) => <tr key={row.orderId}><td>{row.orderCode}</td><td>{row.customerName || '-'}</td><td className="text-right">{formatCurrency(row.grandTotal)}</td><td className="text-right">{formatCurrency(row.adjustedTotal)}</td><td className="text-right">{formatCurrency(row.depositRequired)}</td><td className="text-right">{formatCurrency(row.totalPaid)}</td><td className="text-right">{formatCurrency(row.totalRefunded)}</td><td className="text-right"><strong>{formatCurrency(row.outstanding)}</strong></td></tr>)}</Table></>}
-        {tab === 'shifts' && <>{isAdmin() && <button className="btn btn-primary mb-3" onClick={() => { setShiftForm(emptyShift); setShowShift(true); }}><i className="fas fa-plus mr-1" />Phân ca</button>}<Table headers={['Nhân viên', 'Cửa hàng', 'Bắt đầu', 'Kết thúc', 'Trạng thái', 'Thao tác']} empty="Chưa có ca làm việc.">{shifts.map((row) => <tr key={row.id}><td>{row.staffName}</td><td>{row.storeName}</td><td>{formatDate(row.startsAt)}</td><td>{formatDate(row.endsAt)}</td><td>{badge(row.shiftStatus)}</td><td>{isAdmin() && row.shiftStatus !== 'Cancelled' && <><button className="btn btn-info btn-xs mr-1" onClick={() => editShift(row)}><i className="fas fa-edit" /></button><button className="btn btn-danger btn-xs" onClick={() => cancelShift(row.id)}><i className="fas fa-ban" /></button></>}</td></tr>)}</Table></>}
+        {tab === 'shifts' && <>{isAdmin() && <button className="btn btn-primary mb-3" onClick={() => { setShiftForm(emptyShift); setShowShift(true); }}><i className="fas fa-plus mr-1" />Phân ca</button>}<Table headers={['Nhân viên', 'Bắt đầu', 'Kết thúc', 'Trạng thái', 'Thao tác']} empty="Chưa có ca làm việc.">{shifts.map((row) => <tr key={row.id}><td>{row.staffName}</td><td>{formatDate(row.startsAt)}</td><td>{formatDate(row.endsAt)}</td><td>{badge(row.shiftStatus)}</td><td>{isAdmin() && row.shiftStatus !== 'Cancelled' && <><button className="btn btn-info btn-xs mr-1" onClick={() => editShift(row)}><i className="fas fa-edit" /></button><button className="btn btn-danger btn-xs" onClick={() => cancelShift(row.id)}><i className="fas fa-ban" /></button></>}</td></tr>)}</Table></>}
       </div></div>
     </div></section>
     {showReturn && <Modal title="Tạo phiếu trả hàng" close={() => setShowReturn(false)} save={createReturn}>
       <Select label="Đơn hàng đã giao" value={returnForm.orderId} set={(v) => setReturnForm({ ...returnForm, orderId: v, lines: [{ ...emptyReturnLine }] })} items={lookups.orders} option={(x) => `${x.code} - ${formatCurrency(x.grandTotal)}`} />
-      <Select label="Kho nhận lại" value={returnForm.storeId} set={(v) => setReturnForm({ ...returnForm, storeId: v })} items={lookups.stores} option={(x) => `${x.code} - ${x.name}`} />
       {returnForm.lines.map((line, index) => <div className="row" key={index}><div className="col-md-6"><Select label="Sản phẩm trả" value={line.orderLineId} set={(v) => updateReturnLine(index, 'orderLineId', v)} items={selectedOrder?.lines || []} option={(x) => `${x.productNameSnapshot} - ${x.skuCodeSnapshot} (đã mua ${x.qty})`} /></div><div className="col-md-2"><Field label="Số lượng" type="number" min="1" value={line.qty} set={(v) => updateReturnLine(index, 'qty', v)} /></div><div className="col-md-3"><Select label="Tình trạng" value={line.itemCondition} set={(v) => updateReturnLine(index, 'itemCondition', v)} items={[{ id: 'Resellable', name: 'Có thể bán lại' }, { id: 'Damaged', name: 'Hư hỏng' }, { id: 'Warranty', name: 'Bảo hành' }]} option={(x) => x.name} /></div><div className="col-md-1 d-flex align-items-end"><button className="btn btn-danger mb-3" disabled={returnForm.lines.length === 1} onClick={() => removeReturnLine(index)}><i className="fas fa-trash" /></button></div></div>)}
       <button className="btn btn-outline-primary mb-3" onClick={addReturnLine}><i className="fas fa-plus mr-1" />Thêm sản phẩm</button>
       <Field label="Lý do" value={returnForm.reason} set={(v) => setReturnForm({ ...returnForm, reason: v })} />
@@ -134,7 +133,6 @@ const AdvancedOperations = () => {
     </Modal>}
     {showShift && <Modal title={shiftForm.id ? 'Cập nhật ca làm việc' : 'Phân ca nhân viên'} close={() => setShowShift(false)} save={saveShift}>
       {!shiftForm.id && <Select label="Nhân viên" value={shiftForm.staffUserId} set={(v) => setShiftForm({ ...shiftForm, staffUserId: v })} items={lookups.staff} option={(x) => `${x.fullName} - ${x.email}`} />}
-      <Select label="Cửa hàng" value={shiftForm.storeId} set={(v) => setShiftForm({ ...shiftForm, storeId: v })} items={lookups.stores} option={(x) => `${x.code} - ${x.name}`} />
       <Field label="Bắt đầu" type="datetime-local" value={shiftForm.startsAt} set={(v) => setShiftForm({ ...shiftForm, startsAt: v })} />
       <Field label="Kết thúc" type="datetime-local" value={shiftForm.endsAt} set={(v) => setShiftForm({ ...shiftForm, endsAt: v })} />
       {shiftForm.id && <Select label="Trạng thái" value={shiftForm.shiftStatus} set={(v) => setShiftForm({ ...shiftForm, shiftStatus: v })} items={[{ id: 'Scheduled', name: 'Đã phân ca' }, { id: 'Completed', name: 'Hoàn thành' }, { id: 'Cancelled', name: 'Đã hủy' }]} option={(x) => x.name} />}

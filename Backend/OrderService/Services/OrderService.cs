@@ -100,7 +100,13 @@ public class OrderService : IOrderService
         await EnsureActiveUserAsync(maNguoiDung);
 
         var cart = await _orderRepository.GetActiveCartByUserIdAsync(maNguoiDung);
-        return cart is null ? EmptyCart(maNguoiDung) : MapCart(cart);
+        if (cart is null)
+        {
+            return EmptyCart(maNguoiDung);
+        }
+
+        var imageMap = await _orderRepository.GetPrimaryImageUrlsAsync(cart.Items.Select(i => i.MaSanPham));
+        return MapCart(cart, imageMap);
     }
 
     public async Task<CartDto> AddCartItemAsync(int maNguoiDung, AddCartItemRequest request)
@@ -108,7 +114,7 @@ public class OrderService : IOrderService
         await EnsureActiveUserAsync(maNguoiDung);
         var product = await ValidateProductAsync(request.MaSanPham);
         var variant = await ValidateVariantAsync(product.MaSanPham, request.MaBienSanPham);
-        var unitPrice = GetUnitPrice(product, variant);
+        var unitPrice = GetUnitPrice(variant);
 
         await using var transaction = await _orderRepository.BeginTransactionAsync(IsolationLevel.Serializable);
 
@@ -131,7 +137,7 @@ public class OrderService : IOrderService
 
         var existingItem = cart.Items.FirstOrDefault(i =>
             i.MaSanPham == product.MaSanPham &&
-            i.MaBienSanPham == request.MaBienSanPham);
+            i.MaBienSanPham == variant?.MaBienSanPham);
 
         var newQuantity = request.SoLuong + (existingItem?.SoLuong ?? 0);
         await EnsureStockAsync(product.MaSanPham, variant?.MaBienSanPham, newQuantity);
@@ -174,7 +180,7 @@ public class OrderService : IOrderService
         await EnsureStockAsync(product.MaSanPham, variant?.MaBienSanPham, request.SoLuong);
 
         cartItem.SoLuong = request.SoLuong;
-        cartItem.DonGia = GetUnitPrice(product, variant);
+        cartItem.DonGia = GetUnitPrice(variant);
         cartItem.NgayCapNhat = DateTime.UtcNow;
         if (cartItem.Cart is not null)
         {
@@ -283,7 +289,7 @@ public class OrderService : IOrderService
         var deposit = await GetDepositAmountAsync(orderType, request.TienDatCoc, total);
         var installmentTerm = await ValidateInstallmentTermAsync(orderType, request.SoKyTraGop);
 
-        // Build installment schedule (flat interest on the financed principal) when applicable.
+        // Build only the installment application. Monthly collection is handled outside the web app.
         InstallmentPlan? installmentPlan = null;
         if (orderType == "Installment")
         {
@@ -410,15 +416,7 @@ public class OrderService : IOrderService
             var variant = await _orderRepository.GetVariantAsync(group.Key)
                 ?? throw new BusinessException("Bien the san pham trong don hang khong ton tai.");
             var requiredQuantity = group.Sum(h => h.SoLuong);
-            var stock = variant.SoLuongTon ?? 0;
-
-            if (stock < requiredQuantity)
-            {
-                throw new BusinessException("So luong ton kho bien the khong du de xac nhan don hang.");
-            }
-
-            variant.SoLuongTon = stock - requiredQuantity;
-            variant.NgayCapNhat = now;
+            await _orderRepository.ApplyStockMovementAsync(variant.MaSanPham, variant.MaBienSanPham, -requiredQuantity, "BanHang", "Xac nhan don hang va tru ton kho", "Order", order.MaDonHang);
         }
 
         foreach (var group in activeHolds.Where(h => !h.MaBienSanPham.HasValue).GroupBy(h => h.MaSanPham))
@@ -426,14 +424,7 @@ public class OrderService : IOrderService
             var product = await _orderRepository.GetProductAsync(group.Key)
                 ?? throw new BusinessException("San pham trong don hang khong ton tai.");
             var requiredQuantity = group.Sum(h => h.SoLuong);
-
-            if (product.SoLuongTon < requiredQuantity)
-            {
-                throw new BusinessException("So luong ton kho san pham khong du de xac nhan don hang.");
-            }
-
-            product.SoLuongTon -= requiredQuantity;
-            product.NgayCapNhat = now;
+            await _orderRepository.ApplyStockMovementAsync(product.MaSanPham, null, -requiredQuantity, "BanHang", "Xac nhan don hang va tru ton kho", "Order", order.MaDonHang);
         }
 
         foreach (var hold in activeHolds)
@@ -526,11 +517,6 @@ public class OrderService : IOrderService
         {
             order.InstallmentPlan.TrangThai = "Cancelled";
             order.InstallmentPlan.NgayCapNhat = now;
-            foreach (var term in order.InstallmentPlan.Terms.Where(t => t.TrangThai == "Pending"))
-            {
-                term.TrangThai = "Cancelled";
-                term.NgayCapNhat = now;
-            }
         }
 
         await _orderRepository.SaveChangesAsync();
@@ -595,59 +581,34 @@ public class OrderService : IOrderService
         var txnRef = TrimToNull(request.MaGiaoDich);
         var method = PaymentMethodOf(order);
 
-        if (request.MaKyTraGop.HasValue)
+        var pending = order.Payments
+            .Where(p => p.TrangThai == PendingPaymentRecordStatus)
+            .OrderBy(p => p.NgayTao)
+            .ThenBy(p => p.MaThanhToan)
+            .FirstOrDefault();
+
+        if (pending is not null)
         {
-            var plan = order.InstallmentPlan
-                ?? throw new BusinessException("Don hang khong co ho so tra gop.");
-            var term = plan.Terms.FirstOrDefault(t => t.MaKyTraGop == request.MaKyTraGop.Value)
-                ?? throw new NotFoundException("Khong tim thay ky tra gop.");
-
-            if (string.Equals(term.TrangThai, "Paid", StringComparison.OrdinalIgnoreCase))
+            pending.TrangThai = PaidPaymentStatus;
+            pending.DaThanhToanLuc = now;
+            if (txnRef is not null)
             {
-                throw new BusinessException("Ky tra gop nay da duoc thanh toan.");
+                pending.MaGiaoDich = txnRef;
             }
-
-            if (!DownPaymentPaid(order))
-            {
-                throw new BusinessException("Can xac nhan tien tra truoc truoc khi thu cac ky tra gop.");
-            }
-
-            term.TrangThai = "Paid";
-            term.NgayThanhToan = now;
-            term.NgayCapNhat = now;
-            order.Payments.Add(ConfirmedPayment(order, term.TongTien, method, "Installment", now, txnRef));
+        }
+        else if (string.Equals(order.LoaiDonHang, "Installment", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("Ho so tra gop da duoc duyet, khong thu tien hang thang tren web.");
         }
         else
         {
-            var pending = order.Payments
-                .Where(p => p.TrangThai == PendingPaymentRecordStatus)
-                .OrderBy(p => p.NgayTao)
-                .ThenBy(p => p.MaThanhToan)
-                .FirstOrDefault();
+            var remaining = ComputeOrderRemaining(order);
+            if (remaining <= 0)
+            {
+                throw new BusinessException("Don hang da thanh toan du.");
+            }
 
-            if (pending is not null)
-            {
-                pending.TrangThai = PaidPaymentStatus;
-                pending.DaThanhToanLuc = now;
-                if (txnRef is not null)
-                {
-                    pending.MaGiaoDich = txnRef;
-                }
-            }
-            else if (string.Equals(order.LoaiDonHang, "Installment", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new BusinessException("Vui long chon ky tra gop de xac nhan.");
-            }
-            else
-            {
-                var remaining = ComputeOrderRemaining(order);
-                if (remaining <= 0)
-                {
-                    throw new BusinessException("Don hang da thanh toan du.");
-                }
-
-                order.Payments.Add(ConfirmedPayment(order, remaining, method, "Remaining", now, txnRef));
-            }
+            order.Payments.Add(ConfirmedPayment(order, remaining, method, "Remaining", now, txnRef));
         }
 
         // The first successful payment confirms the order and deducts the reserved stock.
@@ -751,11 +712,6 @@ public class OrderService : IOrderService
         {
             order.InstallmentPlan.TrangThai = "Cancelled";
             order.InstallmentPlan.NgayCapNhat = now;
-            foreach (var term in order.InstallmentPlan.Terms.Where(t => t.TrangThai == "Pending"))
-            {
-                term.TrangThai = "Cancelled";
-                term.NgayCapNhat = now;
-            }
         }
 
         await _orderRepository.SaveChangesAsync();
@@ -821,18 +777,12 @@ public class OrderService : IOrderService
         {
             var plan = order.InstallmentPlan;
             var downPaid = DownPaymentPaid(order);
-            var allTermsPaid = plan.Terms.Count > 0 && plan.Terms.All(t => string.Equals(t.TrangThai, "Paid", StringComparison.OrdinalIgnoreCase));
 
-            if (downPaid && allTermsPaid)
-            {
-                order.TrangThaiThanhToan = PaidPaymentStatus;
-                plan.TrangThai = "Completed";
-                plan.NgayCapNhat = now;
-                order.NgayThanhToanThanhCong ??= now;
-            }
-            else if (downPaid)
+            if (downPaid)
             {
                 order.TrangThaiThanhToan = PartiallyPaidStatus;
+                plan.TrangThai = "Approved";
+                plan.NgayCapNhat = now;
             }
             else
             {
@@ -876,11 +826,7 @@ public class OrderService : IOrderService
 
         if (string.Equals(order.LoaiDonHang, "Installment", StringComparison.OrdinalIgnoreCase) && order.InstallmentPlan is not null)
         {
-            var nextTerm = order.InstallmentPlan.Terms
-                .Where(t => t.TrangThai == "Pending")
-                .OrderBy(t => t.KyThu)
-                .FirstOrDefault();
-            return nextTerm?.TongTien ?? 0;
+            return 0;
         }
 
         return ComputeOrderRemaining(order);
@@ -971,12 +917,22 @@ public class OrderService : IOrderService
     {
         if (!maBienSanPham.HasValue)
         {
-            if (await _orderRepository.ProductHasVariantsAsync(maSanPham))
+            // Giá nằm ở biến thể: tự chọn biến thể mặc định nếu sản phẩm chỉ có 1 biến thể đang bán.
+            var sellable = (await _orderRepository.GetVariantsByProductAsync(maSanPham))
+                .Where(v => string.Equals(v.TrangThai, AvailableProductStatus, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (sellable.Count == 1)
             {
-                throw new BusinessException("Vui long chon phien ban/mau sac truoc khi them vao gio hang.");
+                return sellable[0];
             }
 
-            return null;
+            if (sellable.Count == 0)
+            {
+                throw new BusinessException("San pham chua co bien the kha dung de ban.");
+            }
+
+            throw new BusinessException("Vui long chon phien ban/mau sac truoc khi them vao gio hang.");
         }
 
         var variant = await _orderRepository.GetVariantAsync(maBienSanPham.Value)
@@ -1014,7 +970,7 @@ public class OrderService : IOrderService
 
             item.Product = product;
             item.Variant = variant;
-            item.DonGia = GetUnitPrice(product, variant);
+            item.DonGia = GetUnitPrice(variant);
             item.NgayCapNhat = DateTime.UtcNow;
         }
     }
@@ -1128,8 +1084,7 @@ public class OrderService : IOrderService
             var variant = await _orderRepository.GetVariantAsync(group.Key)
                 ?? throw new BusinessException("Bien the san pham trong don hang khong ton tai.");
 
-            variant.SoLuongTon = (variant.SoLuongTon ?? 0) + group.Sum(h => h.SoLuong);
-            variant.NgayCapNhat = now;
+            await _orderRepository.ApplyStockMovementAsync(variant.MaSanPham, variant.MaBienSanPham, group.Sum(h => h.SoLuong), "HoanTon", confirmedHoldNote, "OrderCancel", order.MaDonHang);
         }
 
         foreach (var group in order.InventoryHolds
@@ -1139,8 +1094,7 @@ public class OrderService : IOrderService
             var product = await _orderRepository.GetProductAsync(group.Key)
                 ?? throw new BusinessException("San pham trong don hang khong ton tai.");
 
-            product.SoLuongTon += group.Sum(h => h.SoLuong);
-            product.NgayCapNhat = now;
+            await _orderRepository.ApplyStockMovementAsync(product.MaSanPham, null, group.Sum(h => h.SoLuong), "HoanTon", confirmedHoldNote, "OrderCancel", order.MaDonHang);
         }
 
         foreach (var hold in order.InventoryHolds.Where(h => h.TrangThai is "Active" or ConfirmedOrderStatus))
@@ -1319,24 +1273,8 @@ public class OrderService : IOrderService
                 -- (EF no longer reads them); safe to drop manually later if desired.
             END;
 
-            IF OBJECT_ID(N'dbo.KY_TRAGOP', N'U') IS NULL
-            BEGIN
-                CREATE TABLE dbo.KY_TRAGOP(
-                    MaKyTraGop INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-                    MaHoSoTraGop INT NOT NULL,
-                    KyThu INT NOT NULL,
-                    NgayDenHan DATETIME2(0) NOT NULL,
-                    SoTienGoc DECIMAL(18,2) NOT NULL,
-                    SoTienLai DECIMAL(18,2) NOT NULL,
-                    TongTien DECIMAL(18,2) NOT NULL,
-                    TrangThai VARCHAR(20) NOT NULL,
-                    NgayThanhToan DATETIME2(0) NULL,
-                    NgayTao DATETIME2(0) NOT NULL,
-                    NgayCapNhat DATETIME2(0) NOT NULL,
-                    CONSTRAINT FK_KY_TRAGOP_HOSO FOREIGN KEY (MaHoSoTraGop) REFERENCES dbo.HOSO_TRAGOP(MaHoSoTraGop) ON DELETE CASCADE
-                );
-                CREATE INDEX IX_KY_TRAGOP_HoSo ON dbo.KY_TRAGOP(MaHoSoTraGop, KyThu);
-            END;
+            IF OBJECT_ID(N'dbo.KY_TRAGOP', N'U') IS NOT NULL
+                DROP TABLE dbo.KY_TRAGOP;
             """);
     }
 
@@ -1390,7 +1328,7 @@ public class OrderService : IOrderService
             LaiSuatNam = annualRate,
             TongTienLai = interestTotal,
             TongPhaiTra = totalPayable,
-            TrangThai = "Active",
+            TrangThai = "Pending",
             NgayTao = now,
             NgayCapNhat = now,
             HoTenNguoiVay = application.HoTenNguoiVay.Trim(),
@@ -1405,32 +1343,6 @@ public class OrderService : IOrderService
             ThoiGianLamViecThang = application.ThoiGianLamViecThang,
             ThuNhapHangThang = application.ThuNhapHangThang
         };
-
-        var perPrincipal = Math.Round(principal / term, 0, MidpointRounding.AwayFromZero);
-        var perInterest = Math.Round(interestTotal / term, 0, MidpointRounding.AwayFromZero);
-        decimal accumulatedPrincipal = 0;
-        decimal accumulatedInterest = 0;
-
-        for (var k = 1; k <= term; k++)
-        {
-            // Last term absorbs rounding remainder so the schedule sums exactly.
-            var principalPart = k == term ? principal - accumulatedPrincipal : perPrincipal;
-            var interestPart = k == term ? interestTotal - accumulatedInterest : perInterest;
-            accumulatedPrincipal += principalPart;
-            accumulatedInterest += interestPart;
-
-            plan.Terms.Add(new InstallmentTerm
-            {
-                KyThu = k,
-                NgayDenHan = now.AddMonths(k),
-                SoTienGoc = principalPart,
-                SoTienLai = interestPart,
-                TongTien = principalPart + interestPart,
-                TrangThai = "Pending",
-                NgayTao = now,
-                NgayCapNhat = now
-            });
-        }
 
         return plan;
     }
@@ -1474,11 +1386,11 @@ public class OrderService : IOrderService
         };
     }
 
-    private static CartDto MapCart(Cart cart)
+    private static CartDto MapCart(Cart cart, IReadOnlyDictionary<int, string> imageMap)
     {
         var items = cart.Items
             .OrderBy(i => i.NgayTao)
-            .Select(MapCartItem)
+            .Select(item => MapCartItem(item, imageMap))
             .ToList();
 
         return new CartDto
@@ -1492,8 +1404,11 @@ public class OrderService : IOrderService
         };
     }
 
-    private static CartItemDto MapCartItem(CartItem item)
+    private static CartItemDto MapCartItem(CartItem item, IReadOnlyDictionary<int, string> imageMap)
     {
+        // Ưu tiên ảnh suy ra từ ANHSANPHAM (khớp ảnh ở trang sản phẩm), fallback cột denormalized.
+        var anhChinhUrl = imageMap.TryGetValue(item.MaSanPham, out var url) ? url : item.Product?.AnhChinhUrl;
+
         return new CartItemDto
         {
             MaChiTietGioHang = item.MaChiTietGioHang,
@@ -1504,7 +1419,8 @@ public class OrderService : IOrderService
             SKU = item.Variant?.SKU,
             SoLuong = item.SoLuong,
             DonGia = item.DonGia,
-            ThanhTien = item.DonGia * item.SoLuong
+            ThanhTien = item.DonGia * item.SoLuong,
+            AnhChinhUrl = anhChinhUrl
         };
     }
 
@@ -1662,21 +1578,7 @@ public class OrderService : IOrderService
             NgheNghiep = plan.NgheNghiep,
             TenCongTy = plan.TenCongTy,
             ThoiGianLamViecThang = plan.ThoiGianLamViecThang,
-            ThuNhapHangThang = plan.ThuNhapHangThang,
-            Terms = plan.Terms
-                .OrderBy(t => t.KyThu)
-                .Select(t => new InstallmentTermDto
-                {
-                    MaKyTraGop = t.MaKyTraGop,
-                    KyThu = t.KyThu,
-                    NgayDenHan = t.NgayDenHan,
-                    SoTienGoc = t.SoTienGoc,
-                    SoTienLai = t.SoTienLai,
-                    TongTien = t.TongTien,
-                    TrangThai = t.TrangThai,
-                    NgayThanhToan = t.NgayThanhToan
-                })
-                .ToList()
+            ThuNhapHangThang = plan.ThuNhapHangThang
         };
     }
 
@@ -1722,9 +1624,15 @@ public class OrderService : IOrderService
         };
     }
 
-    private static decimal GetUnitPrice(Product product, ProductVariant? variant)
+    // Giá nằm ở biến thể (BIENSANPHAM): GiaKhuyenMai ?? GiaGoc.
+    private static decimal GetUnitPrice(ProductVariant? variant)
     {
-        return variant?.GiaGhiDe ?? product.GiaKhuyenMai ?? product.GiaGoc;
+        if (variant is null)
+        {
+            throw new BusinessException("Khong xac dinh duoc gia san pham (thieu bien the).");
+        }
+
+        return variant.GiaKhuyenMai ?? variant.GiaGoc;
     }
 
     private static string NormalizeAllowedValue(string value, HashSet<string> allowedValues)

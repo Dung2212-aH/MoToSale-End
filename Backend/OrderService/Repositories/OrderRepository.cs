@@ -50,6 +50,39 @@ public class OrderRepository : IOrderRepository
         return await _dbContext.ProductVariants.AnyAsync(v => v.MaSanPham == maSanPham);
     }
 
+    public async Task<List<ProductVariant>> GetVariantsByProductAsync(int maSanPham)
+    {
+        return await _dbContext.ProductVariants
+            .Include(v => v.Product)
+            .Where(v => v.MaSanPham == maSanPham)
+            .OrderBy(v => v.MaBienSanPham)
+            .ToListAsync();
+    }
+
+    // Suy ra ảnh chính cho từng sản phẩm từ bảng ANHSANPHAM, cùng thứ tự ưu tiên với
+    // CatalogService để ảnh trong giỏ khớp ảnh hiển thị ở trang/danh sách sản phẩm.
+    public async Task<Dictionary<int, string>> GetPrimaryImageUrlsAsync(IEnumerable<int> maSanPhams)
+    {
+        var ids = maSanPhams.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return new Dictionary<int, string>();
+        }
+
+        var images = await _dbContext.ProductImages
+            .AsNoTracking()
+            .Where(i => ids.Contains(i.MaSanPham))
+            .OrderByDescending(i => i.MaBienSanPham != null)
+            .ThenByDescending(i => i.LaAnhChinh)
+            .ThenBy(i => i.ThuTuHienThi)
+            .ThenBy(i => i.MaAnhSanPham)
+            .ToListAsync();
+
+        return images
+            .GroupBy(i => i.MaSanPham)
+            .ToDictionary(g => g.Key, g => g.First().UrlAnh);
+    }
+
     public async Task<Cart?> GetActiveCartByUserIdAsync(int maNguoiDung)
     {
         return await _dbContext.Carts
@@ -106,17 +139,29 @@ public class OrderRepository : IOrderRepository
                     : h.MaBienSanPham == null))
             .SumAsync(h => (int?)h.SoLuong) ?? 0;
 
-        var stock = maBienSanPham.HasValue
-            ? await _dbContext.ProductVariants
-                .Where(v => v.MaBienSanPham == maBienSanPham.Value)
-                .Select(v => v.SoLuongTon ?? 0)
-                .FirstOrDefaultAsync()
-            : await _dbContext.Products
-                .Where(p => p.MaSanPham == maSanPham)
-                .Select(p => p.SoLuongTon)
-                .FirstOrDefaultAsync();
+        var stockSql = maBienSanPham.HasValue
+            ? $"SELECT ISNULL(SUM(SoLuongThucTe), 0) AS Value FROM dbo.TONKHO_HIENTAI WHERE MaSanPham = {maSanPham} AND MaBienSanPham = {maBienSanPham.Value}"
+            : $"SELECT ISNULL(SUM(SoLuongThucTe), 0) AS Value FROM dbo.TONKHO_HIENTAI WHERE MaSanPham = {maSanPham} AND MaBienSanPham IS NULL";
+        var stockRows = await _dbContext.Database.SqlQueryRaw<IntValueRow>(stockSql).ToListAsync();
+        var stock = stockRows.FirstOrDefault()?.Value ?? 0;
 
         return stock - held;
+    }
+
+    public async Task ApplyStockMovementAsync(int maSanPham, int? maBienSanPham, int soLuongThayDoi, string loaiBienDong, string lyDo, string loaiThamChieu, int? maThamChieu)
+    {
+        int? userId = null;
+        await _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            EXEC dbo.sp_TONKHO_ApDungBienDong
+                @MaSanPham = {maSanPham},
+                @MaBienSanPham = {maBienSanPham},
+                @LoaiBienDong = {loaiBienDong},
+                @SoLuongThayDoi = {soLuongThayDoi},
+                @LyDo = {lyDo},
+                @LoaiThamChieu = {loaiThamChieu},
+                @MaThamChieu = {maThamChieu},
+                @MaNguoiThucHien = {userId}
+            """);
     }
 
     public async Task CleanupExpiredInventoryHoldsAsync()
@@ -178,8 +223,7 @@ public class OrderRepository : IOrderRepository
             .Include(o => o.Vouchers)
             .Include(o => o.Histories)
             .Include(o => o.Payments)
-            .Include(o => o.InstallmentPlan!)
-            .ThenInclude(p => p.Terms)
+            .Include(o => o.InstallmentPlan)
             .Include(o => o.RefundRequests)
             .FirstOrDefaultAsync(o => o.MaDonHang == maDonHang);
     }
@@ -320,4 +364,9 @@ public class OrderRepository : IOrderRepository
     {
         return string.IsNullOrWhiteSpace(current) ? note : $"{current} | {note}";
     }
+}
+
+public class IntValueRow
+{
+    public int Value { get; set; }
 }

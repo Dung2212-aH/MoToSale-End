@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using System.Text;
 using CatalogService.Data;
 using CatalogService.Entities;
 using CatalogService.Services;
@@ -199,8 +198,6 @@ public class InventoryController : ControllerBase
 
         await EnsureSupportTablesAsync();
 
-        await using var transaction = await _db.Database.BeginTransactionAsync();
-        var now = DateTime.UtcNow;
         var userId = GetCurrentUserId();
 
         if (request.MaBienSanPham.HasValue)
@@ -213,16 +210,18 @@ public class InventoryController : ControllerBase
             }
 
             var product = await _db.Products.FirstAsync(x => x.MaSanPham == request.MaSanPham);
-            var before = variant.SoLuongTon ?? 0;
+            var before = await GetCurrentStockAsync(request.MaSanPham, request.MaBienSanPham);
             var after = CalculateNewStock(before, request.SoLuong, type);
             if (after < 0)
             {
                 return BadRequest(new { message = "Ton kho sau dieu chinh khong duoc am." });
             }
 
-            variant.SoLuongTon = after;
-            variant.NgayCapNhat = now;
-            await _db.SaveChangesAsync();
+            var delta = after - before;
+            if (delta != 0)
+            {
+                await ApplyStockMovementAsync(request.MaSanPham, request.MaBienSanPham, type, delta, request.LyDo, "InventoryAdjust", null, userId);
+            }
             await InsertAdjustmentLogAsync(product, variant, type, after - before, before, after, request.LyDo, userId);
             await _auditLog.WriteAsync(this, "Inventory", $"{request.MaSanPham}:{request.MaBienSanPham}", "Adjust", new { Stock = before }, new { Stock = after, Type = type, Quantity = request.SoLuong }, request.LyDo);
         }
@@ -233,23 +232,26 @@ public class InventoryController : ControllerBase
             {
                 return NotFound(new { message = "Khong tim thay san pham." });
             }
+            if (await _db.ProductVariants.AnyAsync(x => x.MaSanPham == request.MaSanPham))
+            {
+                return BadRequest(new { message = "San pham co bien the phai dieu chinh ton theo bien the/SKU." });
+            }
 
-            var before = product.SoLuongTon;
+            var before = await GetCurrentStockAsync(request.MaSanPham, null);
             var after = CalculateNewStock(before, request.SoLuong, type);
             if (after < 0)
             {
                 return BadRequest(new { message = "Ton kho sau dieu chinh khong duoc am." });
             }
 
-            product.SoLuongTon = after;
-            product.NgayCapNhat = now;
-            await _db.SaveChangesAsync();
+            var delta = after - before;
+            if (delta != 0)
+            {
+                await ApplyStockMovementAsync(request.MaSanPham, null, type, delta, request.LyDo, "InventoryAdjust", null, userId);
+            }
             await InsertAdjustmentLogAsync(product, null, type, after - before, before, after, request.LyDo, userId);
             await _auditLog.WriteAsync(this, "Inventory", request.MaSanPham.ToString(), "Adjust", new { Stock = before }, new { Stock = after, Type = type, Quantity = request.SoLuong }, request.LyDo);
         }
-
-        await _db.Database.ExecuteSqlRawAsync("EXEC sp_SANPHAM_DongBoTatCaSoLuongTon");
-        await transaction.CommitAsync();
 
         return Ok(new { message = "Dieu chinh ton kho thanh cong." });
     }
@@ -403,12 +405,15 @@ public class InventoryController : ControllerBase
                 {
                     return NotFound(new { message = $"Khong tim thay bien the #{item.MaBienSanPham}." });
                 }
-
-                before = variant.SoLuongTon ?? 0;
+                before = await GetCurrentStockAsync(item.MaSanPham, item.MaBienSanPham);
             }
             else
             {
-                before = product.SoLuongTon;
+                if (await _db.ProductVariants.AnyAsync(x => x.MaSanPham == item.MaSanPham))
+                {
+                    return BadRequest(new { message = $"San pham #{item.MaSanPham} co bien the phai lap phieu theo bien the/SKU." });
+                }
+                before = await GetCurrentStockAsync(item.MaSanPham, null);
             }
 
             var after = CalculateNewStock(before, item.SoLuong, type);
@@ -465,11 +470,15 @@ public class InventoryController : ControllerBase
             if (detail.MaBienSanPham.HasValue)
             {
                 variant = await _db.ProductVariants.FirstAsync(x => x.MaBienSanPham == detail.MaBienSanPham.Value);
-                before = variant.SoLuongTon ?? 0;
+                before = await GetCurrentStockAsync(detail.MaSanPham, detail.MaBienSanPham);
             }
             else
             {
-                before = product.SoLuongTon;
+                if (await _db.ProductVariants.AnyAsync(x => x.MaSanPham == detail.MaSanPham))
+                {
+                    return BadRequest(new { message = $"San pham {detail.TenSanPham} co bien the phai nhap/xuat theo bien the/SKU." });
+                }
+                before = await GetCurrentStockAsync(detail.MaSanPham, null);
             }
 
             var after = before + detail.SoLuongThayDoi;
@@ -483,18 +492,11 @@ public class InventoryController : ControllerBase
                 return BadRequest(new { message = $"Ton kho sau duyet cua {detail.TenSanPham} khong duoc am." });
             }
 
-            if (variant is not null)
+            var delta = after - before;
+            if (delta != 0)
             {
-                variant.SoLuongTon = after;
-                variant.NgayCapNhat = now;
+                await ApplyStockMovementAsync(detail.MaSanPham, detail.MaBienSanPham, document.LoaiPhieu, delta, document.MaPhieu, "StockDocument", id, userId);
             }
-            else
-            {
-                product.SoLuongTon = after;
-                product.NgayCapNhat = now;
-            }
-
-            await _db.SaveChangesAsync();
             await InsertAdjustmentLogAsync(product, variant, document.LoaiPhieu, after - before, before, after, document.MaPhieu, userId);
         }
 
@@ -503,7 +505,6 @@ public class InventoryController : ControllerBase
             SET TrangThai = N'Approved', MaNguoiDuyet = {userId}, NgayDuyet = {now}, NgayCapNhat = {now}
             WHERE MaPhieuKho = {id}
             """);
-        await _db.Database.ExecuteSqlRawAsync("EXEC sp_SANPHAM_DongBoTatCaSoLuongTon");
         await _auditLog.WriteAsync(this, "InventoryDocument", id.ToString(), "Approve", new { document.TrangThai }, new { TrangThai = "Approved" }, document.MaPhieu);
         await transaction.CommitAsync();
 
@@ -540,7 +541,7 @@ public class InventoryController : ControllerBase
     public async Task<IActionResult> Sync()
     {
         await EnsureSupportTablesAsync();
-        await _db.Database.ExecuteSqlRawAsync("EXEC sp_SANPHAM_DongBoTatCaSoLuongTon");
+        await _db.Database.ExecuteSqlRawAsync("EXEC dbo.sp_TONKHO_DongBoCotCu");
         await _db.Database.ExecuteSqlInterpolatedAsync($"""
             MERGE dbo.TONKHO_META AS target
             USING (SELECT N'LastSyncAt' AS [Key]) AS source
@@ -550,36 +551,6 @@ public class InventoryController : ControllerBase
             """);
         await _auditLog.WriteAsync(this, "Inventory", "All", "Sync", null, new { SyncedAt = DateTime.UtcNow });
         return Ok(new { message = "Dong bo ton kho thanh cong." });
-    }
-
-    [HttpGet("export")]
-    public async Task<IActionResult> Export([FromQuery] InventorySearchRequest request)
-    {
-        await EnsureSupportTablesAsync();
-        var rows = ApplySort(ApplyFilters(await LoadInventoryRowsAsync(), request), request.SortBy, request.SortDirection).ToList();
-        var csv = new StringBuilder();
-        csv.AppendLine("Mã sản phẩm\tMã SP\tMã biến thể\tSKU\tTên sản phẩm\tTên biến thể\tTồn thực tế\tĐang giữ chỗ\tTồn khả dụng\tNgưỡng tồn thấp\tTrạng thái tồn\tNgày cập nhật");
-        foreach (var row in rows)
-        {
-            csv.AppendLine(string.Join("\t", new[]
-            {
-                row.MaSanPham.ToString(),
-                EscapeTsv(row.MaSanPhamKinhDoanh),
-                row.MaBienSanPham?.ToString() ?? "",
-                EscapeTsv(row.SKU),
-                EscapeTsv(FixMojibake(row.TenSanPham)),
-                EscapeTsv(FixMojibake(row.TenBienThe)),
-                row.TonKhoThucTe.ToString(),
-                row.SoLuongDangGiu.ToString(),
-                row.TonKhoKhaDung.ToString(),
-                row.MucCanhBaoTonThap.ToString(),
-                EscapeTsv(LocalizeStockStatus(row.TrangThaiTon)),
-                EscapeTsv(row.NgayCapNhat.ToString("dd/MM/yyyy HH:mm:ss"))
-            }));
-        }
-
-        var unicode = Encoding.Unicode;
-        return File(unicode.GetPreamble().Concat(unicode.GetBytes(csv.ToString())).ToArray(), "text/tab-separated-values; charset=utf-16", $"inventory-{DateTime.UtcNow:yyyyMMddHHmmss}.xls");
     }
 
     private async Task<List<InventoryRow>> LoadInventoryRowsAsync()
@@ -683,6 +654,39 @@ public class InventoryController : ControllerBase
         ).ToListAsync();
 
         return DateTime.TryParse(values.FirstOrDefault()?.Value, out var value) ? value : null;
+    }
+
+    private async Task<int> GetCurrentStockAsync(int maSanPham, int? maBienSanPham)
+    {
+        var sql = maBienSanPham.HasValue
+            ? $"SELECT ISNULL(MAX(SoLuongThucTe), 0) AS Value FROM dbo.TONKHO_HIENTAI WHERE MaSanPham = {maSanPham} AND MaBienSanPham = {maBienSanPham.Value}"
+            : $"SELECT ISNULL(MAX(SoLuongThucTe), 0) AS Value FROM dbo.TONKHO_HIENTAI WHERE MaSanPham = {maSanPham} AND MaBienSanPham IS NULL";
+
+        var rows = await _db.Database.SqlQueryRaw<IntValueRow>(sql).ToListAsync();
+        return rows.FirstOrDefault()?.Value ?? 0;
+    }
+
+    private Task ApplyStockMovementAsync(
+        int maSanPham,
+        int? maBienSanPham,
+        string loaiBienDong,
+        int soLuongThayDoi,
+        string? lyDo,
+        string? loaiThamChieu,
+        int? maThamChieu,
+        int? maNguoiThucHien)
+    {
+        return _db.Database.ExecuteSqlInterpolatedAsync($"""
+            EXEC dbo.sp_TONKHO_ApDungBienDong
+                @MaSanPham = {maSanPham},
+                @MaBienSanPham = {maBienSanPham},
+                @LoaiBienDong = {loaiBienDong},
+                @SoLuongThayDoi = {soLuongThayDoi},
+                @LyDo = {lyDo},
+                @LoaiThamChieu = {loaiThamChieu},
+                @MaThamChieu = {maThamChieu},
+                @MaNguoiThucHien = {maNguoiThucHien}
+            """);
     }
 
     private async Task InsertAdjustmentLogAsync(Product product, ProductVariant? variant, string type, int delta, int before, int after, string reason, int? userId)
@@ -824,69 +828,6 @@ public class InventoryController : ControllerBase
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
-
-    private static string EscapeTsv(string? value)
-    {
-        if (string.IsNullOrEmpty(value)) return "";
-        return value
-            .Replace("\r", " ", StringComparison.Ordinal)
-            .Replace("\n", " ", StringComparison.Ordinal)
-            .Replace("\t", " ", StringComparison.Ordinal);
-    }
-
-    private static string LocalizeStockStatus(string? status)
-    {
-        return status switch
-        {
-            "OutOfStock" => "Hết hàng",
-            "LowStock" => "Sắp hết",
-            "InStock" => "Còn hàng",
-            _ => status ?? ""
-        };
-    }
-
-    private static string? FixMojibake(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value) || !LooksLikeMojibake(value))
-        {
-            return value;
-        }
-
-        try
-        {
-            var bytes = value.Select(ch => ch <= byte.MaxValue ? (byte)ch : (byte)'?').ToArray();
-            var decoded = Encoding.UTF8.GetString(bytes);
-            if (decoded.Contains('\uFFFD') ||
-                decoded.Count(ch => ch == '?') > value.Count(ch => ch == '?') ||
-                CountMojibakeMarkers(decoded) >= CountMojibakeMarkers(value))
-            {
-                return value;
-            }
-
-            return decoded;
-        }
-        catch
-        {
-            return value;
-        }
-    }
-
-    private static bool LooksLikeMojibake(string value)
-    {
-        return value.Contains("áº", StringComparison.Ordinal) ||
-               value.Contains("á»", StringComparison.Ordinal) ||
-               value.Contains("Ã", StringComparison.Ordinal) ||
-               value.Contains("Â", StringComparison.Ordinal) ||
-               value.Contains("Ä", StringComparison.Ordinal) ||
-               value.Contains("Æ", StringComparison.Ordinal) ||
-               value.Contains("â€", StringComparison.Ordinal);
-    }
-
-    private static int CountMojibakeMarkers(string value)
-    {
-        var markers = new[] { "áº", "á»", "Ã", "Â", "Ä", "Æ", "â€" };
-        return markers.Sum(marker => value.Split(marker, StringSplitOptions.None).Length - 1);
-    }
 }
 
 public class InventorySearchRequest
@@ -994,6 +935,11 @@ public class InventoryMetaRow
 {
     public string Key { get; set; } = "";
     public string? Value { get; set; }
+}
+
+public class IntValueRow
+{
+    public int Value { get; set; }
 }
 
 public class InventoryDocumentIdRow

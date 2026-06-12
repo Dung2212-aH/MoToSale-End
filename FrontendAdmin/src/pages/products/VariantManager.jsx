@@ -26,7 +26,8 @@ const VariantManager = ({ productId, onClose }) => {
     sku: '',
     phienBan: '',
     mauSac: '',
-    giaGhiDe: '',
+    giaGoc: '',
+    giaKhuyenMai: '',
     soLuongTon: '',
     trangThai: 'Available',
   });
@@ -65,7 +66,7 @@ const VariantManager = ({ productId, onClose }) => {
 
   const openAdd = () => {
     setEditVariant(null);
-    setForm({ tenBienThe: '', sku: '', phienBan: '', mauSac: '', giaGhiDe: '', soLuongTon: '', trangThai: 'Available' });
+    setForm({ tenBienThe: '', sku: '', phienBan: '', mauSac: '', giaGoc: '', giaKhuyenMai: '', soLuongTon: '', trangThai: 'Available' });
     setShowForm(true);
   };
 
@@ -76,7 +77,8 @@ const VariantManager = ({ productId, onClose }) => {
       sku: v.sku || '',
       phienBan: v.phienBan || v.version || '',
       mauSac: v.mauSac || v.color || '',
-      giaGhiDe: v.giaGhiDe || v.overridePrice || '',
+      giaGoc: v.giaGoc ?? '',
+      giaKhuyenMai: v.giaKhuyenMai ?? '',
       soLuongTon: v.soLuongTon ?? v.stock ?? '',
       trangThai: v.trangThai || v.status || 'Available',
     });
@@ -177,13 +179,22 @@ const VariantManager = ({ productId, onClose }) => {
       alert('Tên biến thể là bắt buộc!');
       return;
     }
+    if (!(Number(form.giaGoc) > 0)) {
+      alert('Giá gốc của biến thể phải lớn hơn 0!');
+      return;
+    }
     setSaving(true);
     try {
+      // Giá thật nằm ở biến thể: giaGoc (bắt buộc) + giaKhuyenMai (tùy chọn).
+      // Backend: giaKhuyenMai <= 0 -> bỏ khuyến mãi (lưu null).
       const payload = {
         ...form,
-        giaGhiDe: Number(form.giaGhiDe) || 0,
+        giaGoc: Number(form.giaGoc) || 0,
+        giaKhuyenMai: Number(form.giaKhuyenMai) || 0,
       };
       if (editVariant) {
+        // Backend bỏ qua soLuongTon khi update; gửi chuỗi rỗng còn gây lỗi 400 binding
+        delete payload.soLuongTon;
         await productService.updateVariant(productId, getVariantId(editVariant), payload);
       } else {
         payload.soLuongTon = Number(form.soLuongTon) || 0;
@@ -254,6 +265,12 @@ const VariantManager = ({ productId, onClose }) => {
                           <div className="mt-2 d-flex flex-wrap" style={{ gap: 6 }}>
                             {(variant.phienBan || variant.version) && <span className="badge badge-light">{variant.phienBan || variant.version}</span>}
                             {(variant.mauSac || variant.color) && <span className="badge badge-info">{variant.mauSac || variant.color}</span>}
+                            <span className="badge badge-dark">
+                              Giá: {Number(variant.giaKhuyenMai ?? variant.giaGoc ?? 0).toLocaleString('vi-VN')}đ
+                              {variant.giaKhuyenMai != null && Number(variant.giaKhuyenMai) > 0 && Number(variant.giaKhuyenMai) < Number(variant.giaGoc) && (
+                                <span className="ml-1 text-decoration-line-through" style={{ opacity: 0.6 }}>{Number(variant.giaGoc).toLocaleString('vi-VN')}đ</span>
+                              )}
+                            </span>
                             <span className="badge badge-secondary">Tồn: {variant.soLuongTon ?? variant.stock ?? 0}</span>
                             <span className={`badge badge-${(variant.trangThai || variant.status) === 'Available' ? 'success' : 'secondary'}`}>
                               {(variant.trangThai || variant.status) === 'Available' ? 'Hoạt động' : 'Ngừng'}
@@ -362,18 +379,16 @@ const VariantManager = ({ productId, onClose }) => {
                       </div>
                       <div className="col-md-3">
                         <div className="form-group">
-                          <label>Giá ghi đè</label>
-                          <input type="number" className="form-control form-control-sm" name="giaGhiDe" value={form.giaGhiDe} onChange={handleChange} min="0" />
+                          <label>Giá gốc <span className="text-danger">*</span></label>
+                          <input type="number" className="form-control form-control-sm" name="giaGoc" value={form.giaGoc} onChange={handleChange} min="0" />
                         </div>
                       </div>
-                      {!editVariant && (
-                        <div className="col-md-3">
-                          <div className="form-group">
-                            <label>Tồn kho ban đầu</label>
-                            <input type="number" className="form-control form-control-sm" name="soLuongTon" value={form.soLuongTon} onChange={handleChange} min="0" />
-                          </div>
+                      <div className="col-md-3">
+                        <div className="form-group">
+                          <label>Giá khuyến mãi</label>
+                          <input type="number" className="form-control form-control-sm" name="giaKhuyenMai" value={form.giaKhuyenMai} onChange={handleChange} min="0" />
                         </div>
-                      )}
+                      </div>
                       <div className="col-md-3">
                         <div className="form-group">
                           <label>Trạng thái</label>
@@ -384,6 +399,16 @@ const VariantManager = ({ productId, onClose }) => {
                         </div>
                       </div>
                     </div>
+                    {!editVariant && (
+                      <div className="row">
+                        <div className="col-md-3">
+                          <div className="form-group">
+                            <label>Tồn kho ban đầu</label>
+                            <input type="number" className="form-control form-control-sm" name="soLuongTon" value={form.soLuongTon} onChange={handleChange} min="0" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <button type="submit" className="btn btn-primary btn-sm mr-2" disabled={saving}>
                       {saving ? 'Đang lưu...' : 'Lưu'}
                     </button>

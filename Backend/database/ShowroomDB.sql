@@ -1703,7 +1703,7 @@ ALTER TABLE [dbo].[DONHANG]  WITH NOCHECK ADD  CONSTRAINT [CK_DONHANG_TrangThaiV
 GO
 ALTER TABLE [dbo].[DONHANG] CHECK CONSTRAINT [CK_DONHANG_TrangThaiVanChuyen]
 GO
-ALTER TABLE [dbo].[THANHTOAN]  WITH CHECK ADD  CONSTRAINT [CK_THANHTOAN_LoaiThanhToan] CHECK  (([LoaiThanhToan]='Installment' OR [LoaiThanhToan]='Remaining' OR [LoaiThanhToan]='Deposit' OR [LoaiThanhToan]='Full'))
+ALTER TABLE [dbo].[THANHTOAN]  WITH CHECK ADD  CONSTRAINT [CK_THANHTOAN_LoaiThanhToan] CHECK  (([LoaiThanhToan]='Remaining' OR [LoaiThanhToan]='Deposit' OR [LoaiThanhToan]='Full'))
 GO
 ALTER TABLE [dbo].[THANHTOAN] CHECK CONSTRAINT [CK_THANHTOAN_LoaiThanhToan]
 GO

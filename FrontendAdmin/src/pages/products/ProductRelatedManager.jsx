@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import productService from '../../services/productService';
 import { formatCurrency } from '../../utils/formatCurrency';
+import { fetchAllPages } from '../../utils/fetchAllPages';
 
 const emptyForm = { relatedProductId: '', relationType: 'Accessory', note: '', sortOrder: 0 };
 const relationLabels = {
@@ -30,10 +31,11 @@ const ProductRelatedManager = ({ product, onClose }) => {
     try {
       const [relatedRes, productRes] = await Promise.all([
         productService.getRelatedProducts(productId),
-        productService.getAll({ page: 1, pageSize: 500 }),
+        // Server clamp pageSize về 100 → gọi theo trang để picker đủ toàn bộ sản phẩm
+        fetchAllPages((params) => productService.getAll(params)),
       ]);
       setItems(relatedRes.data.items || relatedRes.data || []);
-      setProducts(productRes.data.items || productRes.data.data || productRes.data || []);
+      setProducts(productRes.items);
     } catch (err) {
       setError(err?.response?.data?.message || 'Không thể tải danh sách sản phẩm bán kèm.');
     } finally {

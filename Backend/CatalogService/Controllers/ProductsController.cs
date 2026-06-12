@@ -77,11 +77,6 @@ public class ProductsController : ControllerBase
             return BadRequest(new { message = "Danh muc la bat buoc." });
         }
 
-        if (!request.GiaGoc.HasValue || request.GiaGoc.Value <= 0)
-        {
-            return BadRequest(new { message = "Gia goc phai lon hon 0." });
-        }
-
         if (!await _dbContext.Categories.AnyAsync(c => c.MaDanhMuc == request.MaDanhMuc.Value))
         {
             return BadRequest(new { message = "Danh muc khong hop le." });
@@ -134,9 +129,6 @@ public class ProductsController : ControllerBase
             MaHangXe = NormalizeProductType(request.LoaiSanPham) == "PhuTung" ? null : request.MaHangXe,
             MaDongXe = NormalizeProductType(request.LoaiSanPham) == "PhuTung" ? null : request.MaDongXe,
             MoTaNgan = request.MoTaNgan,
-            GiaGoc = request.GiaGoc.Value,
-            GiaKhuyenMai = request.GiaKhuyenMai,
-            SoLuongTon = request.SoLuongTon ?? 0,
             AnhChinhUrl = request.AnhChinhUrl,
             TrangThaiSanPham = string.IsNullOrWhiteSpace(request.TrangThaiSanPham) ? "Available" : request.TrangThaiSanPham,
             DangHoatDong = request.DangHoatDong ?? true,
@@ -155,17 +147,9 @@ public class ProductsController : ControllerBase
             product.MaDanhMuc,
             product.MaHangXe,
             product.MaDongXe,
-            product.GiaGoc,
-            product.GiaKhuyenMai,
             product.TrangThaiSanPham,
             product.DangHoatDong
         });
-
-        if (product.SoLuongTon > 0)
-        {
-            await EnsureInventoryAuditTableAsync();
-            await InsertInventoryAuditLogAsync(product, null, "Initial", product.SoLuongTon, 0, product.SoLuongTon, "Ton kho ban dau khi tao san pham");
-        }
 
         return CreatedAtAction(nameof(GetProductById), new { id = product.MaSanPham }, new { id = product.MaSanPham });
     }
@@ -186,8 +170,6 @@ public class ProductsController : ControllerBase
             product.MaHangXe,
             product.MaDongXe,
             product.MoTaNgan,
-            product.GiaGoc,
-            product.GiaKhuyenMai,
             product.AnhChinhUrl,
             product.TrangThaiSanPham,
             product.DangHoatDong
@@ -195,8 +177,15 @@ public class ProductsController : ControllerBase
 
         var nextType = string.IsNullOrWhiteSpace(request.LoaiSanPham) ? product.LoaiSanPham : request.LoaiSanPham;
         var nextCategoryId = request.MaDanhMuc ?? product.MaDanhMuc;
-        var nextBrandId = NormalizeProductType(nextType) == "PhuTung" ? null : request.MaHangXe ?? product.MaHangXe;
-        var nextModelId = NormalizeProductType(nextType) == "PhuTung" ? null : request.MaDongXe ?? product.MaDongXe;
+        // UPDATE-only clear semantics: an explicit non-positive id means "clear the field".
+        int? requestedBrandId = request.MaHangXe.HasValue
+            ? (request.MaHangXe.Value > 0 ? request.MaHangXe.Value : (int?)null)
+            : product.MaHangXe;
+        int? requestedModelId = request.MaDongXe.HasValue
+            ? (request.MaDongXe.Value > 0 ? request.MaDongXe.Value : (int?)null)
+            : product.MaDongXe;
+        var nextBrandId = NormalizeProductType(nextType) == "PhuTung" ? null : requestedBrandId;
+        var nextModelId = NormalizeProductType(nextType) == "PhuTung" ? null : requestedModelId;
 
         var businessRuleError = await ValidateProductBusinessRulesAsync(nextType, nextCategoryId, nextBrandId, nextModelId);
         if (businessRuleError is not null)
@@ -216,12 +205,10 @@ public class ProductsController : ControllerBase
         }
         else
         {
-            if (request.MaHangXe.HasValue) product.MaHangXe = request.MaHangXe;
-            if (request.MaDongXe.HasValue) product.MaDongXe = request.MaDongXe;
+            if (request.MaHangXe.HasValue) product.MaHangXe = request.MaHangXe.Value > 0 ? request.MaHangXe.Value : null;
+            if (request.MaDongXe.HasValue) product.MaDongXe = request.MaDongXe.Value > 0 ? request.MaDongXe.Value : null;
         }
         if (request.MoTaNgan != null) product.MoTaNgan = request.MoTaNgan;
-        if (request.GiaGoc.HasValue) product.GiaGoc = request.GiaGoc.Value;
-        if (request.GiaKhuyenMai.HasValue) product.GiaKhuyenMai = request.GiaKhuyenMai;
         if (request.AnhChinhUrl != null) product.AnhChinhUrl = request.AnhChinhUrl;
         if (request.TrangThaiSanPham != null) product.TrangThaiSanPham = request.TrangThaiSanPham;
         if (request.DangHoatDong.HasValue) product.DangHoatDong = request.DangHoatDong.Value;
@@ -238,8 +225,6 @@ public class ProductsController : ControllerBase
             product.MaHangXe,
             product.MaDongXe,
             product.MoTaNgan,
-            product.GiaGoc,
-            product.GiaKhuyenMai,
             product.AnhChinhUrl,
             product.TrangThaiSanPham,
             product.DangHoatDong
@@ -502,7 +487,8 @@ public class ProductsController : ControllerBase
                 sku = v.SKU,
                 phienBan = v.PhienBan,
                 mauSac = v.MauSac,
-                giaGhiDe = v.GiaGhiDe,
+                giaGoc = v.GiaGoc,
+                giaKhuyenMai = v.GiaKhuyenMai,
                 soLuongTon = v.SoLuongTon,
                 trangThai = v.TrangThai,
                 ngayTao = v.NgayTao
@@ -527,8 +513,9 @@ public class ProductsController : ControllerBase
             SKU = request.Sku?.Trim() ?? "",
             PhienBan = request.PhienBan?.Trim(),
             MauSac = request.MauSac?.Trim(),
-            GiaGhiDe = request.GiaGhiDe,
-            SoLuongTon = request.SoLuongTon ?? 0,
+            GiaGoc = request.GiaGoc ?? 0m,
+            GiaKhuyenMai = request.GiaKhuyenMai.HasValue && request.GiaKhuyenMai.Value > 0 ? request.GiaKhuyenMai : null,
+            SoLuongTon = 0,
             TrangThai = request.TrangThai ?? "Available",
             NgayTao = now,
             NgayCapNhat = now
@@ -538,11 +525,13 @@ public class ProductsController : ControllerBase
         await _dbContext.SaveChangesAsync();
         await _auditLog.WriteAsync(this, "ProductVariant", variant.MaBienSanPham.ToString(), "Create", null, variant);
 
-        if ((variant.SoLuongTon ?? 0) > 0)
+        var initialStock = request.SoLuongTon ?? 0;
+        if (initialStock > 0)
         {
             var product = await _dbContext.Products.FirstAsync(p => p.MaSanPham == productId);
             await EnsureInventoryAuditTableAsync();
-            await InsertInventoryAuditLogAsync(product, variant, "Initial", variant.SoLuongTon ?? 0, 0, variant.SoLuongTon ?? 0, "Ton kho ban dau khi tao bien the");
+            await ApplyStockMovementAsync(product.MaSanPham, variant.MaBienSanPham, "TonDauKy", initialStock, "Ton kho ban dau khi tao bien the", "ProductVariantCreate", variant.MaBienSanPham);
+            await InsertInventoryAuditLogAsync(product, variant, "Initial", initialStock, 0, initialStock, "Ton kho ban dau khi tao bien the");
         }
         return Ok(new { id = variant.MaBienSanPham, message = "Thêm biến thể thành công." });
     }
@@ -559,7 +548,8 @@ public class ProductsController : ControllerBase
             variant.SKU,
             variant.PhienBan,
             variant.MauSac,
-            variant.GiaGhiDe,
+            variant.GiaGoc,
+            variant.GiaKhuyenMai,
             variant.TrangThai
         };
 
@@ -567,7 +557,8 @@ public class ProductsController : ControllerBase
         if (request.Sku != null) variant.SKU = request.Sku.Trim();
         if (request.PhienBan != null) variant.PhienBan = request.PhienBan.Trim();
         if (request.MauSac != null) variant.MauSac = request.MauSac.Trim();
-        if (request.GiaGhiDe.HasValue) variant.GiaGhiDe = request.GiaGhiDe;
+        if (request.GiaGoc.HasValue) variant.GiaGoc = request.GiaGoc.Value;
+        if (request.GiaKhuyenMai.HasValue) variant.GiaKhuyenMai = request.GiaKhuyenMai.Value > 0 ? request.GiaKhuyenMai.Value : null;
         if (request.TrangThai != null) variant.TrangThai = request.TrangThai;
         variant.NgayCapNhat = DateTime.UtcNow;
 
@@ -1116,6 +1107,29 @@ public class ProductsController : ControllerBase
         return int.TryParse(value, out var id) ? id : null;
     }
 
+    private Task ApplyStockMovementAsync(
+        int maSanPham,
+        int? maBienSanPham,
+        string loaiBienDong,
+        int soLuongThayDoi,
+        string? lyDo,
+        string? loaiThamChieu,
+        int? maThamChieu)
+    {
+        var userId = GetCurrentUserId();
+        return _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            EXEC dbo.sp_TONKHO_ApDungBienDong
+                @MaSanPham = {maSanPham},
+                @MaBienSanPham = {maBienSanPham},
+                @LoaiBienDong = {loaiBienDong},
+                @SoLuongThayDoi = {soLuongThayDoi},
+                @LyDo = {lyDo},
+                @LoaiThamChieu = {loaiThamChieu},
+                @MaThamChieu = {maThamChieu},
+                @MaNguoiThucHien = {userId}
+            """);
+    }
+
     // ===== San pham ban kem / lien quan =====
 
     [HttpGet("{id:int}/related")]
@@ -1133,9 +1147,23 @@ public class ProductsController : ControllerBase
             .Where(p => relatedIds.Contains(p.MaSanPham))
             .ToDictionaryAsync(p => p.MaSanPham);
 
+        // Giá & tồn tổng hợp từ biến thể (giá thật nằm ở BIENSANPHAM).
+        var variantAgg = await _dbContext.ProductVariants.AsNoTracking()
+            .Where(v => relatedIds.Contains(v.MaSanPham))
+            .GroupBy(v => v.MaSanPham)
+            .Select(g => new
+            {
+                MaSanPham = g.Key,
+                TongTon = g.Sum(x => x.SoLuongTon ?? 0),
+                ListPrice = g.Min(x => (decimal?)x.GiaGoc) ?? 0,
+                SalePrice = g.Min(x => (decimal?)(x.GiaKhuyenMai ?? x.GiaGoc))
+            })
+            .ToDictionaryAsync(x => x.MaSanPham);
+
         var items = rels.Select(r =>
         {
             products.TryGetValue(r.MaSanPhamLienQuan, out var p);
+            variantAgg.TryGetValue(r.MaSanPhamLienQuan, out var agg);
             return new
             {
                 id = r.MaLienQuan,
@@ -1145,9 +1173,9 @@ public class ProductsController : ControllerBase
                 sortOrder = r.ThuTuHienThi,
                 relatedProductCode = p?.MaSanPhamKinhDoanh,
                 relatedProductName = p?.TenSanPham,
-                stockTotal = p?.SoLuongTon ?? 0,
-                listPrice = p?.GiaGoc ?? 0,
-                salePrice = p?.GiaKhuyenMai
+                stockTotal = agg?.TongTon ?? 0,
+                listPrice = agg?.ListPrice ?? 0,
+                salePrice = agg?.SalePrice
             };
         }).ToList();
 
@@ -1341,7 +1369,7 @@ public class ProductsController : ControllerBase
                 productName = product.TenSanPham,
                 variantName = v.TenBienThe,
                 barcode = v.SKU,
-                price = v.GiaGhiDe ?? product.GiaKhuyenMai ?? product.GiaGoc
+                price = v.GiaKhuyenMai ?? v.GiaGoc
             })
             .ToListAsync();
 
@@ -1378,7 +1406,8 @@ public class VariantRequest
     public string? Sku { get; set; }
     public string? PhienBan { get; set; }
     public string? MauSac { get; set; }
-    public decimal? GiaGhiDe { get; set; }
+    public decimal? GiaGoc { get; set; }
+    public decimal? GiaKhuyenMai { get; set; }
     public int? SoLuongTon { get; set; }
     public string? TrangThai { get; set; }
 }
@@ -1393,9 +1422,6 @@ public class UpdateProductRequest
     public int? MaHangXe { get; set; }
     public int? MaDongXe { get; set; }
     public string? MoTaNgan { get; set; }
-    public decimal? GiaGoc { get; set; }
-    public decimal? GiaKhuyenMai { get; set; }
-    public int? SoLuongTon { get; set; }
     public string? AnhChinhUrl { get; set; }
     public string? TrangThaiSanPham { get; set; }
     public bool? DangHoatDong { get; set; }

@@ -61,12 +61,14 @@ const ProductList = ({ productType = 'XeMay' }) => {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
+  const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterBrand, setFilterBrand] = useState('');
+  const [filterModel, setFilterModel] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
 
   const [page, setPage] = useState(1);
@@ -119,6 +121,12 @@ const ProductList = ({ productType = 'XeMay' }) => {
     return categories.filter((category) => allowedIds.has(Number(getCategoryId(category))));
   }, [categories, config.rootNames]);
 
+  const filteredModels = useMemo(() => {
+    if (!config.showBrand) return [];
+    if (!filterBrand) return models;
+    return models.filter((model) => String(model.maHangXe || model.hangXeId || model.brandId) === String(filterBrand));
+  }, [models, filterBrand, config.showBrand]);
+
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -130,6 +138,7 @@ const ProductList = ({ productType = 'XeMay' }) => {
         keyword: search || undefined,
         maDanhMuc: filterCategory || undefined,
         maHangXe: config.showBrand ? filterBrand || undefined : undefined,
+        maDongXe: config.showBrand ? filterModel || undefined : undefined,
         trangThaiSanPham: filterStatus || undefined,
       };
       const res = await productService.getAll(params);
@@ -149,13 +158,14 @@ const ProductList = ({ productType = 'XeMay' }) => {
     } finally {
       setLoading(false);
     }
-  }, [page, search, filterCategory, filterBrand, filterStatus, productType, config.showBrand]);
+  }, [page, search, filterCategory, filterBrand, filterModel, filterStatus, productType, config.showBrand]);
 
   const fetchFilters = async () => {
     try {
-      const [catRes, brandRes] = await Promise.allSettled([
+      const [catRes, brandRes, modelRes] = await Promise.allSettled([
         categoryService.getAll(),
-        brandService.getAll(),
+        brandService.getAll({ pageSize: 300 }),
+        brandService.getAllModels({ page: 1, pageSize: 1000 }),
       ]);
       if (catRes.status === 'fulfilled') {
         const data = catRes.value.data;
@@ -164,6 +174,10 @@ const ProductList = ({ productType = 'XeMay' }) => {
       if (brandRes.status === 'fulfilled') {
         const data = brandRes.value.data;
         setBrands(Array.isArray(data) ? data : data.items || data.data || []);
+      }
+      if (modelRes.status === 'fulfilled') {
+        const data = modelRes.value.data;
+        setModels(Array.isArray(data) ? data : data.items || data.data || []);
       }
     } catch (err) {
       console.error('Lỗi tải bộ lọc:', err);
@@ -284,10 +298,20 @@ const ProductList = ({ productType = 'XeMay' }) => {
                 </div>
                 {config.showBrand && (
                   <div className="col-md-2">
-                    <select className="form-control form-control-sm" value={filterBrand} onChange={(e) => { setFilterBrand(e.target.value); setPage(1); }}>
+                    <select className="form-control form-control-sm" value={filterBrand} onChange={(e) => { setFilterBrand(e.target.value); setFilterModel(''); setPage(1); }}>
                       <option value="">{config.brandPlaceholder}</option>
                       {brands.map((brand) => (
                         <option key={brand.maHangXe || brand.id} value={brand.maHangXe || brand.id}>{brand.tenHang || brand.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {config.showBrand && (
+                  <div className="col-md-2">
+                    <select className="form-control form-control-sm" value={filterModel} onChange={(e) => { setFilterModel(e.target.value); setPage(1); }} disabled={!filterBrand}>
+                      <option value="">-- Dòng xe --</option>
+                      {filteredModels.map((model) => (
+                        <option key={model.maDongXe || model.id} value={model.maDongXe || model.id}>{model.tenDongXe || model.name}</option>
                       ))}
                     </select>
                   </div>
@@ -330,6 +354,7 @@ const ProductList = ({ productType = 'XeMay' }) => {
                           <th className="table-col-text">{config.nameHeader}</th>
                           <th className="table-col-text">Danh mục</th>
                           {config.showBrand && <th className="table-col-text">Hãng xe</th>}
+                          {config.showBrand && <th className="table-col-text">Dòng xe</th>}
                           <th className="table-col-money">Giá gốc</th>
                           <th className="table-col-money">Giá KM</th>
                           <th className="table-col-number">Tồn kho</th>
@@ -343,15 +368,17 @@ const ProductList = ({ productType = 'XeMay' }) => {
                           const status = PRODUCT_STATUS[statusKey] || { label: statusKey || 'N/A', color: 'secondary' };
                           const category = categories.find((item) => item.id === product.maDanhMuc || item.maDanhMuc === product.maDanhMuc);
                           const brand = brands.find((item) => item.id === product.maHangXe || item.maHangXe === product.maHangXe);
+                          const model = models.find((item) => item.id === product.maDongXe || item.maDongXe === product.maDongXe);
                           return (
                             <tr key={getProductId(product)}>
                               <td className="table-col-code">{product.maSanPhamKinhDoanh || product.maSP || product.sku || product.id}</td>
                               <td className="table-col-text">{product.tenSanPham || product.name}</td>
                               <td className="table-col-text">{category?.tenDanhMuc || category?.name || ''}</td>
                               {config.showBrand && <td className="table-col-text">{brand?.tenHang || brand?.name || ''}</td>}
-                              <td className="table-col-money">{formatCurrency(product.giaGoc || product.basePrice || 0)}</td>
-                              <td className="table-col-money">{formatCurrency(product.giaKhuyenMai || product.giaBan || product.salePrice || 0)}</td>
-                              <td className="table-col-number">{product.soLuongTon ?? product.stock ?? 0}</td>
+                              {config.showBrand && <td className="table-col-text">{model?.tenDongXe || model?.name || ''}</td>}
+                              <td className="table-col-money">{formatCurrency(product.giaGocThapNhat || product.basePrice || 0)}</td>
+                              <td className="table-col-money">{formatCurrency(product.giaThapNhat || product.giaBan || product.salePrice || 0)}</td>
+                              <td className="table-col-number">{product.tongTon ?? product.soLuongTon ?? product.stock ?? 0}</td>
                               <td className="table-col-status"><span className={`badge badge-${status.color}`}>{status.label}</span></td>
                               <td className="table-col-actions">
                                 <button type="button" className="btn btn-xs btn-info mr-1" title="Sửa" onClick={() => openEdit(product)}>

@@ -6,6 +6,7 @@ import brandService from '../../services/brandService';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { formatDateShort } from '../../utils/formatDate';
 import { useAuth } from '../../contexts/AuthContext';
+import { fetchAllPages } from '../../utils/fetchAllPages';
 
 const VOUCHER_TYPES = {
   Percent: 'Phần trăm (%)',
@@ -100,16 +101,16 @@ const VoucherList = () => {
     const fetchTargetOptions = async () => {
       try {
         const [productsRes, categoriesRes, brandsRes] = await Promise.all([
-          productService.getAll({ page: 1, pageSize: 300 }),
+          // Server clamp pageSize về 100 → gọi theo trang để dropdown đủ toàn bộ sản phẩm
+          fetchAllPages((params) => productService.getAll(params)),
           categoryService.getAll({ activeOnly: false }),
           brandService.getAll({ page: 1, pageSize: 300 }),
         ]);
 
-        const productPayload = productsRes.data;
         const categoryPayload = categoriesRes.data;
         const brandPayload = brandsRes.data;
 
-        setProducts(productPayload.items || productPayload.data || productPayload || []);
+        setProducts(productsRes.items);
         setCategories(Array.isArray(categoryPayload) ? categoryPayload : categoryPayload.items || categoryPayload.data || []);
         setBrands(brandPayload.items || brandPayload.data || brandPayload || []);
       } catch (err) {

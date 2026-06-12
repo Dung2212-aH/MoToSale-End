@@ -78,11 +78,4 @@ public class AuthController : ControllerBase
             roles = User.FindAll(ClaimTypes.Role).Select(role => role.Value).ToList()
         });
     }
-
-    [Authorize]
-    [HttpPost("logout")]
-    public IActionResult Logout()
-    {
-        return Ok(new { message = "Logged out." });
-    }
 }

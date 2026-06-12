@@ -57,19 +57,6 @@ public class PaymentsController : ControllerBase
         }
     }
 
-    [HttpGet("orders/{orderId:int}/summary")]
-    public async Task<IActionResult> GetOrderPaymentSummary(int orderId)
-    {
-        try
-        {
-            return Ok(await _paymentService.GetOrderPaymentSummaryAsync(orderId, this.GetCurrentUserId(), this.CanManagePayments()));
-        }
-        catch (Exception ex)
-        {
-            return this.ToErrorResult(ex);
-        }
-    }
-
     [HttpPost]
     public async Task<IActionResult> CreatePayment(CreatePaymentRequest request)
     {

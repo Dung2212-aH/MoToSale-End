@@ -3,48 +3,7 @@ import orderService from './orderService';
 import paymentService from './paymentService';
 import userService from './userService';
 import { getOrderStatusMeta } from '../utils/constants';
-
-const unwrapList = (payload) => {
-  const data = payload?.data ?? payload;
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.items)) return data.items;
-  if (Array.isArray(data?.data)) return data.data;
-  if (Array.isArray(data?.result)) return data.result;
-  return [];
-};
-
-const unwrapTotal = (payload) => {
-  const data = payload?.data ?? payload;
-  const list = unwrapList(data);
-  return Number(data?.total ?? data?.totalItems ?? data?.totalCount ?? data?.totalRecords ?? data?.count ?? list.length ?? 0);
-};
-
-const fetchAllPages = async (fetcher, params = {}) => {
-  const pageSize = params.pageSize || 100;
-  const firstPayload = await fetcher({ ...params, page: 1, pageSize });
-  const firstItems = unwrapList(firstPayload);
-  const total = unwrapTotal(firstPayload);
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-
-  if (totalPages === 1) {
-    return { items: firstItems, total };
-  }
-
-  const restResults = await Promise.allSettled(
-    Array.from({ length: totalPages - 1 }, (_, index) =>
-      fetcher({ ...params, page: index + 2, pageSize })
-    )
-  );
-
-  const restItems = restResults.flatMap((result) =>
-    result.status === 'fulfilled' ? unwrapList(result.value) : []
-  );
-
-  return {
-    items: [...firstItems, ...restItems],
-    total,
-  };
-};
+import { fetchAllPages } from '../utils/fetchAllPages';
 
 const getOrderAmount = (order) => Number(order?.tongThanhToan ?? order?.tongTien ?? order?.totalAmount ?? order?.amount ?? 0);
 
@@ -56,9 +15,16 @@ const getDateValue = (item) => item?.ngayTao || item?.NgayTao || item?.createdAt
 
 const getPaymentDateValue = (item) => item?.ngayThanhToanThanhCong || item?.NgayThanhToanThanhCong || item?.ngayThanhToan || item?.paidAt || item?.createdAt || item?.ngayTao;
 
-const isPaidOrder = (order) => getPaymentStatus(order) === 'Paid';
+// DB hiện chỉ cho phép TrangThaiDonHang: AwaitingPayment / Confirmed / Cancelled.
+// Doanh thu = đơn Confirmed đã thu tiền (TrangThaiThanhToan: Paid hoặc PartiallyPaid).
+// Giữ Delivered/Completed như nhánh OR cho dữ liệu cũ (legacy, vô hại).
+const REVENUE_PAYMENT_STATUSES = ['Paid', 'PartiallyPaid'];
 
-const isRevenueOrder = (order) => ['Delivered', 'Completed'].includes(getOrderStatus(order)) && isPaidOrder(order);
+const isRevenueOrder = (order) => {
+  const status = getOrderStatus(order);
+  return REVENUE_PAYMENT_STATUSES.includes(getPaymentStatus(order))
+    && (status === 'Confirmed' || ['Delivered', 'Completed'].includes(status));
+};
 
 const isDateInRange = (value, start, end) => {
   const date = new Date(value);
@@ -85,8 +51,8 @@ const getStatusReportGroup = (status) => {
   const groups = {
     Pending: 'Chờ xử lý',
     Checkout: 'Chờ xử lý',
-    AwaitingPayment: 'Chờ xử lý',
-    Confirmed: 'Chờ xử lý',
+    AwaitingPayment: 'Chờ thanh toán',
+    Confirmed: 'Đã xác nhận',
     Processing: 'Đang xử lý',
     Shipping: 'Đang xử lý',
     Delivered: 'Hoàn tất',

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FaStar, FaRegStar, FaStarHalfAlt } from 'react-icons/fa';
 import { reviewApi } from '../../services/api.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
+import { formatDateTime } from '../../utils/formatters.js';
 
 /* ============================================================
    RatingStars — display or interactive star selector
@@ -86,11 +87,7 @@ function UserAvatar({ name }) {
    Helpers
    ============================================================ */
 function formatReviewDate(value) {
-  if (!value) return '';
-  return new Date(value).toLocaleDateString('vi-VN', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
+  return formatDateTime(value);
 }
 
 function ratingLabel(rating) {
@@ -136,7 +133,7 @@ function ReviewSummary({ summary, reviews }) {
         <span className="text-5xl font-black tracking-tight text-gray-900">{avg.toFixed(1)}</span>
         <RatingStars value={avg} size={20} />
         <span className="mt-1 text-sm font-medium text-gray-500">
-          {total > 0 ? `${total} đánh giá` : 'Chưa có đánh giá'}
+          {total > 0 ? `(${total} đánh giá)` : 'Chưa có đánh giá'}
         </span>
         {total > 0 && (
           <span className="rounded-full bg-amber-50 px-3 py-0.5 text-xs font-semibold text-amber-700">
@@ -336,8 +333,8 @@ function ReviewForm({ productId, reviewState, stateLoading, isAuthenticated, myR
     );
   }
 
-  /* --- Not purchased: don't show anything --- */
-  if (!reviewState?.hasPurchased) {
+  /* --- Chưa đủ điều kiện đánh giá (chưa mua / chưa nhận hàng): không hiển thị form --- */
+  if (!reviewState?.canReview) {
     return null;
   }
 

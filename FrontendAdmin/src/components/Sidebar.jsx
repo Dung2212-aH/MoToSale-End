@@ -70,12 +70,6 @@ const Sidebar = ({ collapsed = false }) => {
               </Link>
             </li>
             <li className="nav-item">
-              <Link to="/installments" className={`nav-link ${isActiveGroup('/installments')}`}>
-                <i className="nav-icon fas fa-calendar-check"></i>
-                <p>Duyệt kỳ trả góp</p>
-              </Link>
-            </li>
-            <li className="nav-item">
               <Link to="/vouchers" className={`nav-link ${isActiveGroup('/vouchers')}`}>
                 <i className="nav-icon fas fa-ticket-alt"></i>
                 <p>Voucher</p>

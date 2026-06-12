@@ -621,9 +621,6 @@ function CheckoutPage() {
                     placeholder={String(minDownPayment || 5000000)}
                     type="number"
                   />
-                  <p className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs leading-5 text-amber-700">
-                    Phần còn lại ({formatCurrency(remainingAmount)}) sẽ được chia thành {form.installmentTerm} kỳ, lãi suất áp dụng theo chính sách cửa hàng. Lịch trả góp chi tiết hiển thị sau khi đặt hàng.
-                  </p>
                 </div>
               )}
             </div>

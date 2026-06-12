@@ -165,55 +165,6 @@ public class OrdersController : ControllerBase
         }
     }
 
-    [Authorize(Roles = "Admin,Staff")]
-    [HttpGet("installments")]
-    public async Task<IActionResult> GetInstallmentSchedule([FromQuery] string? status = "Pending")
-    {
-        try
-        {
-            var query = _dbContext.InstallmentTerms
-                .Include(t => t.Plan!)
-                .ThenInclude(p => p.Order!)
-                .AsNoTracking()
-                .AsQueryable();
-
-            if (!string.IsNullOrWhiteSpace(status) && !status.Equals("all", StringComparison.OrdinalIgnoreCase))
-            {
-                var normalized = status.Trim();
-                query = query.Where(t => t.TrangThai == normalized);
-            }
-
-            var rows = await query
-                .OrderBy(t => t.NgayDenHan)
-                .Take(500)
-                .Select(t => new
-                {
-                    maKyTraGop = t.MaKyTraGop,
-                    maHoSoTraGop = t.MaHoSoTraGop,
-                    kyThu = t.KyThu,
-                    ngayDenHan = t.NgayDenHan,
-                    soTienGoc = t.SoTienGoc,
-                    soTienLai = t.SoTienLai,
-                    tongTien = t.TongTien,
-                    trangThai = t.TrangThai,
-                    ngayThanhToan = t.NgayThanhToan,
-                    maDonHang = t.Plan!.MaDonHang,
-                    maDonHangKinhDoanh = t.Plan!.Order!.MaDonHangKinhDoanh,
-                    hoTenNguoiVay = t.Plan!.HoTenNguoiVay,
-                    soCCCD = t.Plan!.SoCCCD,
-                    soDienThoai = t.Plan!.SoDienThoai,
-                    soKy = t.Plan!.SoKy
-                })
-                .ToListAsync();
-
-            return Ok(new { items = rows, count = rows.Count });
-        }
-        catch (Exception ex)
-        {
-            return this.ToErrorResult(ex);
-        }
-    }
-
     [HttpGet("{id:int}/payment-info")]
     public async Task<IActionResult> GetPaymentInfo(int id)
     {
@@ -293,9 +244,7 @@ public class OrdersController : ControllerBase
             if (before is not null)
             {
                 var now = DateTime.UtcNow;
-                var note = request.MaKyTraGop.HasValue
-                    ? $"Xac nhan ky tra gop #{request.MaKyTraGop}"
-                    : "Xac nhan da nhan thanh toan";
+                var note = "Xac nhan da nhan thanh toan";
                 AddHistory(id, "OrderStatus", before.TrangThaiDonHang, result.TrangThaiDonHang, note, now);
                 AddHistory(id, "PaymentStatus", before.TrangThaiThanhToan, result.TrangThaiThanhToan, request.GhiChu ?? note, now);
                 await _dbContext.SaveChangesAsync();
@@ -487,9 +436,6 @@ public class OrdersController : ControllerBase
             return "Don hang khong con giu cho ton kho hieu luc. Vui long checkout lai hoac cap nhat ton kho thu cong truoc khi xac nhan.";
         }
 
-        var variantUpdates = new List<(OrderService.Entities.ProductVariant Variant, int RequiredQuantity)>();
-        var productUpdates = new List<(OrderService.Entities.Product Product, int RequiredQuantity)>();
-
         foreach (var group in activeHolds.Where(h => h.MaBienSanPham.HasValue).GroupBy(h => h.MaBienSanPham!.Value))
         {
             var variant = await _dbContext.ProductVariants.FirstOrDefaultAsync(v => v.MaBienSanPham == group.Key);
@@ -499,38 +445,33 @@ public class OrdersController : ControllerBase
             }
 
             var requiredQuantity = group.Sum(h => h.SoLuong);
-            var stock = variant.SoLuongTon ?? 0;
-            if (stock < requiredQuantity)
+            try
+            {
+                await ApplyStockMovementAsync(variant.MaSanPham, variant.MaBienSanPham, -requiredQuantity, "BanHang", "Xac nhan don hang va tru ton kho", "Order", order.MaDonHang);
+            }
+            catch
             {
                 return "So luong ton kho bien the khong du de xac nhan don hang.";
             }
-
-            variantUpdates.Add((variant, requiredQuantity));
         }
 
         foreach (var group in activeHolds.Where(h => !h.MaBienSanPham.HasValue).GroupBy(h => h.MaSanPham))
         {
             var product = await _dbContext.Products.FirstOrDefaultAsync(p => p.MaSanPham == group.Key);
-            if (product is null || product.SoLuongTon < group.Sum(h => h.SoLuong))
+            var requiredQuantity = group.Sum(h => h.SoLuong);
+            if (product is null)
             {
-                return product is null
-                    ? "San pham trong don hang khong ton tai."
-                    : "So luong ton kho san pham khong du de xac nhan don hang.";
+                return "San pham trong don hang khong ton tai.";
             }
 
-            productUpdates.Add((product, group.Sum(h => h.SoLuong)));
-        }
-
-        foreach (var (variant, requiredQuantity) in variantUpdates)
-        {
-            variant.SoLuongTon = (variant.SoLuongTon ?? 0) - requiredQuantity;
-            variant.NgayCapNhat = now;
-        }
-
-        foreach (var (product, requiredQuantity) in productUpdates)
-        {
-            product.SoLuongTon -= requiredQuantity;
-            product.NgayCapNhat = now;
+            try
+            {
+                await ApplyStockMovementAsync(product.MaSanPham, null, -requiredQuantity, "BanHang", "Xac nhan don hang va tru ton kho", "Order", order.MaDonHang);
+            }
+            catch
+            {
+                return "So luong ton kho san pham khong du de xac nhan don hang.";
+            }
         }
 
         foreach (var hold in activeHolds)
@@ -565,8 +506,7 @@ public class OrdersController : ControllerBase
                     var variant = await _dbContext.ProductVariants.FirstOrDefaultAsync(v => v.MaBienSanPham == hold.MaBienSanPham.Value);
                     if (variant is not null)
                     {
-                        variant.SoLuongTon = (variant.SoLuongTon ?? 0) + hold.SoLuong;
-                        variant.NgayCapNhat = now;
+                        await ApplyStockMovementAsync(variant.MaSanPham, variant.MaBienSanPham, hold.SoLuong, "HoanTon", "Huy don, hoan ton kho", "OrderCancel", order.MaDonHang);
                     }
                 }
                 else
@@ -574,8 +514,7 @@ public class OrdersController : ControllerBase
                     var product = await _dbContext.Products.FirstOrDefaultAsync(p => p.MaSanPham == hold.MaSanPham);
                     if (product is not null)
                     {
-                        product.SoLuongTon += hold.SoLuong;
-                        product.NgayCapNhat = now;
+                        await ApplyStockMovementAsync(product.MaSanPham, null, hold.SoLuong, "HoanTon", "Huy don, hoan ton kho", "OrderCancel", order.MaDonHang);
                     }
                 }
             }
@@ -590,6 +529,41 @@ public class OrdersController : ControllerBase
             await _dbContext.Database.ExecuteSqlInterpolatedAsync(
                 $"EXEC dbo.sp_Voucher_HuySuDungTheoDon @MaDonHang={order.MaDonHang}");
         }
+    }
+
+    private async Task<int> GetAvailableStockAsync(int maSanPham, int? maBienSanPham)
+    {
+        var now = DateTime.UtcNow;
+        var held = await _dbContext.InventoryHolds
+            .Where(h =>
+                h.MaSanPham == maSanPham &&
+                h.TrangThai == "Active" &&
+                h.HetHanLuc > now &&
+                (maBienSanPham.HasValue ? h.MaBienSanPham == maBienSanPham.Value : h.MaBienSanPham == null))
+            .SumAsync(h => (int?)h.SoLuong) ?? 0;
+
+        var stockSql = maBienSanPham.HasValue
+            ? $"SELECT ISNULL(SUM(SoLuongThucTe), 0) AS Value FROM dbo.TONKHO_HIENTAI WHERE MaSanPham = {maSanPham} AND MaBienSanPham = {maBienSanPham.Value}"
+            : $"SELECT ISNULL(SUM(SoLuongThucTe), 0) AS Value FROM dbo.TONKHO_HIENTAI WHERE MaSanPham = {maSanPham} AND MaBienSanPham IS NULL";
+        var stockRows = await _dbContext.Database.SqlQueryRaw<IntValueRow>(stockSql).ToListAsync();
+        return (stockRows.FirstOrDefault()?.Value ?? 0) - held;
+    }
+
+    private async Task ApplyStockMovementAsync(int maSanPham, int? maBienSanPham, int soLuongThayDoi, string loaiBienDong, string lyDo, string loaiThamChieu, int? maThamChieu)
+    {
+        int? userId = null;
+
+        await _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            EXEC dbo.sp_TONKHO_ApDungBienDong
+                @MaSanPham = {maSanPham},
+                @MaBienSanPham = {maBienSanPham},
+                @LoaiBienDong = {loaiBienDong},
+                @SoLuongThayDoi = {soLuongThayDoi},
+                @LyDo = {lyDo},
+                @LoaiThamChieu = {loaiThamChieu},
+                @MaThamChieu = {maThamChieu},
+                @MaNguoiThucHien = {userId}
+            """);
     }
 
     private static string AppendNote(string? current, string note)
@@ -735,4 +709,9 @@ public class UpdateOrderStatusRequest
     public string? LyDoHuyDon { get; set; }
     public string? TrangThaiThanhToan { get; set; }
     public string? PaymentStatus { get; set; }
+}
+
+public class IntValueRow
+{
+    public int Value { get; set; }
 }

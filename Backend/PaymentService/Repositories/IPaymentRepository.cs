@@ -15,6 +15,7 @@ public interface IPaymentRepository
     Task<int> CountPaymentsAsync(PaymentSearchDto search, int? maNguoiDung);
     Task<Product?> GetProductAsync(int maSanPham);
     Task<ProductVariant?> GetVariantAsync(int maBienSanPham);
+    Task ApplyStockMovementAsync(int maSanPham, int? maBienSanPham, int soLuongThayDoi, string loaiBienDong, string lyDo, string loaiThamChieu, int? maThamChieu);
     Task AddPaymentAsync(Payment payment);
     Task CleanupExpiredInventoryHoldsAsync();
     Task SaveChangesAsync();

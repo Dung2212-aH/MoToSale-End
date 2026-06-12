@@ -73,7 +73,7 @@ function HomePage() {
       ];
 
       if (isAuthenticated) {
-        tasks.push(orderApi.getMine().catch(() => []));
+        tasks.push(orderApi.getMyOrders().catch(() => []));
       }
 
       const results = await Promise.all(tasks);
@@ -89,7 +89,7 @@ function HomePage() {
           ordersResponse.filter(
             (order) =>
               order.orderType === 'Deposit' &&
-              ['DepositPaid', 'PartiallyPaid'].includes(order.paymentStatus) &&
+              order.paymentStatus === 'PartiallyPaid' &&
               order.remainingAmount > 0 &&
               order.orderStatus !== 'Cancelled',
           ),

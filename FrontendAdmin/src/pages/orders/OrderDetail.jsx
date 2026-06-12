@@ -21,11 +21,6 @@ import { printInstallmentApplication } from '../../utils/printInstallmentApplica
 
 const isLockedOrder = (status) => ['Cancelled', 'Completed'].includes(status);
 const canCancelOrder = (status) => !['Cancelled', 'Delivered', 'Completed'].includes(status);
-const SHIPPING_STATUS_BY_ORDER_STATUS = {
-  Processing: 'Preparing',
-  Shipping: 'Shipping',
-  Delivered: 'Delivered',
-};
 
 const EVENT_LABELS = {
   Created: 'Tạo đơn',
@@ -100,14 +95,11 @@ const OrderDetail = () => {
     }
   };
 
-  const handleConfirmPayment = async (maKyTraGop) => {
-    const message = maKyTraGop
-      ? 'Xác nhận đã nhận thanh toán cho kỳ trả góp này?'
-      : 'Xác nhận đã nhận thanh toán (chuyển khoản) cho đơn này?';
-    if (!window.confirm(message)) return;
+  const handleConfirmPayment = async () => {
+    if (!window.confirm('Xác nhận đã nhận thanh toán (chuyển khoản) cho đơn này?')) return;
     setUpdating(true);
     try {
-      await orderService.confirmPayment(id, maKyTraGop ? { maKyTraGop } : {});
+      await orderService.confirmPayment(id, {});
       await fetchOrder();
     } catch (err) {
       alert(err?.response?.data?.message || 'Xác nhận thanh toán thất bại. Vui lòng thử lại.');
@@ -160,7 +152,6 @@ const OrderDetail = () => {
     await runUpdate(
       {
         trangThaiDonHang: newStatus,
-        trangThaiVanChuyen: SHIPPING_STATUS_BY_ORDER_STATUS[newStatus],
         lyDoHuyDon: cancelReason.trim() || undefined,
       },
       () => {
@@ -527,34 +518,6 @@ const OrderDetail = () => {
                     </table>
                   </div>
                 )}
-                <table className="table table-bordered table-striped mb-0">
-                  <thead>
-                    <tr><th>Kỳ</th><th>Đến hạn</th><th className="table-col-money">Gốc</th><th className="table-col-money">Lãi</th><th className="table-col-money">Tổng</th><th>Trạng thái</th><th></th></tr>
-                  </thead>
-                  <tbody>
-                    {(installment.terms || []).map((t) => (
-                      <tr key={t.maKyTraGop}>
-                        <td>Kỳ {t.kyThu}</td>
-                        <td>{formatDate(t.ngayDenHan)}</td>
-                        <td className="table-col-money">{formatCurrency(t.soTienGoc)}</td>
-                        <td className="table-col-money">{formatCurrency(t.soTienLai)}</td>
-                        <td className="table-col-money">{formatCurrency(t.tongTien)}</td>
-                        <td>
-                          <span className={`badge badge-${t.trangThai === 'Paid' ? 'success' : t.trangThai === 'Cancelled' ? 'secondary' : 'warning'}`}>
-                            {t.trangThai === 'Paid' ? 'Đã trả' : t.trangThai === 'Cancelled' ? 'Đã hủy' : 'Chờ trả'}
-                          </span>
-                        </td>
-                        <td>
-                          {t.trangThai === 'Pending' && orderStatus !== 'Cancelled' && (
-                            <button className="btn btn-sm btn-outline-success" onClick={() => handleConfirmPayment(t.maKyTraGop)} disabled={updating}>
-                              Xác nhận
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             </div>
           )}

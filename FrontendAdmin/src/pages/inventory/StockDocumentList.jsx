@@ -3,6 +3,7 @@ import inventoryService from '../../services/inventoryService';
 import productService from '../../services/productService';
 import { formatDate } from '../../utils/formatDate';
 import { createDateStamp, exportWorkbook } from '../../utils/exportExcel';
+import { fetchAllPages } from '../../utils/fetchAllPages';
 
 const TYPES = {
   Import: 'Phiếu nhập kho',
@@ -60,9 +61,9 @@ const StockDocumentList = () => {
 
   const fetchProducts = async () => {
     try {
-      const res = await productService.getAll({ page: 1, pageSize: 500 });
-      const data = res.data;
-      setProducts(data.items || data.data || data || []);
+      // Server clamp pageSize về 100 → gọi theo trang để picker đủ toàn bộ sản phẩm
+      const { items } = await fetchAllPages((params) => productService.getAll(params));
+      setProducts(items);
     } catch (err) {
       setProducts([]);
     }

@@ -41,7 +41,6 @@ public class ReviewsController : ControllerBase
     }
 
     [HttpGet("~/api/products/{productId:int}/reviews")]
-    [HttpGet("product/{productId:int}")]
     public async Task<IActionResult> GetProductReviews(int productId)
     {
         var reviews = await _dbContext.ProductReviews

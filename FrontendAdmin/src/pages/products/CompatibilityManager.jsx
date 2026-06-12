@@ -43,7 +43,7 @@ const CompatibilityManager = ({ product, onClose }) => {
     try {
       const [compatRes, brandRes, modelRes] = await Promise.all([
         productService.getCompatibilities(productId),
-        brandService.getAll(),
+        brandService.getAll({ pageSize: 300 }),
         brandService.getAllModels({ page: 1, pageSize: 500 }),
       ]);
 

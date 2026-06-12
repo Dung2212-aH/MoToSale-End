@@ -219,7 +219,7 @@ namespace PaymentService.Migrations
 
                     b.ToTable("THANHTOAN", null, t =>
                         {
-                            t.HasCheckConstraint("CK_THANHTOAN_LoaiThanhToan", "[LoaiThanhToan] IN ('Full','Deposit','Remaining','Installment')");
+                            t.HasCheckConstraint("CK_THANHTOAN_LoaiThanhToan", "[LoaiThanhToan] IN ('Full','Deposit','Remaining')");
 
                             t.HasCheckConstraint("CK_THANHTOAN_PhuongThuc", "[PhuongThuc] IN ('COD','BankTransfer','Card','Momo','VNPay')");
 
@@ -239,9 +239,6 @@ namespace PaymentService.Migrations
 
                     b.Property<DateTime>("NgayCapNhat")
                         .HasColumnType("datetime2(0)");
-
-                    b.Property<int>("SoLuongTon")
-                        .HasColumnType("int");
 
                     b.HasKey("MaSanPham");
 

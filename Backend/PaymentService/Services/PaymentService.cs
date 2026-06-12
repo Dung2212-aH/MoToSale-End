@@ -368,15 +368,7 @@ public class PaymentService : IPaymentService
             var variant = await _paymentRepository.GetVariantAsync(group.Key)
                 ?? throw new BusinessException("Bien the san pham trong don hang khong ton tai.");
             var requiredQuantity = group.Sum(h => h.SoLuong);
-            var stock = variant.SoLuongTon ?? 0;
-
-            if (stock < requiredQuantity)
-            {
-                throw new BusinessException("So luong ton kho bien the khong du de xac nhan don hang.");
-            }
-
-            variant.SoLuongTon = stock - requiredQuantity;
-            variant.NgayCapNhat = now;
+            await _paymentRepository.ApplyStockMovementAsync(variant.MaSanPham, variant.MaBienSanPham, -requiredQuantity, "BanHang", "Xac nhan thanh toan va tru ton kho", "Payment", order.MaDonHang);
         }
 
         foreach (var group in activeHolds.Where(h => !h.MaBienSanPham.HasValue).GroupBy(h => h.MaSanPham))
@@ -384,14 +376,7 @@ public class PaymentService : IPaymentService
             var product = await _paymentRepository.GetProductAsync(group.Key)
                 ?? throw new BusinessException("San pham trong don hang khong ton tai.");
             var requiredQuantity = group.Sum(h => h.SoLuong);
-
-            if (product.SoLuongTon < requiredQuantity)
-            {
-                throw new BusinessException("So luong ton kho san pham khong du de xac nhan don hang.");
-            }
-
-            product.SoLuongTon -= requiredQuantity;
-            product.NgayCapNhat = now;
+            await _paymentRepository.ApplyStockMovementAsync(product.MaSanPham, null, -requiredQuantity, "BanHang", "Xac nhan thanh toan va tru ton kho", "Payment", order.MaDonHang);
         }
 
         foreach (var hold in activeHolds)

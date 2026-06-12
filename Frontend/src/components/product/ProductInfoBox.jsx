@@ -1,7 +1,6 @@
-import { Link } from 'react-router-dom';
 import { FiHeart } from 'react-icons/fi';
 import QuantitySelector from '../QuantitySelector.jsx';
-import { formatCurrency, getProductDiscountPercent } from '../../utils/formatters.js';
+import { formatCurrency, formatDiscountPercent, getProductDiscountPercent } from '../../utils/formatters.js';
 
 export const defaultPromotions = [
   'Áp dụng Phiếu quà tặng / Mã giảm giá theo sản phẩm.',
@@ -76,16 +75,17 @@ function ProductInfoBox({
   isFavorite = false,
   onToggleFavorite,
 }) {
+  // Giá hiển thị theo biến thể đang chọn (giá thật nằm ở biến thể). Fallback giá tổng hợp của sản phẩm.
   const productBasePrice = Number(product?.basePrice || 0);
   const productSalePrice = Number(product?.salePrice ?? productBasePrice);
-  const variantBasePrice = selectedVariant?.priceOverride == null ? null : Number(selectedVariant.priceOverride);
-  const originalPrice = variantBasePrice || productBasePrice;
-  const discountAmount = productBasePrice > productSalePrice ? productBasePrice - productSalePrice : 0;
-  const sellingPrice = discountAmount > 0 && originalPrice > 0
-    ? originalPrice - discountAmount
-    : originalPrice || productSalePrice;
+  const variantBasePrice = selectedVariant?.basePrice == null ? null : Number(selectedVariant.basePrice);
+  const variantSellPrice = selectedVariant?.sellPrice != null && Number(selectedVariant.sellPrice) > 0
+    ? Number(selectedVariant.sellPrice)
+    : (selectedVariant?.salePrice != null ? Number(selectedVariant.salePrice) : null);
+  const originalPrice = variantBasePrice ?? productBasePrice;
+  const sellingPrice = variantSellPrice ?? (originalPrice > 0 ? originalPrice : productSalePrice);
   const formattedSellingPrice = sellingPrice > 0 ? formatCurrency(sellingPrice) : 'Liên hệ';
-  const discountPercent = getProductDiscountPercent(product);
+  const discountPercent = selectedVariant?.discountPercent ?? getProductDiscountPercent(product);
   const hasOriginalPrice = originalPrice > 0 && originalPrice > sellingPrice;
   const stockValue = selectedVariant?.stockQuantity ?? product?.stockQuantity;
   const hasKnownStock = stockValue !== undefined && stockValue !== null;
@@ -122,7 +122,7 @@ function ProductInfoBox({
             <div className="text-sm font-semibold text-zinc-500">Giá bán</div>
             {discountPercent && (
               <span className="rounded-full bg-[#d71920] px-3 py-1 text-xs font-extrabold text-white">
-                Giảm {discountPercent}%
+                Giảm {formatDiscountPercent(discountPercent)}%
               </span>
             )}
           </div>
@@ -164,7 +164,6 @@ function ProductInfoBox({
         <div>
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="text-base font-bold text-zinc-950">Màu sắc</h2>
-            <span className="text-sm text-zinc-500">{showColorSelector ? selectedColor || colorStatusText : colorStatusText}</span>
           </div>
           {showColorSelector ? (
             <div className="grid gap-3 sm:grid-cols-2">
@@ -199,18 +198,6 @@ function ProductInfoBox({
         )}
 
         <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-bold text-zinc-950">Tùy chọn mua nhanh</div>
-              <div className="text-sm text-zinc-500">
-                {selectedVariant?.variantName || [selectedVersion, selectedColor].filter(Boolean).join(' / ') || 'Chọn số lượng để tiếp tục'}
-              </div>
-            </div>
-            <Link className="text-sm font-semibold text-[#d71920]" to="/products">
-              Xem sản phẩm khác
-            </Link>
-          </div>
-
           <div className="flex flex-col gap-3">
             <QuantitySelector value={quantity} onChange={onQuantityChange} max={maxQuantity} />
             <div className="grid gap-3 sm:grid-cols-2">

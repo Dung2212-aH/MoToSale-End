@@ -45,6 +45,8 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
   const isEdit = !!product;
   const lockedType = fixedProductType || null;
   const [models, setModels] = useState([]);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [modelLoadError, setModelLoadError] = useState('');
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -57,9 +59,6 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
     hangXeId: '',
     dongXeId: '',
     moTaNgan: '',
-    giaGoc: '',
-    giaKhuyenMai: '',
-    soLuongTon: '',
     anhChinhUrl: '',
     anhChinhFile: null,
     trangThai: 'Available',
@@ -136,9 +135,6 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
         hangXeId: String(product.maHangXe || product.hangXeId || product.brandId || ''),
         dongXeId: String(product.maDongXe || product.dongXeId || product.modelId || ''),
         moTaNgan: product.moTaNgan || product.shortDescription || '',
-        giaGoc: product.giaGoc || product.basePrice || '',
-        giaKhuyenMai: product.giaKhuyenMai || product.salePrice || '',
-        soLuongTon: product.soLuongTon ?? product.stock ?? 0,
         anhChinhUrl: product.anhChinhUrl || product.mainImage || '',
         anhChinhFile: null,
         trangThai: product.trangThaiSanPham || product.trangThai || product.status || 'Available',
@@ -153,9 +149,6 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
         hangXeId: '',
         dongXeId: '',
         moTaNgan: '',
-        giaGoc: '',
-        giaKhuyenMai: '',
-        soLuongTon: '',
         anhChinhUrl: '',
         anhChinhFile: null,
         trangThai: 'Available',
@@ -178,14 +171,23 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
 
   useEffect(() => {
     if (form.hangXeId && form.loaiSP === 'XeMay') {
-      brandService.getModels(form.hangXeId)
+      setLoadingModels(true);
+      setModelLoadError('');
+      brandService.getModels(form.hangXeId, { pageSize: 1000 })
         .then((res) => {
           const data = res.data;
           setModels(Array.isArray(data) ? data : data.items || data.data || []);
         })
-        .catch(() => setModels([]));
+        .catch((err) => {
+          setModels([]);
+          setModelLoadError('Không thể tải danh sách dòng xe. Vui lòng thử lại.');
+          console.error(err);
+        })
+        .finally(() => setLoadingModels(false));
     } else {
       setModels([]);
+      setModelLoadError('');
+      setLoadingModels(false);
     }
   }, [form.hangXeId, form.loaiSP]);
 
@@ -233,7 +235,6 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
   const validate = () => {
     const errs = {};
     if (!form.tenSanPham.trim()) errs.tenSanPham = 'Tên sản phẩm là bắt buộc';
-    if (!form.giaGoc || Number(form.giaGoc) <= 0) errs.giaGoc = 'Giá gốc phải lớn hơn 0';
     if (!form.danhMucId) errs.danhMucId = 'Vui lòng chọn danh mục';
     if (form.danhMucId && !isCategoryAllowed(form.danhMucId)) {
       errs.danhMucId = 'Danh mục không thuộc loại sản phẩm đã chọn';
@@ -252,24 +253,25 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
     setSaving(true);
     try {
       const mainImageFile = form.anhChinhFile;
+      // Hợp đồng PATCH update của backend: với giaKhuyenMai/maHangXe/maDongXe,
+      // null = "giữ nguyên", còn giá trị <= 0 (gửi 0) = "xóa về null".
+      // → Khi EDIT, ô bị xóa trống phải gửi 0 để thực sự xóa; khi CREATE giữ null/bỏ qua.
+      const clearableOnEdit = (value) => {
+        if (value === '' || value == null) return isEdit ? 0 : null;
+        return Number(value);
+      };
       const payload = {
         maSanPhamKinhDoanh: form.maSP || undefined,
         tenSanPham: form.tenSanPham,
         slug: form.slug || undefined,
         loaiSanPham: form.loaiSP,
         maDanhMuc: form.danhMucId ? Number(form.danhMucId) : undefined,
-        maHangXe: form.loaiSP === 'XeMay' && form.hangXeId ? Number(form.hangXeId) : null,
-        maDongXe: form.loaiSP === 'XeMay' && form.dongXeId ? Number(form.dongXeId) : null,
+        maHangXe: form.loaiSP === 'XeMay' ? clearableOnEdit(form.hangXeId) : null,
+        maDongXe: form.loaiSP === 'XeMay' ? clearableOnEdit(form.dongXeId) : null,
         moTaNgan: form.moTaNgan || undefined,
-        giaGoc: Number(form.giaGoc) || 0,
-        giaKhuyenMai: Number(form.giaKhuyenMai) || null,
         anhChinhUrl: mainImageFile ? undefined : form.anhChinhUrl || undefined,
         trangThaiSanPham: form.trangThai,
       };
-      if (!isEdit) {
-        payload.soLuongTon = Number(form.soLuongTon) || 0;
-      }
-
       let productId = product?.maSanPham || product?.id;
       if (isEdit) {
         const res = await productService.update(product.maSanPham || product.id, payload);
@@ -387,13 +389,14 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
                     </div>
                     <div className="col-md-4">
                       <div className="form-group">
-                        <label>Dòng xe</label>
-                        <select className="form-control" name="dongXeId" value={form.dongXeId} onChange={handleChange} disabled={!form.hangXeId}>
+                        <label>Dòng xe {loadingModels && <span className="spinner-border spinner-border-sm ml-1"></span>}</label>
+                        <select className="form-control" name="dongXeId" value={form.dongXeId} onChange={handleChange} disabled={!form.hangXeId || loadingModels}>
                           <option value="">-- Chọn dòng xe --</option>
                           {models.map((model) => (
                             <option key={model.maDongXe || model.id} value={String(model.maDongXe || model.id)}>{model.tenDongXe || model.name}</option>
                           ))}
                         </select>
+                        {modelLoadError && <small className="form-text text-danger">{modelLoadError}</small>}
                       </div>
                     </div>
                   </>
@@ -417,28 +420,10 @@ const ProductForm = ({ show, onClose, onSaved, product, categories = [], brands 
                 <textarea className="form-control" name="moTaNgan" value={form.moTaNgan} onChange={handleChange} rows="3" />
               </div>
 
-              <div className="row">
-                <div className="col-md-4">
-                  <div className="form-group">
-                    <label>Giá gốc <span className="text-danger">*</span></label>
-                    <input type="number" className={`form-control ${errors.giaGoc ? 'is-invalid' : ''}`} name="giaGoc" value={form.giaGoc} onChange={handleChange} min="0" />
-                    {errors.giaGoc && <div className="invalid-feedback">{errors.giaGoc}</div>}
-                  </div>
-                </div>
-                <div className="col-md-4">
-                  <div className="form-group">
-                    <label>Giá khuyến mại</label>
-                    <input type="number" className="form-control" name="giaKhuyenMai" value={form.giaKhuyenMai} onChange={handleChange} min="0" />
-                  </div>
-                </div>
-                {!isEdit && (
-                  <div className="col-md-4">
-                    <div className="form-group">
-                      <label>Tồn kho ban đầu</label>
-                      <input type="number" className="form-control" name="soLuongTon" value={form.soLuongTon} onChange={handleChange} min="0" />
-                    </div>
-                  </div>
-                )}
+              <div className="alert alert-info py-2">
+                <i className="fas fa-info-circle mr-1"></i>
+                Giá &amp; tồn kho được nhập ở từng <strong>biến thể</strong>. Sau khi lưu sản phẩm, mở
+                "Quản lý biến thể" để thêm giá gốc/khuyến mãi và tồn kho cho mỗi SKU.
               </div>
 
               <div className="form-group">

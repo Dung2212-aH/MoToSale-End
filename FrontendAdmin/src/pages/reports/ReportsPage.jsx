@@ -10,6 +10,7 @@ import warrantyService from '../../services/warrantyService';
 import { formatCurrency } from '../../utils/formatCurrency';
 import { formatDate } from '../../utils/formatDate';
 import { createDateStamp, exportWorkbook } from '../../utils/exportExcel';
+import { fetchAllPages } from '../../utils/fetchAllPages';
 
 const getDefaultRange = () => {
   const end = new Date();
@@ -66,7 +67,8 @@ const ReportsPage = () => {
         businessOperationsService.getCash(),
         advancedOperationsService.getReceivables(),
         businessOperationsService.getRepairs(),
-        warrantyService.getAll({ page: 1, pageSize: 500 }),
+        // Server clamp pageSize về 100 → gọi theo trang để báo cáo đủ toàn bộ phiếu bảo hành
+        fetchAllPages((params) => warrantyService.getAll(params)),
         inventoryService.getAll({ page: 1, pageSize: 100, lowStockOnly: true }),
       ]);
 
@@ -83,7 +85,7 @@ const ReportsPage = () => {
         ? asItems(repairRes.value.data).filter((row) => inRange(row.receivedAt || row.ngayTiepNhan, range.startDate, range.endDate))
         : [];
       const warranties = warrantyRes.status === 'fulfilled'
-        ? asItems(warrantyRes.value.data).filter((row) => inRange(row.receivedAt || row.ngayTiepNhan || row.ngayTao, range.startDate, range.endDate))
+        ? warrantyRes.value.items.filter((row) => inRange(row.receivedAt || row.ngayTiepNhan || row.ngayTao, range.startDate, range.endDate))
         : [];
       const inventoryWarnings = inventoryRes.status === 'fulfilled' ? asItems(inventoryRes.value.data) : [];
 

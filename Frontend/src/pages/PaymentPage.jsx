@@ -3,15 +3,15 @@ import { FiLoader } from 'react-icons/fi';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Breadcrumb from '../components/Breadcrumb.jsx';
 import { orderApi } from '../services/api.js';
+import { useNotification } from '../contexts/NotificationContext.jsx';
 import { formatCurrency } from '../utils/formatters.js';
-import { getOrderStatusLabel, getPaymentStatusLabel } from '../utils/statusMappings.js';
-
-const PAID_STATUSES = ['Paid', 'PartiallyPaid', 'Refunded'];
+import { getPaymentStatusLabel, getPaymentStatusColor, isOrderPaid } from '../utils/statusMappings.js';
 
 function PaymentPage() {
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('orderId');
   const navigate = useNavigate();
+  const { notify } = useNotification();
 
   const [order, setOrder] = useState(null);
   const [paymentInfo, setPaymentInfo] = useState(null);
@@ -43,9 +43,9 @@ function PaymentPage() {
     load();
   }, [orderId, load, navigate]);
 
-  // Once admin confirms payment, hop to the success page.
+  // Once admin confirms payment, hop to the success page. Đơn đã hoàn tiền/đã hủy do effect bên dưới xử lý.
   useEffect(() => {
-    if (order && PAID_STATUSES.includes(order.paymentStatus)) {
+    if (order && isOrderPaid(order.paymentStatus)) {
       navigate(`/checkout/success?orderId=${orderId}`, { replace: true });
     }
   }, [order, orderId, navigate]);
@@ -75,7 +75,7 @@ function PaymentPage() {
       await orderApi.cancel(orderId, 'Khách hủy đơn trước khi thanh toán');
       navigate(`/orders/${orderId}`, { replace: true });
     } catch (err) {
-      alert(err?.response?.data?.message || err?.message || 'Hủy đơn thất bại.');
+      notify(err?.response?.data?.message || err?.message || 'Hủy đơn thất bại.', 'error');
     } finally {
       setCancelling(false);
     }
@@ -97,8 +97,7 @@ function PaymentPage() {
           {order && (
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-sm">
               <span className="rounded-full bg-zinc-100 px-3 py-1 font-bold text-zinc-700">Mã đơn: {order.orderCode || paymentInfo?.maDonHangKinhDoanh}</span>
-              <span className="rounded-full bg-amber-100 px-3 py-1 font-bold text-amber-700">{getOrderStatusLabel(order.orderStatus)}</span>
-              <span className="rounded-full bg-amber-100 px-3 py-1 font-bold text-amber-700">{getPaymentStatusLabel(order.paymentStatus)}</span>
+              <span className={`rounded-full px-3 py-1 font-bold ${getPaymentStatusColor(order.paymentStatus)}`}>{getPaymentStatusLabel(order.paymentStatus)}</span>
             </div>
           )}
 

@@ -116,24 +116,8 @@ BEGIN
     IF COL_LENGTH('dbo.HOSO_TRAGOP','NoiCapCCCD') IS NULL ALTER TABLE dbo.HOSO_TRAGOP ADD NoiCapCCCD NVARCHAR(150) NULL;
 END;
 
-IF OBJECT_ID(N'dbo.KY_TRAGOP', N'U') IS NULL
-BEGIN
-    CREATE TABLE dbo.KY_TRAGOP(
-        MaKyTraGop INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-        MaHoSoTraGop INT NOT NULL,
-        KyThu INT NOT NULL,
-        NgayDenHan DATETIME2(0) NOT NULL,
-        SoTienGoc DECIMAL(18,2) NOT NULL,
-        SoTienLai DECIMAL(18,2) NOT NULL,
-        TongTien DECIMAL(18,2) NOT NULL,
-        TrangThai VARCHAR(20) NOT NULL,
-        NgayThanhToan DATETIME2(0) NULL,
-        NgayTao DATETIME2(0) NOT NULL,
-        NgayCapNhat DATETIME2(0) NOT NULL,
-        CONSTRAINT FK_KY_TRAGOP_HOSO FOREIGN KEY (MaHoSoTraGop) REFERENCES dbo.HOSO_TRAGOP(MaHoSoTraGop) ON DELETE CASCADE
-    );
-    CREATE INDEX IX_KY_TRAGOP_HoSo ON dbo.KY_TRAGOP(MaHoSoTraGop, KyThu);
-END;
+IF OBJECT_ID(N'dbo.KY_TRAGOP', N'U') IS NOT NULL
+    DROP TABLE dbo.KY_TRAGOP;
 
 IF OBJECT_ID(N'dbo.YEUCAU_HOANTIEN', N'U') IS NULL
 BEGIN
@@ -165,6 +149,14 @@ BEGIN
 END;
 ALTER TABLE dbo.DONHANG WITH CHECK ADD CONSTRAINT CK_DONHANG_PaymentStatus
     CHECK (TrangThaiThanhToan IN ('Unpaid','PartiallyPaid','Paid','Refunded','Cancelled'));
+
+IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_THANHTOAN_LoaiThanhToan')
+BEGIN
+    UPDATE dbo.THANHTOAN SET LoaiThanhToan = 'Remaining' WHERE LoaiThanhToan = 'Installment';
+    ALTER TABLE dbo.THANHTOAN DROP CONSTRAINT CK_THANHTOAN_LoaiThanhToan;
+END;
+ALTER TABLE dbo.THANHTOAN WITH CHECK ADD CONSTRAINT CK_THANHTOAN_LoaiThanhToan
+    CHECK (LoaiThanhToan IN ('Full','Deposit','Remaining'));
 
 -- Simplified order status: AwaitingPayment / Confirmed / Cancelled only. Shipping progress is
 -- tracked separately in TrangThaiVanChuyen. Migrate any legacy in-flight statuses into Confirmed
@@ -223,23 +215,6 @@ static async Task EnsureOperationsSchemaAsync(WebApplication app)
     var db = scope.ServiceProvider.GetRequiredService<OrderDbContext>();
 
     const string sql = @"
-IF OBJECT_ID(N'dbo.CUAHANG', N'U') IS NULL
-BEGIN
-    CREATE TABLE dbo.CUAHANG(
-        MaCuaHang INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-        MaCuaHangKinhDoanh VARCHAR(40) NOT NULL,
-        TenCuaHang NVARCHAR(150) NOT NULL,
-        LoaiCuaHang VARCHAR(20) NOT NULL DEFAULT 'Showroom',
-        DiaChi NVARCHAR(255) NULL,
-        SoDienThoai VARCHAR(20) NULL,
-        DangHoatDong BIT NOT NULL DEFAULT 1,
-        NgayTao DATETIME2(0) NOT NULL,
-        NgayCapNhat DATETIME2(0) NOT NULL
-    );
-    INSERT INTO dbo.CUAHANG (MaCuaHangKinhDoanh, TenCuaHang, LoaiCuaHang, DangHoatDong, NgayTao, NgayCapNhat)
-    VALUES ('KHO_CHINH', N'Cửa hàng chính', 'Showroom', 1, SYSUTCDATETIME(), SYSUTCDATETIME());
-END;
-
 IF OBJECT_ID(N'dbo.NHACUNGCAP', N'U') IS NULL
 BEGIN
     CREATE TABLE dbo.NHACUNGCAP(
@@ -264,7 +239,6 @@ BEGIN
         MaDonNhap INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
         MaDonNhapKinhDoanh VARCHAR(40) NOT NULL,
         MaNhaCungCap INT NOT NULL,
-        MaCuaHang INT NOT NULL,
         TrangThai VARCHAR(20) NOT NULL DEFAULT 'Draft',
         TongTien DECIMAL(18,2) NOT NULL DEFAULT 0,
         DaThanhToan DECIMAL(18,2) NOT NULL DEFAULT 0,
@@ -298,7 +272,6 @@ BEGIN
         MaPhieuNhap INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
         MaPhieuNhapKinhDoanh VARCHAR(40) NOT NULL,
         MaDonNhap INT NOT NULL,
-        MaCuaHang INT NOT NULL,
         GhiChu NVARCHAR(500) NULL,
         MaNguoiNhan INT NULL,
         NgayNhan DATETIME2(0) NOT NULL,
@@ -343,7 +316,6 @@ BEGIN
         MaPhieuSua INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
         MaPhieuSuaKinhDoanh VARCHAR(40) NOT NULL,
         MaKhachHang INT NOT NULL,
-        MaCuaHang INT NOT NULL,
         MaNhanVienPhuTrach INT NULL,
         MaBaoHanh INT NULL,
         MoTaXe NVARCHAR(255) NOT NULL,
@@ -409,7 +381,6 @@ BEGIN
     CREATE TABLE dbo.CHAMCONG(
         MaChamCong INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
         MaNhanVien INT NOT NULL,
-        MaCuaHang INT NOT NULL,
         ThoiGianVao DATETIME2(0) NOT NULL,
         ThoiGianRa DATETIME2(0) NULL,
         GhiChu NVARCHAR(500) NULL,
@@ -423,7 +394,6 @@ BEGIN
         MaPhieuTra INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
         MaPhieuTraKinhDoanh VARCHAR(40) NOT NULL,
         MaDonHang INT NOT NULL,
-        MaCuaHang INT NOT NULL,
         TrangThai VARCHAR(20) NOT NULL DEFAULT 'Draft',
         LyDo NVARCHAR(500) NOT NULL,
         GhiChu NVARCHAR(500) NULL,
@@ -475,7 +445,6 @@ BEGIN
     CREATE TABLE dbo.CALAMVIEC(
         MaCa INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
         MaNhanVien INT NOT NULL,
-        MaCuaHang INT NOT NULL,
         BatDau DATETIME2(0) NOT NULL,
         KetThuc DATETIME2(0) NOT NULL,
         TrangThai VARCHAR(20) NOT NULL DEFAULT 'Scheduled',

@@ -6,7 +6,10 @@ public class ProductVariantDto
     public int MaSanPham { get; set; }
     public string TenBienThe { get; set; } = string.Empty;
     public string SKU { get; set; } = string.Empty;
-    public decimal? GiaGhiDe { get; set; }
+    public decimal GiaGoc { get; set; }
+    public decimal? GiaKhuyenMai { get; set; }
+    public decimal GiaBan { get; set; }
+    public decimal? TyLeGiam { get; set; }
     public int? SoLuongTon { get; set; }
     public string TrangThai { get; set; } = string.Empty;
     public string? PhienBan { get; set; }

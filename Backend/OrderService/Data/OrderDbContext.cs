@@ -13,6 +13,7 @@ public class OrderDbContext : DbContext
     public DbSet<UserAddress> UserAddresses { get; set; }
     public DbSet<Product> Products { get; set; }
     public DbSet<ProductVariant> ProductVariants { get; set; }
+    public DbSet<ProductImage> ProductImages { get; set; }
     public DbSet<Cart> Carts { get; set; }
     public DbSet<CartItem> CartItems { get; set; }
     public DbSet<Order> Orders { get; set; }
@@ -25,11 +26,9 @@ public class OrderDbContext : DbContext
     public DbSet<VoucherValidationResult> VoucherValidationResults { get; set; }
     public DbSet<Payment> Payments { get; set; }
     public DbSet<InstallmentPlan> InstallmentPlans { get; set; }
-    public DbSet<InstallmentTerm> InstallmentTerms { get; set; }
     public DbSet<RefundRequest> RefundRequests { get; set; }
 
     // Nghiep vu cua hang & van hanh nang cao
-    public DbSet<CuaHang> CuaHangs { get; set; }
     public DbSet<NhaCungCap> NhaCungCaps { get; set; }
     public DbSet<DonNhapHang> DonNhapHangs { get; set; }
     public DbSet<ChiTietDonNhap> ChiTietDonNhaps { get; set; }
@@ -55,6 +54,7 @@ public class OrderDbContext : DbContext
         ConfigureUserAddresses(modelBuilder);
         ConfigureProducts(modelBuilder);
         ConfigureProductVariants(modelBuilder);
+        ConfigureProductImages(modelBuilder);
         ConfigureCarts(modelBuilder);
         ConfigureCartItems(modelBuilder);
         ConfigureOrders(modelBuilder);
@@ -66,7 +66,6 @@ public class OrderDbContext : DbContext
         ConfigureVoucherUsers(modelBuilder);
         ConfigurePayments(modelBuilder);
         ConfigureInstallmentPlans(modelBuilder);
-        ConfigureInstallmentTerms(modelBuilder);
         ConfigureRefundRequests(modelBuilder);
         ConfigureStoredProcedureResults(modelBuilder);
     }
@@ -159,29 +158,6 @@ public class OrderDbContext : DbContext
         });
     }
 
-    private static void ConfigureInstallmentTerms(ModelBuilder modelBuilder)
-    {
-        modelBuilder.Entity<InstallmentTerm>(e =>
-        {
-            e.ToTable("KY_TRAGOP");
-            e.HasKey(x => x.MaKyTraGop);
-            e.Property(x => x.MaKyTraGop).ValueGeneratedOnAdd();
-            e.Property(x => x.NgayDenHan).HasColumnType("datetime2(0)");
-            e.Property(x => x.SoTienGoc).HasPrecision(18, 2);
-            e.Property(x => x.SoTienLai).HasPrecision(18, 2);
-            e.Property(x => x.TongTien).HasPrecision(18, 2);
-            e.Property(x => x.TrangThai).HasMaxLength(20).IsUnicode(false).IsRequired();
-            e.Property(x => x.NgayThanhToan).HasColumnType("datetime2(0)");
-            e.Property(x => x.NgayTao).HasColumnType("datetime2(0)");
-            e.Property(x => x.NgayCapNhat).HasColumnType("datetime2(0)");
-
-            e.HasOne(x => x.Plan)
-                .WithMany(x => x.Terms)
-                .HasForeignKey(x => x.MaHoSoTraGop)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-    }
-
     private static void ConfigureVouchers(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Voucher>(e =>
@@ -254,8 +230,6 @@ public class OrderDbContext : DbContext
             e.Property(x => x.TenSanPham).HasMaxLength(255).IsRequired();
             e.Property(x => x.Slug).HasMaxLength(280).IsRequired();
             e.Property(x => x.MoTaNgan).HasMaxLength(500);
-            e.Property(x => x.GiaGoc).HasPrecision(18, 2);
-            e.Property(x => x.GiaKhuyenMai).HasPrecision(18, 2);
             e.Property(x => x.AnhChinhUrl).HasMaxLength(500);
             e.Property(x => x.TrangThaiSanPham).HasMaxLength(20).IsUnicode(false).IsRequired();
             e.Property(x => x.NgayTao).HasColumnType("datetime2(0)");
@@ -270,15 +244,13 @@ public class OrderDbContext : DbContext
     {
         modelBuilder.Entity<ProductVariant>(e =>
         {
-            e.ToTable("BIENSANPHAM", table =>
-            {
-                table.HasTrigger("trg_BIENSANPHAM_Sync_SoLuongTon_SANPHAM");
-            });
+            e.ToTable("BIENSANPHAM");
             e.HasKey(x => x.MaBienSanPham);
             e.Property(x => x.MaBienSanPham).ValueGeneratedOnAdd();
             e.Property(x => x.TenBienThe).HasMaxLength(180).IsRequired();
             e.Property(x => x.SKU).HasMaxLength(80).IsRequired();
-            e.Property(x => x.GiaGhiDe).HasPrecision(18, 2);
+            e.Property(x => x.GiaGoc).HasPrecision(18, 2).IsRequired();
+            e.Property(x => x.GiaKhuyenMai).HasPrecision(18, 2);
             e.Property(x => x.TrangThai).HasMaxLength(20).IsUnicode(false).IsRequired();
             e.Property(x => x.PhienBan).HasMaxLength(100);
             e.Property(x => x.MauSac).HasMaxLength(80);
@@ -289,6 +261,18 @@ public class OrderDbContext : DbContext
             e.HasOne(x => x.Product)
                 .WithMany()
                 .HasForeignKey(x => x.MaSanPham);
+        });
+    }
+
+    private static void ConfigureProductImages(ModelBuilder modelBuilder)
+    {
+        // Read-model chỉ đọc trên bảng ANHSANPHAM; OrderService không tạo/sửa schema bảng này.
+        modelBuilder.Entity<ProductImage>(e =>
+        {
+            e.ToTable("ANHSANPHAM");
+            e.HasKey(x => x.MaAnhSanPham);
+            e.Property(x => x.MaAnhSanPham).ValueGeneratedOnAdd();
+            e.Property(x => x.UrlAnh).HasMaxLength(500).IsRequired();
         });
     }
 
@@ -489,7 +473,6 @@ public class OrderDbContext : DbContext
 
     private static void ConfigureOperations(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<CuaHang>(e => { e.ToTable("CUAHANG"); e.HasKey(x => x.MaCuaHang); });
         modelBuilder.Entity<NhaCungCap>(e => { e.ToTable("NHACUNGCAP"); e.HasKey(x => x.MaNhaCungCap); });
 
         modelBuilder.Entity<DonNhapHang>(e =>

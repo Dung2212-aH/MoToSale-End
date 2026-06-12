@@ -6,6 +6,7 @@ import businessOperationsService from '../../services/businessOperationsService'
 import { formatCurrency } from '../../utils/formatCurrency';
 import { formatDate } from '../../utils/formatDate';
 import { createDateStamp, exportWorkbook } from '../../utils/exportExcel';
+import { fetchAllPages } from '../../utils/fetchAllPages';
 
 const getApiMessage = (err, fallback) => err?.response?.data?.message || fallback;
 const normalize = (value) => String(value || '').trim().toLowerCase();
@@ -32,12 +33,13 @@ const CustomerList = () => {
     try {
       const [customersRes, ordersRes] = await Promise.allSettled([
         userService.getCustomers({ search: search || undefined, status: status || undefined, pageSize: 100 }),
-        orderService.getAll({ page: 1, pageSize: 1000 }),
+        // Server clamp pageSize về 100 → gọi theo trang để thống kê đủ toàn bộ đơn
+        fetchAllPages((params) => orderService.getAll(params)),
       ]);
 
       if (customersRes.status !== 'fulfilled') throw customersRes.reason;
       setCustomers(asItems(customersRes.value.data));
-      setOrders(ordersRes.status === 'fulfilled' ? asItems(ordersRes.value.data) : []);
+      setOrders(ordersRes.status === 'fulfilled' ? ordersRes.value.items : []);
     } catch (err) {
       setError(getApiMessage(err, 'Không thể tải danh sách khách hàng.'));
     } finally {
@@ -120,12 +122,12 @@ const CustomerList = () => {
     setCrmForm({ subject: '', note: '', followUpAt: '' });
     try {
       const [warrantyRes, repairRes, interactionRes] = await Promise.allSettled([
-        warrantyService.getAll({ page: 1, pageSize: 500 }),
+        fetchAllPages((params) => warrantyService.getAll(params)),
         businessOperationsService.getRepairs(),
         businessOperationsService.getInteractions(),
       ]);
       const customerOrders = orders.filter((order) => matchesCustomer(order, customer));
-      const warranties = warrantyRes.status === 'fulfilled' ? asItems(warrantyRes.value.data).filter((item) => matchesCustomer(item, customer)) : [];
+      const warranties = warrantyRes.status === 'fulfilled' ? warrantyRes.value.items.filter((item) => matchesCustomer(item, customer)) : [];
       const repairs = repairRes.status === 'fulfilled' ? asItems(repairRes.value.data).filter((item) => matchesCustomer(item, customer)) : [];
       const interactions = interactionRes.status === 'fulfilled' ? asItems(interactionRes.value.data).filter((item) => matchesCustomer(item, customer)) : [];
       const summary = {

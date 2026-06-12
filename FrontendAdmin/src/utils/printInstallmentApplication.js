@@ -93,9 +93,6 @@ export function printInstallmentApplication(order, plan) {
   const downPayment = Number(plan.tienTraTruoc || 0);
   const principal = Number(plan.soTienGoc || 0);
   const termCount = Number(plan.soKy || 0);
-  const monthlyPayment = termCount > 0 ? Math.round(Number(plan.tongPhaiTra || 0) / termCount) : 0;
-  const firstTermDate = (plan.terms || [])[0]?.ngayDenHan;
-  const dueDayOfMonth = firstTermDate ? new Date(firstTermDate).getDate() : '';
 
   const now = new Date();
   const dd = now.getDate();
@@ -130,11 +127,6 @@ export function printInstallmentApplication(order, plan) {
     .signatures div { padding-bottom: 90px; }
     .signatures b { display: block; font-size: 14pt; }
     .signatures i { display: block; font-size: 11pt; font-style: italic; margin-top: 2px; }
-    table.schedule { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11pt; }
-    table.schedule th, table.schedule td { border: 1px solid #000; padding: 5px 8px; text-align: left; }
-    table.schedule th { background: #f0f0f0; text-align: center; }
-    table.schedule td.right { text-align: right; }
-    table.schedule td.ctr { text-align: center; }
     h2.section { font-size: 13pt; margin-top: 24px; }
     @media print { body { padding: 0 20mm; max-width: 100%; } }
   </style>
@@ -195,32 +187,7 @@ export function printInstallmentApplication(order, plan) {
       lãi suất <b>${escapeHtml(plan.laiSuatNam)}%/năm</b> (lãi phẳng tính trên dư nợ gốc).<br/>
       Tổng tiền lãi: <b>${escapeHtml(formatCurrency(plan.tongTienLai))}</b>.
       Tổng tiền phải trả qua các kỳ (gốc + lãi): <b>${escapeHtml(formatCurrency(plan.tongPhaiTra))}</b>.<br/>
-      Mỗi tháng Bên B trả khoảng <b>${escapeHtml(formatCurrency(monthlyPayment))}</b>, vào ngày <b>${escapeHtml(dueDayOfMonth)}</b> mỗi tháng (theo lịch chi tiết bên dưới).<br/>
-      Nếu Bên B thanh toán chậm sẽ bị phạt theo lãi suất trả chậm hàng tháng là (<b>0,05</b>%/ngày).
     </div>
-
-    <h2 class="section">Lịch thanh toán chi tiết</h2>
-    <table class="schedule">
-      <thead>
-        <tr>
-          <th>Kỳ</th>
-          <th>Ngày đến hạn</th>
-          <th>Tiền gốc</th>
-          <th>Tiền lãi</th>
-          <th>Tổng phải trả</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${(plan.terms || []).map((t) => `
-          <tr>
-            <td class="ctr">Kỳ ${escapeHtml(t.kyThu)}</td>
-            <td class="ctr">${escapeHtml(fmtDate(t.ngayDenHan))}</td>
-            <td class="right">${escapeHtml(formatCurrency(t.soTienGoc))}</td>
-            <td class="right">${escapeHtml(formatCurrency(t.soTienLai))}</td>
-            <td class="right"><b>${escapeHtml(formatCurrency(t.tongTien))}</b></td>
-          </tr>`).join('')}
-      </tbody>
-    </table>
   </div>
 
   <div class="article">

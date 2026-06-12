@@ -16,12 +16,12 @@ const tabs = [
 
 const emptySupplier = { code: '', name: '', taxCode: '', contactName: '', phone: '', email: '', address: '', note: '', status: 1 };
 const emptyPurchaseLine = { skuId: '', qty: 1, unitCost: 0 };
-const emptyPurchase = { supplierId: '', storeId: '', note: '', lines: [{ ...emptyPurchaseLine }] };
+const emptyPurchase = { supplierId: '', note: '', lines: [{ ...emptyPurchaseLine }] };
 const emptyCash = { transactionType: 'Receipt', category: 'Other', amount: '', method: 'Cash', note: '' };
 const emptyRepairLine = { skuId: '', description: '', qty: 1, unitPrice: 0 };
-const emptyRepair = { customerId: '', storeId: '', assignedStaffId: '', vehicleDescription: '', reportedIssue: '', laborCost: 0, note: '', lines: [] };
+const emptyRepair = { customerId: '', assignedStaffId: '', vehicleDescription: '', reportedIssue: '', laborCost: 0, note: '', lines: [] };
 const emptyCrm = { customerId: '', assignedStaffId: '', interactionType: 'Call', subject: '', note: '', followUpAt: '' };
-const emptyAttendance = { staffUserId: '', storeId: '', note: '' };
+const emptyAttendance = { staffUserId: '', note: '' };
 const emptyPayment = { amount: '', method: 'Cash', note: '' };
 const msg = (err, fallback) => err?.response?.data?.message || fallback;
 const labels = {
@@ -37,7 +37,7 @@ const BusinessOperations = () => {
   const { user, isAdmin } = useAuth();
   const [tab, setTab] = useState('suppliers');
   const [data, setData] = useState({});
-  const [lookups, setLookups] = useState({ stores: [], skus: [], suppliers: [], customers: [], staff: [] });
+  const [lookups, setLookups] = useState({ skus: [], suppliers: [], customers: [], staff: [] });
   const [summary, setSummary] = useState({});
   const [modal, setModal] = useState('');
   const [supplier, setSupplier] = useState(emptySupplier);
@@ -50,7 +50,6 @@ const BusinessOperations = () => {
   const [crmKeyword, setCrmKeyword] = useState('');
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [storeFilter, setStoreFilter] = useState('');
   const [detailPurchase, setDetailPurchase] = useState(null);
   const [receiveTarget, setReceiveTarget] = useState(null);
   const [paymentTarget, setPaymentTarget] = useState(null);
@@ -91,7 +90,7 @@ const BusinessOperations = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [keyword, statusFilter, storeFilter, crmKeyword, crmStatus]);
+  }, [keyword, statusFilter, crmKeyword, crmStatus]);
 
   const openCreate = () => {
     if (tab === 'suppliers') setSupplier(emptySupplier);
@@ -111,7 +110,6 @@ const BusinessOperations = () => {
       if (modal === 'purchase') {
         await service.createPurchase({
           supplierId: Number(purchase.supplierId),
-          storeId: Number(purchase.storeId),
           note: purchase.note,
           lines: purchase.lines.filter((x) => x.skuId).map((x) => ({ skuId: Number(x.skuId), qty: Number(x.qty), unitCost: Number(x.unitCost) })),
         });
@@ -121,7 +119,6 @@ const BusinessOperations = () => {
         await service.createRepair({
           ...repair,
           customerId: Number(repair.customerId),
-          storeId: Number(repair.storeId),
           assignedStaffId: repair.assignedStaffId ? Number(repair.assignedStaffId) : null,
           laborCost: Number(repair.laborCost),
           lines: repair.lines.filter((x) => x.description || x.skuId).map((x) => ({
@@ -141,7 +138,7 @@ const BusinessOperations = () => {
         };
         crm.id ? await service.updateInteraction(crm.id, payload) : await service.createInteraction(payload);
       }
-      if (modal === 'attendance') await service.checkIn({ ...attendance, staffUserId: Number(attendance.staffUserId), storeId: Number(attendance.storeId) });
+      if (modal === 'attendance') await service.checkIn({ ...attendance, staffUserId: Number(attendance.staffUserId) });
       setModal('');
       await load();
     } catch (err) {
@@ -186,7 +183,7 @@ const BusinessOperations = () => {
       cash: { name: 'ThuChi', columns: [['Mã phiếu', 'code'], ['Loại', 'transactionType'], ['Nhóm', 'category'], ['Số tiền', 'amount', 'currency'], ['Hình thức', 'method'], ['Ngày ghi nhận', 'occurredAt', 'date'], ['Ghi chú', 'note']] },
       repairs: { name: 'SuaChua', columns: [['Mã phiếu', 'code'], ['Khách hàng', 'customerName'], ['Xe', 'vehicleDescription'], ['Lỗi ghi nhận', 'reportedIssue'], ['Trạng thái', 'repairStatus'], ['Tổng phí', 'total', 'currency'], ['Ngày nhận', 'receivedAt', 'date']] },
       crm: { name: 'ChamSocKhachHang', columns: [['Khách hàng', 'customerName'], ['Loại', 'interactionType'], ['Nội dung', 'subject'], ['Trạng thái', 'interactionStatus'], ['Nhắc lại', 'followUpAt', 'date'], ['Hoàn thành', 'completedAt', 'date']] },
-      attendance: { name: 'ChamCong', columns: [['Nhân viên', 'staffName'], ['Cửa hàng', 'storeName'], ['Check-in', 'checkInAt', 'date'], ['Check-out', 'checkOutAt', 'date'], ['Ghi chú', 'note']] },
+      attendance: { name: 'ChamCong', columns: [['Nhân viên', 'staffName'], ['Check-in', 'checkInAt', 'date'], ['Check-out', 'checkOutAt', 'date'], ['Ghi chú', 'note']] },
     };
     const config = configs[tab];
     await exportWorkbook({
@@ -255,16 +252,14 @@ const BusinessOperations = () => {
       const text = JSON.stringify(row).toLowerCase();
       const status = row.purchaseStatus || row.repairStatus || row.interactionStatus || '';
       return (!keyword || text.includes(keyword.toLowerCase()))
-        && (!statusFilter || status === statusFilter)
-        && (!storeFilter || String(row.storeId) === String(storeFilter));
+        && (!statusFilter || status === statusFilter);
     });
-  }, [data, filteredCrm, keyword, statusFilter, storeFilter, tab]);
+  }, [data, filteredCrm, keyword, statusFilter, tab]);
 
   const selectTab = (nextTab) => {
     setTab(nextTab);
     setKeyword('');
     setStatusFilter('');
-    setStoreFilter('');
     setPage(1);
   };
 
@@ -315,7 +310,6 @@ const BusinessOperations = () => {
             <div className="row mb-3">
               <div className="col-md-4"><input className="form-control" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="Tìm nhanh trong danh sách..." /></div>
               {['purchases', 'repairs'].includes(tab) && <div className="col-md-3"><select className="form-control" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="">Tất cả trạng thái</option>{(tab === 'purchases' ? ['Draft', 'Approved', 'PartiallyReceived', 'Received', 'Cancelled'] : ['Received', 'Inspecting', 'Quoted', 'Repairing', 'Completed', 'Delivered', 'Cancelled']).map((x) => <option key={x} value={x}>{label(x)}</option>)}</select></div>}
-              {['purchases', 'repairs', 'attendance'].includes(tab) && <div className="col-md-3"><select className="form-control" value={storeFilter} onChange={(e) => setStoreFilter(e.target.value)}><option value="">Tất cả cửa hàng</option>{(lookups.stores || []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>}
             </div>
 
             {tab === 'suppliers' && <SuppliersTable rows={visibleRows} canEdit={isAdmin()} edit={(x) => { setSupplier(x); setModal('supplier'); }} />}
@@ -361,7 +355,7 @@ const Select = ({ label, value, set, items, text }) => <div className="form-grou
 const Modal = ({ title, close, save, children }) => <div className="modal fade show d-block" style={{ background: 'rgba(0,0,0,.5)' }}><div className="modal-dialog modal-lg"><div className="modal-content"><div className="modal-header"><h5>{title}</h5><button className="close" onClick={close}>&times;</button></div><div className="modal-body">{children}</div><div className="modal-footer"><button className="btn btn-secondary" onClick={close}>Đóng</button>{save && <button className="btn btn-primary" onClick={save}>Lưu</button>}</div></div></div></div>;
 
 const SuppliersTable = ({ rows, edit, canEdit }) => <Table headers={['Mã NCC', 'Tên nhà cung cấp', 'Liên hệ', 'Điện thoại', 'Mã số thuế', 'Trạng thái', 'Thao tác']}>{rows.map((x) => <tr key={x.id}><td>{x.code}</td><td>{x.name}</td><td>{x.contactName || '-'}</td><td>{x.phone || '-'}</td><td>{x.taxCode || '-'}</td><td>{x.status === 1 ? 'Hoạt động' : 'Ngừng hợp tác'}</td><td>{canEdit && <button className="btn btn-info btn-xs" onClick={() => edit(x)}>Sửa</button>}</td></tr>)}</Table>;
-const PurchasesTable = ({ rows, run, view, receive, pay, isAdmin, printRecord }) => <Table headers={['Mã đơn mua', 'Nhà cung cấp', 'Kho nhận', 'Tổng tiền', 'Còn phải trả', 'Trạng thái', 'Ngày tạo', 'Thao tác']}>{rows.map((x) => <tr key={x.id}><td>{x.code}</td><td>{x.supplierName}</td><td>{x.storeName || '-'}</td><td className="text-right">{formatCurrency(x.totalAmount)}</td><td className="text-right">{formatCurrency(x.outstanding)}</td><td><StatusBadge value={x.purchaseStatus} /></td><td>{formatDate(x.createdDate)}</td><td className="text-nowrap"><button className="btn btn-secondary btn-xs mr-1" onClick={() => view(x)}>Chi tiết</button>{isAdmin && x.purchaseStatus === 'Draft' && <><button className="btn btn-success btn-xs mr-1" onClick={() => run(() => service.approvePurchase(x.id))}>Duyệt</button><button className="btn btn-danger btn-xs mr-1" onClick={() => window.confirm('Hủy đơn mua này?') && run(() => service.cancelPurchase(x.id))}>Hủy</button></>}{['Approved', 'PartiallyReceived'].includes(x.purchaseStatus) && <button className="btn btn-info btn-xs mr-1" onClick={() => receive(x)}>Nhận hàng từ NCC</button>}{isAdmin && x.outstanding > 0 && x.purchaseStatus !== 'Cancelled' && <button className="btn btn-warning btn-xs mr-1" onClick={() => pay(x)}>Thanh toán</button>}<button className="btn btn-outline-secondary btn-xs" onClick={() => printRecord(`Đơn mua ${x.code}`, [['Nhà cung cấp', x.supplierName], ['Tổng tiền', formatCurrency(x.totalAmount)], ['Còn phải trả', formatCurrency(x.outstanding)], ['Trạng thái', label(x.purchaseStatus)], ['Ngày tạo', formatDate(x.createdDate)]])}>In</button></td></tr>)}</Table>;
+const PurchasesTable = ({ rows, run, view, receive, pay, isAdmin, printRecord }) => <Table headers={['Mã đơn mua', 'Nhà cung cấp', 'Tổng tiền', 'Còn phải trả', 'Trạng thái', 'Ngày tạo', 'Thao tác']}>{rows.map((x) => <tr key={x.id}><td>{x.code}</td><td>{x.supplierName}</td><td className="text-right">{formatCurrency(x.totalAmount)}</td><td className="text-right">{formatCurrency(x.outstanding)}</td><td><StatusBadge value={x.purchaseStatus} /></td><td>{formatDate(x.createdDate)}</td><td className="text-nowrap"><button className="btn btn-secondary btn-xs mr-1" onClick={() => view(x)}>Chi tiết</button>{isAdmin && x.purchaseStatus === 'Draft' && <><button className="btn btn-success btn-xs mr-1" onClick={() => run(() => service.approvePurchase(x.id))}>Duyệt</button><button className="btn btn-danger btn-xs mr-1" onClick={() => window.confirm('Hủy đơn mua này?') && run(() => service.cancelPurchase(x.id))}>Hủy</button></>}{['Approved', 'PartiallyReceived'].includes(x.purchaseStatus) && <button className="btn btn-info btn-xs mr-1" onClick={() => receive(x)}>Nhận hàng từ NCC</button>}{isAdmin && x.outstanding > 0 && x.purchaseStatus !== 'Cancelled' && <button className="btn btn-warning btn-xs mr-1" onClick={() => pay(x)}>Thanh toán</button>}<button className="btn btn-outline-secondary btn-xs" onClick={() => printRecord(`Đơn mua ${x.code}`, [['Nhà cung cấp', x.supplierName], ['Tổng tiền', formatCurrency(x.totalAmount)], ['Còn phải trả', formatCurrency(x.outstanding)], ['Trạng thái', label(x.purchaseStatus)], ['Ngày tạo', formatDate(x.createdDate)]])}>In</button></td></tr>)}</Table>;
 const CashTable = ({ rows, printRecord, isAdmin, run }) => <Table headers={['Mã phiếu', 'Loại', 'Nhóm', 'Số tiền', 'Hình thức', 'Ngày ghi nhận', 'Ghi chú', 'Thao tác']}>{rows.map((x) => <tr key={x.id}><td>{x.code}</td><td>{label(x.transactionType)}</td><td>{x.category}</td><td className="text-right">{formatCurrency(x.amount)}</td><td>{label(x.method)}</td><td>{formatDate(x.occurredAt)}</td><td>{x.note || '-'}</td><td className="text-nowrap"><button className="btn btn-secondary btn-xs mr-1" onClick={() => printRecord(`Phiếu ${label(x.transactionType).toLowerCase()} ${x.code}`, [['Nhóm', x.category], ['Số tiền', formatCurrency(x.amount)], ['Hình thức', label(x.method)], ['Ngày ghi nhận', formatDate(x.occurredAt)], ['Ghi chú', x.note]])}>In</button>{isAdmin && x.referenceType !== 'CashReversal' && <button className="btn btn-outline-danger btn-xs" onClick={() => window.confirm(`Đảo phiếu ${x.code}?`) && run(() => service.reverseCash(x.id))}>Đảo phiếu</button>}</td></tr>)}</Table>;
 const RepairsTable = ({ rows, run, view, printRecord }) => {
   const actions = { Received: ['Inspecting', 'Kiểm tra xe'], Inspecting: ['Quoted', 'Xác nhận báo giá'], Quoted: ['Repairing', 'Bắt đầu sửa'], Repairing: ['Completed', 'Sửa xong'], Completed: ['Delivered', 'Bàn giao'] };
@@ -371,23 +365,23 @@ const RepairsTable = ({ rows, run, view, printRecord }) => {
   })}</Table>;
 };
 const CrmTable = ({ rows, run, edit }) => <Table headers={['Khách hàng', 'Loại', 'Nội dung', 'Trạng thái', 'Nhắc lại', 'Thao tác']}>{rows.map((x) => <tr key={x.id}><td>{x.customerName}</td><td>{label(x.interactionType)}</td><td>{x.subject}<div className="text-muted small">{x.note || ''}</div></td><td><StatusBadge value={x.interactionStatus} /></td><td>{formatDate(x.followUpAt)}</td><td className="text-nowrap">{x.interactionStatus === 'Open' && <><button className="btn btn-info btn-xs mr-1" onClick={() => edit(x)}>Sửa</button><button className="btn btn-success btn-xs mr-1" onClick={() => run(() => service.completeInteraction(x.id))}>Hoàn thành</button><button className="btn btn-outline-danger btn-xs" onClick={() => window.confirm('Hủy lịch chăm sóc này?') && run(() => service.cancelInteraction(x.id))}>Hủy</button></>}</td></tr>)}</Table>;
-const AttendanceTable = ({ rows, run }) => <Table headers={['Nhân viên', 'Cửa hàng', 'Check-in', 'Check-out', 'Ghi chú', 'Thao tác']}>{rows.map((x) => <tr key={x.id}><td>{x.staffName}</td><td>{x.storeName}</td><td>{formatDate(x.checkInAt)}</td><td>{formatDate(x.checkOutAt)}</td><td>{x.note || '-'}</td><td>{!x.checkOutAt && <button className="btn btn-warning btn-xs" onClick={() => run(() => service.checkOut(x.id))}>Check-out</button>}</td></tr>)}</Table>;
+const AttendanceTable = ({ rows, run }) => <Table headers={['Nhân viên', 'Check-in', 'Check-out', 'Ghi chú', 'Thao tác']}>{rows.map((x) => <tr key={x.id}><td>{x.staffName}</td><td>{formatDate(x.checkInAt)}</td><td>{formatDate(x.checkOutAt)}</td><td>{x.note || '-'}</td><td>{!x.checkOutAt && <button className="btn btn-warning btn-xs" onClick={() => run(() => service.checkOut(x.id))}>Check-out</button>}</td></tr>)}</Table>;
 
 const SupplierForm = ({ value, set }) => <><Input label="Mã nhà cung cấp" value={value.code} set={(x) => set({ ...value, code: x })} /><Input label="Tên nhà cung cấp" value={value.name} set={(x) => set({ ...value, name: x })} /><Input label="Người liên hệ" value={value.contactName} set={(x) => set({ ...value, contactName: x })} /><Input label="Điện thoại" value={value.phone} set={(x) => set({ ...value, phone: x })} /><Input label="Email" type="email" value={value.email || ''} set={(x) => set({ ...value, email: x })} /><Input label="Mã số thuế" value={value.taxCode} set={(x) => set({ ...value, taxCode: x })} /><Input label="Địa chỉ" value={value.address || ''} set={(x) => set({ ...value, address: x })} /><Input label="Ghi chú" value={value.note || ''} set={(x) => set({ ...value, note: x })} /><Select label="Trạng thái hợp tác" value={value.status} set={(x) => set({ ...value, status: Number(x) })} items={[{ id: 1, name: 'Hoạt động' }, { id: 0, name: 'Ngừng hợp tác' }]} text={(x) => x.name} /></>;
 const PurchaseForm = ({ value, set, lookups }) => {
   const update = (index, key, nextValue) => set({ ...value, lines: value.lines.map((line, lineIndex) => lineIndex === index ? { ...line, [key]: nextValue } : line) });
-  return <><Select label="Nhà cung cấp" value={value.supplierId} set={(x) => set({ ...value, supplierId: x })} items={lookups.suppliers || []} text={(x) => `${x.code} - ${x.name}`} /><Select label="Kho nhận" value={value.storeId} set={(x) => set({ ...value, storeId: x })} items={lookups.stores || []} text={(x) => `${x.code} - ${x.name}`} />{value.lines.map((line, index) => <div className="border rounded p-2 mb-2" key={index}><Select label={`SKU nhập #${index + 1}`} value={line.skuId} set={(x) => update(index, 'skuId', x)} items={lookups.skus || []} text={(x) => `${x.skuCode} - ${x.productName}`} /><div className="row"><div className="col-md-6"><Input label="Số lượng" type="number" value={line.qty} set={(x) => update(index, 'qty', x)} /></div><div className="col-md-6"><Input label="Giá nhập" type="number" value={line.unitCost} set={(x) => update(index, 'unitCost', x)} /></div></div>{value.lines.length > 1 && <button className="btn btn-outline-danger btn-sm" onClick={() => set({ ...value, lines: value.lines.filter((_, i) => i !== index) })}>Xóa dòng</button>}</div>)}<button className="btn btn-outline-primary btn-sm mb-3" onClick={() => set({ ...value, lines: [...value.lines, { ...emptyPurchaseLine }] })}>Thêm dòng SKU</button><Input label="Ghi chú" value={value.note || ''} set={(x) => set({ ...value, note: x })} /></>;
+  return <><Select label="Nhà cung cấp" value={value.supplierId} set={(x) => set({ ...value, supplierId: x })} items={lookups.suppliers || []} text={(x) => `${x.code} - ${x.name}`} />{value.lines.map((line, index) => <div className="border rounded p-2 mb-2" key={index}><Select label={`SKU nhập #${index + 1}`} value={line.skuId} set={(x) => update(index, 'skuId', x)} items={lookups.skus || []} text={(x) => `${x.skuCode} - ${x.productName}`} /><div className="row"><div className="col-md-6"><Input label="Số lượng" type="number" value={line.qty} set={(x) => update(index, 'qty', x)} /></div><div className="col-md-6"><Input label="Giá nhập" type="number" value={line.unitCost} set={(x) => update(index, 'unitCost', x)} /></div></div>{value.lines.length > 1 && <button className="btn btn-outline-danger btn-sm" onClick={() => set({ ...value, lines: value.lines.filter((_, i) => i !== index) })}>Xóa dòng</button>}</div>)}<button className="btn btn-outline-primary btn-sm mb-3" onClick={() => set({ ...value, lines: [...value.lines, { ...emptyPurchaseLine }] })}>Thêm dòng SKU</button><Input label="Ghi chú" value={value.note || ''} set={(x) => set({ ...value, note: x })} /></>;
 };
 const CashForm = ({ value, set }) => <><Select label="Loại phiếu" value={value.transactionType} set={(x) => set({ ...value, transactionType: x })} items={[{ id: 'Receipt', name: 'Phiếu thu' }, { id: 'Payment', name: 'Phiếu chi' }]} text={(x) => x.name} /><Select label="Nhóm thu chi" value={value.category} set={(x) => set({ ...value, category: x })} items={[{ id: 'Other', name: 'Khác' }, { id: 'Service', name: 'Dịch vụ sửa chữa' }, { id: 'OperatingExpense', name: 'Chi phí vận hành' }, { id: 'SupplierPayment', name: 'Thanh toán nhà cung cấp' }]} text={(x) => x.name} /><Select label="Hình thức" value={value.method} set={(x) => set({ ...value, method: x })} items={[{ id: 'Cash', name: 'Tiền mặt' }, { id: 'BankTransfer', name: 'Chuyển khoản' }]} text={(x) => x.name} /><Input label="Số tiền" type="number" value={value.amount} set={(x) => set({ ...value, amount: x })} /><Input label="Ngày ghi nhận" type="datetime-local" value={value.occurredAt || ''} set={(x) => set({ ...value, occurredAt: x || null })} /><Input label="Ghi chú" value={value.note} set={(x) => set({ ...value, note: x })} /></>;
 const RepairForm = ({ value, set, lookups }) => {
   const updateLine = (index, key, nextValue) => set({ ...value, lines: value.lines.map((line, lineIndex) => lineIndex === index ? { ...line, [key]: nextValue } : line) });
-  return <><Select label="Khách hàng" value={value.customerId} set={(x) => set({ ...value, customerId: x })} items={lookups.customers || []} text={(x) => `${x.fullName} - ${x.email}`} /><Select label="Cửa hàng" value={value.storeId} set={(x) => set({ ...value, storeId: x })} items={lookups.stores || []} text={(x) => x.name} /><Select label="Nhân viên phụ trách" value={value.assignedStaffId} set={(x) => set({ ...value, assignedStaffId: x })} items={lookups.staff || []} text={(x) => x.fullName} /><Input label="Thông tin xe" value={value.vehicleDescription} set={(x) => set({ ...value, vehicleDescription: x })} /><Input label="Lỗi ghi nhận" value={value.reportedIssue} set={(x) => set({ ...value, reportedIssue: x })} /><Input label="Công sửa chữa" type="number" value={value.laborCost} set={(x) => set({ ...value, laborCost: x })} /><Input label="Ghi chú" value={value.note || ''} set={(x) => set({ ...value, note: x })} /><hr /><strong>Phụ tùng sử dụng</strong>{value.lines.map((line, index) => <div className="border rounded p-2 mb-2" key={index}><Select label="SKU phụ tùng" value={line.skuId} set={(x) => updateLine(index, 'skuId', x)} items={lookups.skus || []} text={(x) => `${x.skuCode} - ${x.productName}`} /><Input label="Mô tả" value={line.description} set={(x) => updateLine(index, 'description', x)} /><div className="row"><div className="col-md-6"><Input label="Số lượng" type="number" value={line.qty} set={(x) => updateLine(index, 'qty', x)} /></div><div className="col-md-6"><Input label="Đơn giá" type="number" value={line.unitPrice} set={(x) => updateLine(index, 'unitPrice', x)} /></div></div><button className="btn btn-outline-danger btn-sm" onClick={() => set({ ...value, lines: value.lines.filter((_, i) => i !== index) })}>Xóa phụ tùng</button></div>)}<button className="btn btn-outline-primary btn-sm" onClick={() => set({ ...value, lines: [...value.lines, { ...emptyRepairLine }] })}>Thêm phụ tùng</button></>;
+  return <><Select label="Khách hàng" value={value.customerId} set={(x) => set({ ...value, customerId: x })} items={lookups.customers || []} text={(x) => `${x.fullName} - ${x.email}`} /><Select label="Nhân viên phụ trách" value={value.assignedStaffId} set={(x) => set({ ...value, assignedStaffId: x })} items={lookups.staff || []} text={(x) => x.fullName} /><Input label="Thông tin xe" value={value.vehicleDescription} set={(x) => set({ ...value, vehicleDescription: x })} /><Input label="Lỗi ghi nhận" value={value.reportedIssue} set={(x) => set({ ...value, reportedIssue: x })} /><Input label="Công sửa chữa" type="number" value={value.laborCost} set={(x) => set({ ...value, laborCost: x })} /><Input label="Ghi chú" value={value.note || ''} set={(x) => set({ ...value, note: x })} /><hr /><strong>Phụ tùng sử dụng</strong>{value.lines.map((line, index) => <div className="border rounded p-2 mb-2" key={index}><Select label="SKU phụ tùng" value={line.skuId} set={(x) => updateLine(index, 'skuId', x)} items={lookups.skus || []} text={(x) => `${x.skuCode} - ${x.productName}`} /><Input label="Mô tả" value={line.description} set={(x) => updateLine(index, 'description', x)} /><div className="row"><div className="col-md-6"><Input label="Số lượng" type="number" value={line.qty} set={(x) => updateLine(index, 'qty', x)} /></div><div className="col-md-6"><Input label="Đơn giá" type="number" value={line.unitPrice} set={(x) => updateLine(index, 'unitPrice', x)} /></div></div><button className="btn btn-outline-danger btn-sm" onClick={() => set({ ...value, lines: value.lines.filter((_, i) => i !== index) })}>Xóa phụ tùng</button></div>)}<button className="btn btn-outline-primary btn-sm" onClick={() => set({ ...value, lines: [...value.lines, { ...emptyRepairLine }] })}>Thêm phụ tùng</button></>;
 };
 const CrmForm = ({ value, set, lookups }) => <><Select label="Khách hàng" value={value.customerId} set={(x) => set({ ...value, customerId: x })} items={lookups.customers || []} text={(x) => `${x.fullName} - ${x.email}`} /><Select label="Loại tương tác" value={value.interactionType} set={(x) => set({ ...value, interactionType: x })} items={[{ id: 'Call', name: 'Gọi điện' }, { id: 'Email', name: 'Email' }, { id: 'Visit', name: 'Tại cửa hàng' }, { id: 'Message', name: 'Tin nhắn' }]} text={(x) => x.name} /><Select label="Nhân viên phụ trách" value={value.assignedStaffId} set={(x) => set({ ...value, assignedStaffId: x })} items={lookups.staff || []} text={(x) => x.fullName} /><Input label="Nội dung chăm sóc" value={value.subject} set={(x) => set({ ...value, subject: x })} /><Input label="Nhắc lại lúc" type="datetime-local" value={value.followUpAt} set={(x) => set({ ...value, followUpAt: x })} /><Input label="Ghi chú" value={value.note} set={(x) => set({ ...value, note: x })} /></>;
-const AttendanceForm = ({ value, set, lookups, lockStaff }) => <><div className="form-group"><label>Nhân viên</label><select className="form-control" disabled={lockStaff} value={value.staffUserId} onChange={(e) => set({ ...value, staffUserId: e.target.value })}><option value="">-- Chọn --</option>{(lookups.staff || []).map((x) => <option key={x.id} value={x.id}>{x.fullName}</option>)}</select></div><Select label="Cửa hàng" value={value.storeId} set={(x) => set({ ...value, storeId: x })} items={lookups.stores || []} text={(x) => x.name} /><Input label="Ghi chú" value={value.note || ''} set={(x) => set({ ...value, note: x })} /></>;
+const AttendanceForm = ({ value, set, lookups, lockStaff }) => <><div className="form-group"><label>Nhân viên</label><select className="form-control" disabled={lockStaff} value={value.staffUserId} onChange={(e) => set({ ...value, staffUserId: e.target.value })}><option value="">-- Chọn --</option>{(lookups.staff || []).map((x) => <option key={x.id} value={x.id}>{x.fullName}</option>)}</select></div><Input label="Ghi chú" value={value.note || ''} set={(x) => set({ ...value, note: x })} /></>;
 
 const PurchaseDetail = ({ value, close }) => <Modal title={`Chi tiết đơn mua - ${value.code}`} close={close}>
-  <div className="row mb-3"><div className="col-md-4"><strong>Nhà cung cấp:</strong> {value.supplierName}</div><div className="col-md-4"><strong>Kho nhận:</strong> {value.storeName || '-'}</div><div className="col-md-4"><strong>Trạng thái:</strong> {label(value.purchaseStatus)}</div></div>
+  <div className="row mb-3"><div className="col-md-6"><strong>Nhà cung cấp:</strong> {value.supplierName}</div><div className="col-md-6"><strong>Trạng thái:</strong> {label(value.purchaseStatus)}</div></div>
   <Table headers={['SKU', 'Sản phẩm', 'Đặt mua', 'Đã nhận', 'Còn lại', 'Giá nhập']}>{(value.lines || []).map((line) => <tr key={line.id}><td>{line.skuCode || line.skuId}</td><td>{line.productName || '-'}</td><td className="text-right">{line.orderedQty}</td><td className="text-right">{line.receivedQty}</td><td className="text-right">{line.orderedQty - line.receivedQty}</td><td className="text-right">{formatCurrency(line.unitCost)}</td></tr>)}</Table>
 </Modal>;
 

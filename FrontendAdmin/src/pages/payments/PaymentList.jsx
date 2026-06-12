@@ -22,9 +22,10 @@ const PaymentList = () => {
     setLoading(true);
     setError('');
     try {
+      // PaymentSearchDto backend chỉ bind TrangThai/PhuongThuc (không có status/method)
       const params = { page, pageSize };
-      if (statusFilter) params.status = statusFilter;
-      if (methodFilter) params.method = methodFilter;
+      if (statusFilter) params.trangThai = statusFilter;
+      if (methodFilter) params.phuongThuc = methodFilter;
       const res = await paymentService.getAll(params);
       const data = res.data;
       setPayments(data.items || data.data || data || []);

@@ -12,6 +12,7 @@ import {
 import { formatCurrency } from '../../utils/formatCurrency';
 import { formatDate } from '../../utils/formatDate';
 import { createDateStamp, exportWorkbook } from '../../utils/exportExcel';
+import { fetchAllPages } from '../../utils/fetchAllPages';
 
 const pageSize = 10;
 
@@ -99,9 +100,11 @@ const OrderList = () => {
   const handleExportExcel = async () => {
     setExporting(true);
     try {
-      const res = await orderService.getAll(buildFilterParams({ page: 1, pageSize: 10000 }));
-      const data = res.data;
-      const exportRows = data.items || data.data || data || [];
+      // Server clamp pageSize về 100 → phải gọi theo trang để lấy ĐỦ đơn theo bộ lọc
+      const { items: exportRows } = await fetchAllPages(
+        (params) => orderService.getAll(params),
+        buildFilterParams()
+      );
 
       await exportWorkbook({
         fileName: `don-hang-${createDateStamp()}.xlsx`,

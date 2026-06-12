@@ -8,7 +8,6 @@ const mapSearchParams = (params = {}) => ({
 
 const productService = {
   getAll: (params) => api.get('/products', { params: mapSearchParams(params) }),
-  getById: (id) => api.get(`/products/${id}`),
   create: (data) => api.post('/products', data),
   update: (id, data) => api.patch(`/products/${id}`, data),
   delete: (id) => api.delete(`/products/${id}`),
@@ -29,13 +28,11 @@ const productService = {
   deleteCompatibility: (productId, compatibilityId) => api.delete(`/products/${productId}/compatibilities/${compatibilityId}`),
   // Sản phẩm bán kèm / liên quan
   getRelatedProducts: (productId) => api.get(`/products/${productId}/related`),
-  getRelatedItems: (productId) => api.get(`/products/${productId}/related`),
   createRelatedItem: (productId, data) => api.post(`/products/${productId}/related`, data),
   updateRelatedItem: (productId, relatedId, data) => api.put(`/products/${productId}/related/${relatedId}`, data),
   deleteRelatedItem: (productId, relatedId) => api.delete(`/products/${productId}/related/${relatedId}`),
   // Khuyến mại đang áp dụng, tuổi tồn kho, mã vạch
   getApplicableVouchers: (productId) => api.get(`/products/${productId}/promotions`),
-  getPromotions: (productId) => api.get(`/products/${productId}/promotions`),
   getInventoryAging: (productId) => api.get(`/products/${productId}/inventory-aging`),
   getBarcodes: (productId) => api.get(`/products/${productId}/barcodes`),
 };

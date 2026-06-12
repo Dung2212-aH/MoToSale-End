@@ -96,7 +96,7 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5002 }],
       "UpstreamPathTemplate": "/api/favorites",
-      "UpstreamHttpMethod": [ "GET", "POST", "OPTIONS" ]
+      "UpstreamHttpMethod": [ "GET", "OPTIONS" ]
     },
     {
       "DownstreamPathTemplate": "/api/favorites/{everything}",
@@ -173,7 +173,7 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5002 }],
       "UpstreamPathTemplate": "/api/inventory/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "OPTIONS" ]
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "OPTIONS" ]
     },
     {
       "DownstreamPathTemplate": "/api/content/{everything}",
@@ -187,7 +187,7 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5003 }],
       "UpstreamPathTemplate": "/api/cart",
-      "UpstreamHttpMethod": [ "GET", "DELETE", "OPTIONS" ]
+      "UpstreamHttpMethod": [ "GET", "OPTIONS" ]
     },
     {
       "DownstreamPathTemplate": "/api/cart/{everything}",
@@ -208,7 +208,7 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5003 }],
       "UpstreamPathTemplate": "/api/orders/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "OPTIONS" ]
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "PATCH", "OPTIONS" ]
     },
     {
       "DownstreamPathTemplate": "/api/vouchers",
@@ -229,7 +229,7 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5003 }],
       "UpstreamPathTemplate": "/api/business-operations/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE", "OPTIONS" ]
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "OPTIONS" ]
     },
     {
       "DownstreamPathTemplate": "/api/advanced-operations/{everything}",
@@ -250,7 +250,7 @@
       "DownstreamScheme": "http",
       "DownstreamHostAndPorts": [{ "Host": "localhost", "Port": 5004 }],
       "UpstreamPathTemplate": "/api/payments/{everything}",
-      "UpstreamHttpMethod": [ "GET", "POST", "PATCH", "DELETE", "OPTIONS" ]
+      "UpstreamHttpMethod": [ "GET", "POST", "PATCH", "OPTIONS" ]
     }
   ],
   "GlobalConfiguration": {

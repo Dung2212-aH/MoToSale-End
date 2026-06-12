@@ -30,20 +30,6 @@ public class CartController : ControllerBase
         }
     }
 
-    [HttpGet("count")]
-    public async Task<IActionResult> GetCount()
-    {
-        try
-        {
-            var cart = await _orderService.GetMyCartAsync(this.GetCurrentUserId());
-            return Ok(new { count = cart.TongSoLuong, totalItems = cart.TongSoLuong });
-        }
-        catch (Exception ex)
-        {
-            return this.ToErrorResult(ex);
-        }
-    }
-
     [HttpPost("items")]
     public async Task<IActionResult> AddItem(AddCartItemRequest request)
     {

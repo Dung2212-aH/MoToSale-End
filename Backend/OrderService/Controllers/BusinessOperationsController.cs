@@ -29,8 +29,6 @@ public class BusinessOperationsController : ControllerBase
     [HttpGet("lookups")]
     public async Task<IActionResult> GetLookups()
     {
-        var stores = await _db.CuaHangs.AsNoTracking().OrderBy(x => x.MaCuaHang)
-            .Select(x => new { id = x.MaCuaHang, code = x.MaCuaHangKinhDoanh, name = x.TenCuaHang }).ToListAsync();
         var skus = await _db.ProductVariants.AsNoTracking()
             .Join(_db.Products.AsNoTracking(), v => v.MaSanPham, p => p.MaSanPham, (v, p) => new { id = v.MaBienSanPham, maSanPham = v.MaSanPham, skuCode = v.SKU, productName = p.TenSanPham })
             .OrderBy(x => x.productName).Take(1000).ToListAsync();
@@ -52,7 +50,7 @@ public class BusinessOperationsController : ControllerBase
                     .ToList()
             }).ToListAsync();
 
-        return Ok(new { stores, skus, suppliers, customers = users, staff = users, orders });
+        return Ok(new { skus, suppliers, customers = users, staff = users, orders });
     }
 
     [HttpGet("summary")]
@@ -143,7 +141,6 @@ public class BusinessOperationsController : ControllerBase
     public async Task<IActionResult> GetPurchases()
     {
         var supplierNames = await _db.NhaCungCaps.AsNoTracking().ToDictionaryAsync(x => x.MaNhaCungCap, x => x.TenNhaCungCap);
-        var storeNames = await _db.CuaHangs.AsNoTracking().ToDictionaryAsync(x => x.MaCuaHang, x => x.TenCuaHang);
         var skuCodes = await _db.ProductVariants.AsNoTracking()
             .Join(_db.Products.AsNoTracking(), v => v.MaSanPham, p => p.MaSanPham, (v, p) => new { v.MaBienSanPham, v.SKU, p.TenSanPham })
             .ToDictionaryAsync(x => x.MaBienSanPham, x => new { x.SKU, x.TenSanPham });
@@ -156,8 +153,6 @@ public class BusinessOperationsController : ControllerBase
             id = p.MaDonNhap,
             code = p.MaDonNhapKinhDoanh,
             supplierName = supplierNames.GetValueOrDefault(p.MaNhaCungCap),
-            storeId = p.MaCuaHang,
-            storeName = storeNames.GetValueOrDefault(p.MaCuaHang),
             purchaseStatus = p.TrangThai,
             totalAmount = p.TongTien,
             paidAmount = p.DaThanhToan,
@@ -182,12 +177,10 @@ public class BusinessOperationsController : ControllerBase
     public async Task<IActionResult> CreatePurchase([FromBody] CreatePurchaseRequest req)
     {
         if (req.Lines is null || req.Lines.Count == 0) return BadRequest(new { message = "Vui long them it nhat mot dong SKU." });
-        var storeId = req.StoreId > 0 ? req.StoreId : await DefaultStoreIdAsync();
         var order = new DonNhapHang
         {
             MaDonNhapKinhDoanh = GenerateCode("PO"),
             MaNhaCungCap = req.SupplierId,
-            MaCuaHang = storeId,
             TrangThai = "Draft",
             TongTien = req.Lines.Sum(l => l.Qty * l.UnitCost),
             DaThanhToan = 0,
@@ -253,7 +246,6 @@ public class BusinessOperationsController : ControllerBase
         {
             MaPhieuNhapKinhDoanh = GenerateCode("GR"),
             MaDonNhap = id,
-            MaCuaHang = order.MaCuaHang,
             GhiChu = TrimToNull(req.Note),
             MaNguoiNhan = this.GetCurrentUserId(),
             NgayNhan = DateTime.UtcNow,
@@ -407,7 +399,6 @@ public class BusinessOperationsController : ControllerBase
             id = r.MaPhieuSua,
             code = r.MaPhieuSuaKinhDoanh,
             customerName = customerNames.GetValueOrDefault(r.MaKhachHang),
-            storeId = r.MaCuaHang,
             vehicleDescription = r.MoTaXe,
             reportedIssue = r.MoTaLoi,
             repairStatus = r.TrangThai,
@@ -422,7 +413,6 @@ public class BusinessOperationsController : ControllerBase
     [HttpPost("repairs")]
     public async Task<IActionResult> CreateRepair([FromBody] CreateRepairRequest req)
     {
-        var storeId = req.StoreId > 0 ? req.StoreId : await DefaultStoreIdAsync();
         var lines = (req.Lines ?? new()).Select(l => new ChiTietSuaChua
         {
             MaBienSanPham = l.SkuId.HasValue && l.SkuId.Value > 0 ? l.SkuId : null,
@@ -436,7 +426,6 @@ public class BusinessOperationsController : ControllerBase
         {
             MaPhieuSuaKinhDoanh = GenerateCode("RO"),
             MaKhachHang = req.CustomerId,
-            MaCuaHang = storeId,
             MaNhanVienPhuTrach = req.AssignedStaffId,
             MoTaXe = TrimToNull(req.VehicleDescription) ?? "",
             MoTaLoi = TrimToNull(req.ReportedIssue) ?? "",
@@ -571,15 +560,12 @@ public class BusinessOperationsController : ControllerBase
     public async Task<IActionResult> GetAttendance()
     {
         var names = await _db.Users.AsNoTracking().ToDictionaryAsync(x => x.MaNguoiDung, x => x.HoTen);
-        var storeNames = await _db.CuaHangs.AsNoTracking().ToDictionaryAsync(x => x.MaCuaHang, x => x.TenCuaHang);
         var rows = await _db.ChamCongs.AsNoTracking().OrderByDescending(x => x.MaChamCong).Take(500).ToListAsync();
         var items = rows.Select(x => new
         {
             id = x.MaChamCong,
             staffUserId = x.MaNhanVien,
             staffName = names.GetValueOrDefault(x.MaNhanVien),
-            storeId = x.MaCuaHang,
-            storeName = storeNames.GetValueOrDefault(x.MaCuaHang),
             checkInAt = x.ThoiGianVao,
             checkOutAt = x.ThoiGianRa,
             note = x.GhiChu
@@ -593,12 +579,11 @@ public class BusinessOperationsController : ControllerBase
         var me = this.GetCurrentUserId();
         var staffId = req.StaffUserId > 0 ? req.StaffUserId : me;
         if (!IsAdmin && staffId != me) return BadRequest(new { message = "Chi duoc check-in cho ban than." });
-        var storeId = req.StoreId > 0 ? req.StoreId : await DefaultStoreIdAsync();
 
         var open = await _db.ChamCongs.AnyAsync(x => x.MaNhanVien == staffId && x.ThoiGianRa == null);
         if (open) return BadRequest(new { message = "Ban dang co ca chua check-out." });
 
-        var entity = new ChamCong { MaNhanVien = staffId, MaCuaHang = storeId, ThoiGianVao = DateTime.UtcNow, GhiChu = TrimToNull(req.Note), NgayTao = DateTime.UtcNow };
+        var entity = new ChamCong { MaNhanVien = staffId, ThoiGianVao = DateTime.UtcNow, GhiChu = TrimToNull(req.Note), NgayTao = DateTime.UtcNow };
         _db.ChamCongs.Add(entity);
         await _db.SaveChangesAsync();
         return Ok(new { id = entity.MaChamCong });
@@ -620,16 +605,22 @@ public class BusinessOperationsController : ControllerBase
 
     private static string? TrimToNull(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
 
-    private async Task<int> DefaultStoreIdAsync()
-    {
-        var id = await _db.CuaHangs.OrderBy(x => x.MaCuaHang).Select(x => x.MaCuaHang).FirstOrDefaultAsync();
-        return id == 0 ? 1 : id;
-    }
-
     private async Task IncreaseStockAsync(int maBienSanPham, int delta)
     {
-        await _db.Database.ExecuteSqlInterpolatedAsync(
-            $"UPDATE dbo.BIENSANPHAM SET SoLuongTon = CASE WHEN ISNULL(SoLuongTon,0) + {delta} < 0 THEN 0 ELSE ISNULL(SoLuongTon,0) + {delta} END WHERE MaBienSanPham = {maBienSanPham}");
+        var variant = await _db.ProductVariants.AsNoTracking().FirstAsync(x => x.MaBienSanPham == maBienSanPham);
+        int? userId = null;
+        int? refId = null;
+        await _db.Database.ExecuteSqlInterpolatedAsync($"""
+            EXEC dbo.sp_TONKHO_ApDungBienDong
+                @MaSanPham = {variant.MaSanPham},
+                @MaBienSanPham = {maBienSanPham},
+                @LoaiBienDong = {"NghiepVu"},
+                @SoLuongThayDoi = {delta},
+                @LyDo = {"Dieu chinh ton kho tu nghiep vu van hanh"},
+                @LoaiThamChieu = {"BusinessOperations"},
+                @MaThamChieu = {refId},
+                @MaNguoiThucHien = {userId}
+            """);
     }
 }
 
@@ -651,7 +642,6 @@ public class SupplierRequest
 public class CreatePurchaseRequest
 {
     public int SupplierId { get; set; }
-    public int StoreId { get; set; }
     public string? Note { get; set; }
     public List<PurchaseLineRequest> Lines { get; set; } = new();
 }
@@ -675,7 +665,6 @@ public class CashRequest
 public class CreateRepairRequest
 {
     public int CustomerId { get; set; }
-    public int StoreId { get; set; }
     public int? AssignedStaffId { get; set; }
     public string? VehicleDescription { get; set; }
     public string? ReportedIssue { get; set; }
@@ -696,4 +685,4 @@ public class InteractionRequest
     public DateTime? FollowUpAt { get; set; }
 }
 
-public class AttendanceRequest { public int StaffUserId { get; set; } public int StoreId { get; set; } public string? Note { get; set; } }
+public class AttendanceRequest { public int StaffUserId { get; set; } public string? Note { get; set; } }

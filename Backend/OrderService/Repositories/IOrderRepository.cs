@@ -13,6 +13,8 @@ public interface IOrderRepository
     Task<Product?> GetProductAsync(int maSanPham);
     Task<ProductVariant?> GetVariantAsync(int maBienSanPham);
     Task<bool> ProductHasVariantsAsync(int maSanPham);
+    Task<List<ProductVariant>> GetVariantsByProductAsync(int maSanPham);
+    Task<Dictionary<int, string>> GetPrimaryImageUrlsAsync(IEnumerable<int> maSanPhams);
     Task<Cart?> GetActiveCartByUserIdAsync(int maNguoiDung);
     Task<CartItem?> GetCartItemForUserAsync(int maNguoiDung, int maChiTietGioHang);
     Task AddCartAsync(Cart cart);
@@ -20,6 +22,7 @@ public interface IOrderRepository
     void RemoveCartItem(CartItem cartItem);
     void RemoveCartItems(IEnumerable<CartItem> cartItems);
     Task<int> GetAvailableStockAsync(int maSanPham, int? maBienSanPham);
+    Task ApplyStockMovementAsync(int maSanPham, int? maBienSanPham, int soLuongThayDoi, string loaiBienDong, string lyDo, string loaiThamChieu, int? maThamChieu);
     Task CleanupExpiredInventoryHoldsAsync();
     Task AddOrderAsync(Order order);
     Task<Order?> GetOrderByIdAsync(int maDonHang);

@@ -1,19 +1,5 @@
 namespace OrderService.Entities;
 
-// ===== Cua hang / kho (CUAHANG) =====
-public class CuaHang
-{
-    public int MaCuaHang { get; set; }
-    public string MaCuaHangKinhDoanh { get; set; } = string.Empty;
-    public string TenCuaHang { get; set; } = string.Empty;
-    public string LoaiCuaHang { get; set; } = "Showroom";
-    public string? DiaChi { get; set; }
-    public string? SoDienThoai { get; set; }
-    public bool DangHoatDong { get; set; } = true;
-    public DateTime NgayTao { get; set; }
-    public DateTime NgayCapNhat { get; set; }
-}
-
 // ===== Nha cung cap (NHACUNGCAP) =====
 public class NhaCungCap
 {
@@ -37,7 +23,6 @@ public class DonNhapHang
     public int MaDonNhap { get; set; }
     public string MaDonNhapKinhDoanh { get; set; } = string.Empty;
     public int MaNhaCungCap { get; set; }
-    public int MaCuaHang { get; set; }
     public string TrangThai { get; set; } = "Draft";
     public decimal TongTien { get; set; }
     public decimal DaThanhToan { get; set; }
@@ -68,7 +53,6 @@ public class PhieuNhapKho
     public int MaPhieuNhap { get; set; }
     public string MaPhieuNhapKinhDoanh { get; set; } = string.Empty;
     public int MaDonNhap { get; set; }
-    public int MaCuaHang { get; set; }
     public string? GhiChu { get; set; }
     public int? MaNguoiNhan { get; set; }
     public DateTime NgayNhan { get; set; }
@@ -109,7 +93,6 @@ public class PhieuSuaChua
     public int MaPhieuSua { get; set; }
     public string MaPhieuSuaKinhDoanh { get; set; } = string.Empty;
     public int MaKhachHang { get; set; }
-    public int MaCuaHang { get; set; }
     public int? MaNhanVienPhuTrach { get; set; }
     public int? MaBaoHanh { get; set; }
     public string MoTaXe { get; set; } = string.Empty;
@@ -169,7 +152,6 @@ public class ChamCong
 {
     public int MaChamCong { get; set; }
     public int MaNhanVien { get; set; }
-    public int MaCuaHang { get; set; }
     public DateTime ThoiGianVao { get; set; }
     public DateTime? ThoiGianRa { get; set; }
     public string? GhiChu { get; set; }
@@ -182,7 +164,6 @@ public class PhieuTraHang
     public int MaPhieuTra { get; set; }
     public string MaPhieuTraKinhDoanh { get; set; } = string.Empty;
     public int MaDonHang { get; set; }
-    public int MaCuaHang { get; set; }
     public string TrangThai { get; set; } = "Draft";
     public string LyDo { get; set; } = string.Empty;
     public string? GhiChu { get; set; }
@@ -230,7 +211,6 @@ public class CaLamViec
 {
     public int MaCa { get; set; }
     public int MaNhanVien { get; set; }
-    public int MaCuaHang { get; set; }
     public DateTime BatDau { get; set; }
     public DateTime KetThuc { get; set; }
     public string TrangThai { get; set; } = "Scheduled";

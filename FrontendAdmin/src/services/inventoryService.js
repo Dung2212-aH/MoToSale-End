@@ -12,7 +12,6 @@ const inventoryService = {
   cancelDocument: (id, payload) => api.post(`/inventory/documents/${id}/cancel`, payload),
   updateThreshold: (payload) => api.put('/inventory/threshold', payload),
   adjustStock: (payload) => api.post('/inventory/adjust', payload),
-  exportCsv: (params) => api.get('/inventory/export', { params, responseType: 'blob' }),
 };
 
 export default inventoryService;

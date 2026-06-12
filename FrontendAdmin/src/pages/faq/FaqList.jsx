@@ -61,7 +61,7 @@ const FaqList = () => {
       cauHoi: item.cauHoi || item.question || '',
       cauTraLoi: item.cauTraLoi || item.answer || '',
       danhMuc: item.danhMuc || item.category || '',
-      thuTu: item.thuTu || item.sortOrder || 0,
+      thuTu: item.thuTu ?? item.thuTuHienThi ?? item.sortOrder ?? 0,
       dangHoatDong: !!isActive,
     });
     setShowModal(true);
@@ -89,7 +89,8 @@ const FaqList = () => {
         cauHoi: form.cauHoi,
         cauTraLoi: form.cauTraLoi,
         danhMuc: form.danhMuc,
-        thuTu: Number(form.thuTu) || 0,
+        // Backend Create/UpdateFaqRequest bind 'ThuTuHienThi' (GET admin trả về 'thuTu')
+        thuTuHienThi: Number(form.thuTu) || 0,
         dangHoatDong: !!form.dangHoatDong,
       };
 

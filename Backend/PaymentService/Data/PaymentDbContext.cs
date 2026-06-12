@@ -85,7 +85,7 @@ public class PaymentDbContext : DbContext
                 t.HasCheckConstraint("CK_THANHTOAN_SoTien", "[SoTien] > 0");
                 t.HasCheckConstraint("CK_THANHTOAN_PhuongThuc", "[PhuongThuc] IN ('COD','BankTransfer','Card','Momo','VNPay')");
                 t.HasCheckConstraint("CK_THANHTOAN_TrangThai", "[TrangThai] IN ('Pending','Paid','Failed','Cancelled')");
-                t.HasCheckConstraint("CK_THANHTOAN_LoaiThanhToan", "[LoaiThanhToan] IN ('Full','Deposit','Remaining','Installment')");
+                t.HasCheckConstraint("CK_THANHTOAN_LoaiThanhToan", "[LoaiThanhToan] IN ('Full','Deposit','Remaining')");
             });
             e.HasKey(x => x.MaThanhToan);
             e.Property(x => x.MaThanhToan).ValueGeneratedOnAdd();
@@ -131,7 +131,6 @@ public class PaymentDbContext : DbContext
         {
             e.ToTable("SANPHAM");
             e.HasKey(x => x.MaSanPham);
-            e.Property(x => x.SoLuongTon).IsRequired();
             e.Property(x => x.NgayCapNhat).HasColumnType("datetime2(0)");
         });
     }

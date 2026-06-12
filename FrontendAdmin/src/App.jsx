@@ -25,7 +25,6 @@ import AuditLogList from './pages/audit/AuditLogList';
 import WarrantyList from './pages/warranties/WarrantyList';
 import OperationsSettings from './pages/settings/OperationsSettings';
 import PaymentSettings from './pages/settings/PaymentSettings';
-import InstallmentTermList from './pages/installments/InstallmentTermList';
 import AdvancedOperations from './pages/operations/AdvancedOperations';
 import BusinessOperations from './pages/operations/BusinessOperations';
 import OperationalImports from './pages/operations/OperationalImports';
@@ -78,7 +77,6 @@ function AppRoutes() {
       {/* Orders & Payments */}
       <Route path="/orders" element={<ProtectedRoute><MainLayout><OrderList /></MainLayout></ProtectedRoute>} />
       <Route path="/orders/:id" element={<ProtectedRoute><MainLayout><OrderDetail /></MainLayout></ProtectedRoute>} />
-      <Route path="/installments" element={<ProtectedRoute><MainLayout><InstallmentTermList /></MainLayout></ProtectedRoute>} />
       <Route path="/vouchers" element={<ProtectedRoute><MainLayout><VoucherList /></MainLayout></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><MainLayout><InventoryView /></MainLayout></ProtectedRoute>} />
       <Route path="/stock-documents" element={<ProtectedRoute><MainLayout><StockDocumentList /></MainLayout></ProtectedRoute>} />

@@ -12,9 +12,6 @@ public class Product
     public string LoaiSanPham { get; set; } = string.Empty;
     public string? MoTaNgan { get; set; }
     public string? MoTa { get; set; }
-    public decimal GiaGoc { get; set; }
-    public decimal? GiaKhuyenMai { get; set; }
-    public int SoLuongTon { get; set; }
     public string? AnhChinhUrl { get; set; }
     public bool DangHoatDong { get; set; }
     public string TrangThaiSanPham { get; set; } = string.Empty;

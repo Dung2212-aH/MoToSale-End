@@ -31,5 +31,4 @@ public class CategoryRepository : ICategoryRepository
             .ThenBy(c => c.TenDanhMuc)
             .ToListAsync();
     }
-
 }

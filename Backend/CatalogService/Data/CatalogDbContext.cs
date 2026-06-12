@@ -227,8 +227,6 @@ public class CatalogDbContext : DbContext
             e.Property(e => e.Slug).HasMaxLength(280).IsRequired();
             e.Property(e => e.LoaiSanPham).HasMaxLength(20).IsUnicode(false).IsRequired();
             e.Property(e => e.MoTaNgan).HasMaxLength(500);
-            e.Property(e => e.GiaGoc).HasPrecision(18, 2).IsRequired();
-            e.Property(e => e.GiaKhuyenMai).HasPrecision(18, 2);
             e.Property(e => e.AnhChinhUrl).HasMaxLength(500);
             e.Property(e => e.TrangThaiSanPham).HasMaxLength(20).IsUnicode(false).IsRequired();
             e.Property(e => e.NgayTao).HasColumnType("datetime2(0)");
@@ -301,15 +299,13 @@ public class CatalogDbContext : DbContext
     {
         modelBuilder.Entity<ProductVariant>(e =>
         {
-            e.ToTable("BIENSANPHAM", table =>
-            {
-                table.HasTrigger("trg_BIENSANPHAM_Sync_SoLuongTon_SANPHAM");
-            });
+            e.ToTable("BIENSANPHAM");
             e.HasKey(e => e.MaBienSanPham);
             e.Property(e => e.MaBienSanPham).ValueGeneratedOnAdd();
             e.Property(e => e.TenBienThe).HasMaxLength(180).IsRequired();
             e.Property(e => e.SKU).HasMaxLength(80).IsRequired();
-            e.Property(e => e.GiaGhiDe).HasPrecision(18, 2);
+            e.Property(e => e.GiaGoc).HasPrecision(18, 2).IsRequired();
+            e.Property(e => e.GiaKhuyenMai).HasPrecision(18, 2);
             e.Property(e => e.TrangThai).HasMaxLength(20).IsUnicode(false).IsRequired();
             e.Property(e => e.PhienBan).HasMaxLength(100);
             e.Property(e => e.NgayTao).HasColumnType("datetime2(0)");

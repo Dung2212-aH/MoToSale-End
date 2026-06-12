@@ -101,12 +101,18 @@ public class ProductRepository : IProductRepository
 
         if (search.GiaTu.HasValue)
         {
-            query = query.Where(p => (p.GiaKhuyenMai ?? p.GiaGoc) >= search.GiaTu.Value);
+            var giaTu = search.GiaTu.Value;
+            query = query.Where(p => _dbContext.ProductVariants
+                .Where(v => v.MaSanPham == p.MaSanPham)
+                .Min(v => (decimal?)(v.GiaKhuyenMai ?? v.GiaGoc)) >= giaTu);
         }
 
         if (search.GiaDen.HasValue)
         {
-            query = query.Where(p => (p.GiaKhuyenMai ?? p.GiaGoc) <= search.GiaDen.Value);
+            var giaDen = search.GiaDen.Value;
+            query = query.Where(p => _dbContext.ProductVariants
+                .Where(v => v.MaSanPham == p.MaSanPham)
+                .Min(v => (decimal?)(v.GiaKhuyenMai ?? v.GiaGoc)) <= giaDen);
         }
 
         if (search.DangHoatDong.HasValue)
@@ -117,7 +123,7 @@ public class ProductRepository : IProductRepository
         return ApplySort(query, search);
     }
 
-    private static IQueryable<Product> ApplySort(IQueryable<Product> query, ProductSearchDto search)
+    private IQueryable<Product> ApplySort(IQueryable<Product> query, ProductSearchDto search)
     {
         var sortBy = search.SortBy?.Trim().ToLowerInvariant();
 
@@ -127,11 +133,19 @@ public class ProductRepository : IProductRepository
                 ? query.OrderByDescending(p => p.TenSanPham)
                 : query.OrderBy(p => p.TenSanPham),
             "price" or "giaban" => search.SortDescending
-                ? query.OrderByDescending(p => p.GiaKhuyenMai ?? p.GiaGoc)
-                : query.OrderBy(p => p.GiaKhuyenMai ?? p.GiaGoc),
+                ? query.OrderByDescending(p => _dbContext.ProductVariants
+                    .Where(v => v.MaSanPham == p.MaSanPham)
+                    .Min(v => (decimal?)(v.GiaKhuyenMai ?? v.GiaGoc)))
+                : query.OrderBy(p => _dbContext.ProductVariants
+                    .Where(v => v.MaSanPham == p.MaSanPham)
+                    .Min(v => (decimal?)(v.GiaKhuyenMai ?? v.GiaGoc))),
             "stock" or "soluongton" => search.SortDescending
-                ? query.OrderByDescending(p => p.SoLuongTon)
-                : query.OrderBy(p => p.SoLuongTon),
+                ? query.OrderByDescending(p => _dbContext.ProductVariants
+                    .Where(v => v.MaSanPham == p.MaSanPham)
+                    .Sum(v => v.SoLuongTon ?? 0))
+                : query.OrderBy(p => _dbContext.ProductVariants
+                    .Where(v => v.MaSanPham == p.MaSanPham)
+                    .Sum(v => v.SoLuongTon ?? 0)),
             "created" or "date" or "newest" => search.SortDescending
                 ? query.OrderByDescending(p => p.NgayTao)
                 : query.OrderBy(p => p.NgayTao),

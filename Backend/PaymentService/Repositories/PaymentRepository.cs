@@ -71,6 +71,23 @@ public class PaymentRepository : IPaymentRepository
         return await _dbContext.ProductVariants.FirstOrDefaultAsync(v => v.MaBienSanPham == maBienSanPham);
     }
 
+    public async Task ApplyStockMovementAsync(int maSanPham, int? maBienSanPham, int soLuongThayDoi, string loaiBienDong, string lyDo, string loaiThamChieu, int? maThamChieu)
+    {
+        int? userId = null;
+
+        await _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            EXEC dbo.sp_TONKHO_ApDungBienDong
+                @MaSanPham = {maSanPham},
+                @MaBienSanPham = {maBienSanPham},
+                @LoaiBienDong = {loaiBienDong},
+                @SoLuongThayDoi = {soLuongThayDoi},
+                @LyDo = {lyDo},
+                @LoaiThamChieu = {loaiThamChieu},
+                @MaThamChieu = {maThamChieu},
+                @MaNguoiThucHien = {userId}
+            """);
+    }
+
     public async Task AddPaymentAsync(Payment payment)
     {
         await _dbContext.Payments.AddAsync(payment);
@@ -182,4 +199,9 @@ public class PaymentRepository : IPaymentRepository
     {
         return string.IsNullOrWhiteSpace(current) ? note : $"{current} | {note}";
     }
+}
+
+public class IntValueRow
+{
+    public int Value { get; set; }
 }

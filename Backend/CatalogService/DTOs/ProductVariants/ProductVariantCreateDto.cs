@@ -15,7 +15,10 @@ public class ProductVariantCreateDto
     public string SKU { get; set; } = string.Empty;
 
     [Range(0, double.MaxValue)]
-    public decimal? GiaGhiDe { get; set; }
+    public decimal GiaGoc { get; set; }
+
+    [Range(0, double.MaxValue)]
+    public decimal? GiaKhuyenMai { get; set; }
 
     [Range(0, int.MaxValue)]
     public int? SoLuongTon { get; set; }

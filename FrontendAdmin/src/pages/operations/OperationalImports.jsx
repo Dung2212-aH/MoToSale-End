@@ -59,7 +59,7 @@ const OperationalImports = () => {
           item.errors = [!item.code && 'Thiếu mã sản phẩm', !item.name && 'Thiếu tên sản phẩm', !item.categoryId && 'Thiếu mã danh mục', !item.skuCode && 'Thiếu SKU', !(item.listPrice >= 0) && 'Giá không hợp lệ'].filter(Boolean);
           next.push(item);
         } else {
-          const item = { row: index, storeId: number(cell(row, headers, ['mã kho', 'ma kho', 'storeid'])) || null, skuId: number(cell(row, headers, ['mã sku', 'ma sku', 'skuid'])), qty: number(cell(row, headers, ['tồn đầu kỳ', 'ton dau ky', 'quantity', 'qty'])) };
+          const item = { row: index, skuId: number(cell(row, headers, ['mã sku', 'ma sku', 'skuid'])), qty: number(cell(row, headers, ['tồn đầu kỳ', 'ton dau ky', 'quantity', 'qty'])) };
           if (!item.skuId && !item.qty) continue;
           item.errors = [!item.skuId && 'Thiếu mã SKU', !(item.qty >= 0) && 'Tồn đầu kỳ không hợp lệ'].filter(Boolean);
           next.push(item);
@@ -106,17 +106,17 @@ const OperationalImports = () => {
               maSanPhamKinhDoanh: row.code,
               tenSanPham: row.name,
               maDanhMuc: row.categoryId,
-              maHangXe: row.brandId,
+              // Backend từ chối Phụ tùng (kind === 2) kèm hãng xe → chỉ gửi maHangXe cho xe máy
+              maHangXe: row.kind === 2 ? null : row.brandId,
               loaiSanPham: row.kind === 2 ? 'PhuTung' : 'XeMay',
-              giaGoc: row.listPrice,
-              giaKhuyenMai: row.salePrice,
               moTaNgan: 'Import XLSX',
             });
+            // Giá thật nằm ở biến thể: giaGoc (gốc) + giaKhuyenMai (KM, nếu có).
             await productService.createVariant(created.data.id, {
               sku: row.skuCode,
               tenBienThe: row.variantName || 'Mặc định',
-              giaGhiDe: row.salePrice ?? row.listPrice,
-              soLuongTon: 0,
+              giaGoc: row.listPrice ?? row.salePrice ?? 0,
+              giaKhuyenMai: row.salePrice ?? null,
               trangThai: 'Available',
             });
           } catch (err) { errors.push(`Dòng ${row.row}: ${err?.response?.data?.message || 'không thể lưu'}`); }
@@ -137,12 +137,12 @@ const OperationalImports = () => {
   };
 
   const productHeaders = ['Dòng', 'Mã SP', 'Tên sản phẩm', 'Loại', 'Danh mục', 'SKU', 'Giá', 'Kết quả'];
-  const stockHeaders = ['Dòng', 'Mã kho', 'Mã SKU', 'Tồn đầu kỳ', 'Kết quả'];
+  const stockHeaders = ['Dòng', 'Mã SKU', 'Tồn đầu kỳ', 'Kết quả'];
   return <div className="content-wrapper"><div className="content-header"><div className="container-fluid"><h1 className="m-0">Import dữ liệu vận hành</h1></div></div><section className="content"><div className="container-fluid"><div className="card"><div className="card-header p-2"><div className="nav nav-pills"><button className={`nav-link ${tab === 'products' ? 'active' : ''}`} onClick={() => { setTab('products'); setRows([]); setQuickText(''); }}>Sản phẩm và SKU</button><button className={`nav-link ${tab === 'stock' ? 'active' : ''}`} onClick={() => { setTab('stock'); setRows([]); setQuickText(''); }}>Tồn đầu kỳ</button></div></div><div className="card-body">
-    <p className="text-muted">{tab === 'products' ? 'Cột XLSX: Mã sản phẩm, Tên sản phẩm, Loại, Mã danh mục, Mã hãng, Giá niêm yết, Giá bán, SKU, Tên biến thể.' : 'Cột XLSX: Mã kho, Mã SKU, Tồn đầu kỳ.'}</p>
+    <p className="text-muted">{tab === 'products' ? 'Cột XLSX: Mã sản phẩm, Tên sản phẩm, Loại, Mã danh mục, Mã hãng, Giá niêm yết, Giá bán, SKU, Tên biến thể.' : 'Cột XLSX: Mã SKU, Tồn đầu kỳ.'}</p>
     {tab === 'products' && <div className="card card-body mb-3"><label>Nhập nhanh sản phẩm/SKU</label><textarea className="form-control" rows="4" value={quickText} onChange={(e) => setQuickText(e.target.value)} placeholder="Mỗi dòng: Mã SP, Tên sản phẩm, Loại, Mã danh mục, Mã hãng, Giá niêm yết, Giá bán, SKU, Tên biến thể" /><div className="mt-2"><button type="button" className="btn btn-outline-primary" onClick={parseQuickProducts}>Đọc dữ liệu nhập nhanh</button></div></div>}
     <label className="btn btn-primary"><i className="fas fa-file-import mr-1" />Chọn file XLSX<input type="file" accept=".xlsx" className="d-none" onChange={parse} /></label>
-    {rows.length > 0 && <><button className="btn btn-success ml-2" disabled={saving} onClick={commit}>Xác nhận import</button><div className="table-responsive mt-3"><table className="table table-bordered table-striped"><thead><tr>{(tab === 'products' ? productHeaders : stockHeaders).map((x) => <th key={x}>{x}</th>)}</tr></thead><tbody>{rows.map((row) => tab === 'products' ? <tr key={row.row}><td>{row.row}</td><td>{row.code}</td><td>{row.name}</td><td>{row.kind === 2 ? 'Phụ tùng' : 'Xe máy'}</td><td>{row.categoryId}</td><td>{row.skuCode}</td><td className="text-right">{row.listPrice}</td><td className={row.errors.length ? 'text-danger' : 'text-success'}>{row.errors.join(', ') || 'Hợp lệ'}</td></tr> : <tr key={row.row}><td>{row.row}</td><td>{row.storeId}</td><td>{row.skuId}</td><td className="text-right">{row.qty}</td><td className={row.errors.length ? 'text-danger' : 'text-success'}>{row.errors.join(', ') || 'Hợp lệ'}</td></tr>)}</tbody></table></div></>}
+    {rows.length > 0 && <><button className="btn btn-success ml-2" disabled={saving} onClick={commit}>Xác nhận import</button><div className="table-responsive mt-3"><table className="table table-bordered table-striped"><thead><tr>{(tab === 'products' ? productHeaders : stockHeaders).map((x) => <th key={x}>{x}</th>)}</tr></thead><tbody>{rows.map((row) => tab === 'products' ? <tr key={row.row}><td>{row.row}</td><td>{row.code}</td><td>{row.name}</td><td>{row.kind === 2 ? 'Phụ tùng' : 'Xe máy'}</td><td>{row.categoryId}</td><td>{row.skuCode}</td><td className="text-right">{row.listPrice}</td><td className={row.errors.length ? 'text-danger' : 'text-success'}>{row.errors.join(', ') || 'Hợp lệ'}</td></tr> : <tr key={row.row}><td>{row.row}</td><td>{row.skuId}</td><td className="text-right">{row.qty}</td><td className={row.errors.length ? 'text-danger' : 'text-success'}>{row.errors.join(', ') || 'Hợp lệ'}</td></tr>)}</tbody></table></div></>}
   </div></div></div></section></div>;
 };
 export default OperationalImports;
